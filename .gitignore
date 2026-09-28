@@ -1,0 +1,32 @@
+# 비밀
+.env
+*.env
+
+# 파이썬
+__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/
+
+# 빌드·캐시
+.cache/
+dist/
+build/
+out/
+node_modules/
+
+# 공개 저장소: 강의 녹음·전사·작업 결과는 절대 커밋하지 않는다
+*.m4a
+*.mp3
+*.wav
+*.ogg
+*.opus
+*.flac
+*.aac
+*.mp4
+*.webm
+*.amr
+*.3gp
+*.wma
+jobs/
+bench/
