@@ -83,13 +83,13 @@ powershell -File ../scripts/build_whisper.ps1 -SourceDir <whisper.cpp 체크아�
 계획과 진행은 claude.ai artifact 두 개에 있다(`Artifact` 도구 `action: "read"`로 읽고, 고칠 때는 `url`을 넘겨 같은 artifact를 갱신한다).
 
 - 구현 계획: https://claude.ai/artifact/QEe654uyQBhZaYgXfY5xsd (일정, 완료 기준, 결정 기록, 접힌 "구조 전환 검토")
-- 화면 흐름 초안: https://claude.ai/artifact/16v7z6VAGTSd9miaCUxQZ4 (설치부터 미리보기까지 와이어프레임, 오류 문구, 열린 질문 9개)
+- 화면 흐름 초안: https://claude.ai/artifact/16v7z6VAGTSd9miaCUxQZ4 (설치부터 미리보기까지 와이어프레임, 오류 문구, 9/28에 정리한 질문 표)
 
 S3는 9/28에 정했다: 로컬 STT는 whisper.cpp, CPU 기본 `large-v3-turbo-q8_0` + greedy(`-bs 1`, 노트북 90분 강의 약 27분). 앱의 기본 모델·옵션은 이것으로 둔다(`WhisperCpp`의 `beamSize: 1`).
 
 사용자가 정해야 하는 것:
 
-1. **화면 흐름의 열린 질문 9개.** 특히 마법사 순서('이 PC 확인'을 키보다 먼저), 창 닫기 동작, 요약 실패 시 [전사만 저장].
+1. **앱 이름.** W4 전에 정한다(그때까지 lecture-notes, `productName` 한 곳만 바꾸면 되게 둔다). 화면 흐름의 나머지 질문 8개는 9/28에 정했다(`docs/decisions.md`, 화면 흐름 artifact의 "질문 정리").
 
 M1(10/4) 진행: 작업 저장·재개(`job.ts`), 노트 작성·저장(`note.ts`), CLI `run`/`resume`/`jobs`, 강의 언어(`--lang` → `-l`)는 됐다데스크톱에서 63분 강의로 확인: 외장 GPU로 30초에 전사만 담은 노트, 잘못된 키로 요약 단계에서 멈춘 뒤 `resume`하면 STT 없이 6초에 요약(10.17크레딧)까지 끝나 노트 다섯 요소가 모두 나옴. 하드웨어 감지·예상 시간(`probe`)도 됐다. 데스크톱: 외장 GPU를 고르고 내장 GPU(CPU보다 느림)는 뺌, 63분 강의 예상 약 1분에 실제 29초. 남은 M1: 노트북 CPU로 90분 강의 `run`(사용자). 감지용 샘플은 작성자가 대본(`app/resources/probe-ko.txt`)을 읽은 39초 녹음 `app/resources/probe-ko.wav`(16kHz 모노, 공개)이고, `probe`의 기본 샘플이며 설치본에는 `resources/probe-ko.wav`로 들어간다. 데스크톱에서 CPU 9.4초, 외장 GPU 0.4초, 대본과 거의 같은 전사. TTS 샘플은 쉼이 없어 RTF가 실제 강의보다 높게 나온다(예상 시간이 넉넉함). 실제 작업의 전사 시간으로 예상치를 고치는 것은 W2. 잠자기 방지는 앱에서 Electron `powerSaveBlocker`로 한다(W2). 그 뒤 W2 화면은 화면 흐름 초안을 따른다.
 
