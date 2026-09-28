@@ -81,6 +81,13 @@
   cursor: not-allowed;
 }
 
+.cardDisabled,
+.cardDisabled:hover {
+  border-color: var(--color-border);
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
 /* 라디오는 보이지 않게 두고 카드가 모양을 맡는다 */
 .input {
   position: absolute;

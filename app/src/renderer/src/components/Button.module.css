@@ -70,6 +70,21 @@
   color: var(--color-on-danger);
 }
 
+/* 클래스 두 개로 지정해 크기 클래스(sm/md/lg)의 높이·여백을 덮어쓴다 */
+.button.link {
+  height: auto;
+  padding: 0;
+  background: none;
+  color: var(--color-primary);
+  font-weight: var(--font-weight-regular);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.link:hover:not(:disabled) {
+  color: var(--color-primary-hover);
+}
+
 /* 위험색 hover 토큰은 따로 두지 않고 글자색 쪽으로 섞는다(라이트는 어둡게, 다크는 밝게) */
 .danger:hover:not(:disabled) {
   background: color-mix(in oklab, var(--color-danger), var(--color-text) 15%);

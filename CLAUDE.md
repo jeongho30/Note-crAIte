@@ -67,7 +67,7 @@ powershell -File ../scripts/build_whisper.ps1 -SourceDir <whisper.cpp 체크아�
 ## Architecture (지금까지)
 
 - `src/core/`: 처리 로직. **electron을 import하지 않는다** — 메인 프로세스, CLI(`src/cli/`), 테스트(`test/`)가 같은 코드를 그대로 쓴다. 상대 import에는 `.ts` 확장자를 붙이고, 타입은 `import type`으로 가져온다(Node type stripping 규칙, tsconfig의 `erasableSyntaxOnly`).
-- `src/main/index.ts`: 화면이 부를 수 있는 처리를 `handlers`(허용 목록)에 두고 `api:call` IPC로 연다.
+- `src/main/index.ts`: 화면이 부를 수 있는 처리를 `handlers`(허용 목록)에 두고 `api:call` IPC로 연다. 처리 오류(`EngineError`)는 IPC가 필드를 버려서 메시지 앞에 `[코드]`를 붙여 보내고, 화면의 `api.ts`가 다시 나눈다. 메인 → 화면 알림은 `api:event`이고 preload의 허용 목록(`setup`)에 있는 것만 받는다. `setup.ts`는 모델 받기와 속도 재기(probe) 상태를 메인에 두고 바뀔 때마다 보낸다. `secrets.ts`는 API 키를 safeStorage로 암호화해 `<데이터 폴더>/secrets.json`에 두고 화면에는 끝 4자리만 준다. 설정은 `core/settings.ts`(`settings.json`: 마법사 단계, 저장 폴더, 연결된 요약 서비스). 개발 중 `LN_DATA_DIR` 환경변수로 데이터 폴더를 바꿔 첫 실행을 따로 시험할 수 있다.
 - 데이터 폴더는 `%LOCALAPPDATA%\lecture-notes`(`models/`, `bench/`, 이후 `jobs/`)다. 강의 녹음에서 나온 파일은 여기에만 쓴다.
 - `audio.ts` + `wav.ts`: 16kHz 모노 WAV로 바꾼 뒤 약 10분마다 무음 지점에서 조각(`chunks/part_NNN.wav`)으로 나누고 원본 WAV는 지운다.
 - `stt/base.ts`의 `transcribeChunks`: 조각별 결과를 `part_NNN.json`으로 저장해 끝난 조각은 다시 돌리지 않고, 조각 시작 시각만큼 밀어 하나로 합친다. 엔진 구현(`stt/whispercpp.ts`)은 `SttEngine`만 따르면 된다.
@@ -76,7 +76,7 @@ powershell -File ../scripts/build_whisper.ps1 -SourceDir <whisper.cpp 체크아�
 - `job.ts`: 작업 하나를 `audio→stt→clean→summarize→note→save` 단계로 돌리고 `<데이터 폴더>/jobs/<id>/job.json`에 단계 상태를 남긴다. 끝난 단계(`done`/`skipped`)는 건너뛰므로 실패·취소 뒤 `runJob`을 다시 부르면 이어서 한다. 필기는 작업 폴더에 복사해 두고, API 키는 `job.json`에 넣지 않고 실행할 때 `JobContext`로 받는다. 요약 설정(`settings.llm`)이 없으면 요약 단계는 `skipped`이고 전사만 담은 노트가 된다.
 - `probe.ts`: 샘플을 CPU와 Vulkan 장치마다 돌려(로그의 장치 목록·`uma`·처리 시간) 쓸 장치와 RTF를 정한다. GPU 전사가 CPU 전사와 CER 0.3 넘게 다르면 깨진 것으로 보고, 1.2배 이상 빠를 때만 GPU를 고른다. 결과는 `<데이터 폴더>/probe.json`, `run --device auto`(기본)가 장치·예상 시간에 쓴다. `compare.ts`: CER(벤치와 공용).
 - `note.ts`: 노트 마크다운(frontmatter 값은 JSON 문자열, 접는 부분은 `> [!quote]-` callout)과 저장(`<저장 폴더>/<과목|미분류>/<날짜> <제목>.md`, 겹치면 ` (2)`). `inputs.ts`: 녹음 옆 같은 이름 필기 찾기, UTF-8이 아니면 CP949로 읽기.
-- 화면(`src/renderer/src/`): 색·크기는 `styles/tokens.css`의 CSS 변수만 쓰고(라이트 B2, 다크 D4, OS 설정을 따름), 부품은 `components/`(CSS Modules)에 있다. 화면은 이 부품을 조합하고 색·치수를 직접 쓰지 않는다. 본문 글꼴은 내장한 Pretendard 가변 글꼴(`assets/fonts/`, 서브셋 아님). W2 화면이 생기기 전까지 `ComponentGallery.tsx`가 부품을 모아 보여 준다.
+- 화면(`src/renderer/src/`): 색·크기는 `styles/tokens.css`의 CSS 변수만 쓰고(라이트 B2, 다크 D4, OS 설정을 따름), 부품은 `components/`(CSS Modules)에 있다. 화면은 이 부품을 조합하고 색·치수를 직접 쓰지 않는다. 본문 글꼴은 내장한 Pretendard 가변 글꼴(`assets/fonts/`, 서브셋 아님). 첫 실행 마법사는 `wizard/`(안내 → 이 PC 확인 → 요약 서비스 → 저장 폴더 → 준비 완료)이고, 마법사를 끝낸 뒤 홈이 생기기 전까지는 `ComponentGallery.tsx`(부품 모음)가 보인다.
 - `src/cli/bench.ts`: S3용. RTF와, 기준 전사(기존 파이프라인의 large-v3 결과) 대비 CER을 잰다.
 
 ## 지금 상태와 다음 할 일 (9/28 노트북 세션 끝)

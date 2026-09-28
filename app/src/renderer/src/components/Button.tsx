@@ -3,7 +3,8 @@ import { cx } from './cx'
 import styles from './Button.module.css'
 
 type Props = ComponentProps<'button'> & {
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
+  /** link: 글자 링크 모양 (예: "키 발급 방법 보기") */
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'link'
   /** sm: 표 안, md: 기본, lg: 첫 실행 마법사 */
   size?: 'sm' | 'md' | 'lg'
 }

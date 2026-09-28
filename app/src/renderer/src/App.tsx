@@ -1,15 +1,32 @@
 import { useEffect, useState } from 'react'
+import { call } from './api'
 import ComponentGallery from './ComponentGallery'
+import type { Settings } from '../../core/settings'
+import Wizard from './wizard/Wizard'
 
 type Ping = { version: string; whisperCli: string | null; ffmpeg: string | null }
 
-// S1(걷는 뼈대): 메인 프로세스 왕복과 처리 도구(whisper-cli, ffmpeg)가 보이는지만 확인한다. 실제 화면은 W2에서 만든다.
-export default function App(): React.JSX.Element {
+export default function App(): React.JSX.Element | null {
+  const [settings, setSettings] = useState<Settings | null>(null)
+
+  useEffect(() => {
+    call<Settings>('settings.get').then(setSettings)
+  }, [])
+
+  if (!settings) return null
+  if (!settings.wizardDone) {
+    return <Wizard initialStep={settings.wizardStep} onDone={() => setSettings({ ...settings, wizardDone: true })} />
+  }
+  return <DevHome />
+}
+
+// 홈 화면을 만들기 전까지: 처리 도구가 보이는지와 부품 모음.
+function DevHome(): React.JSX.Element {
   const [status, setStatus] = useState('확인 중...')
 
   async function ping(): Promise<void> {
     try {
-      const r = (await window.api.call('ping')) as Ping
+      const r = await call<Ping>('ping')
       const mark = (path: string | null): string => (path ? '있음' : '없음')
       setStatus(`v${r.version} · whisper-cli ${mark(r.whisperCli)} · ffmpeg ${mark(r.ffmpeg)}`)
     } catch (e) {

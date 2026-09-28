@@ -8,6 +8,8 @@ type Option<T> = {
   description?: ReactNode
   /** 오른쪽에 붙는 짧은 정보 (예: "약 27분", "약 540크레딧") */
   meta?: ReactNode
+  /** 이 선택지만 고를 수 없게 (예: 곧 지원) */
+  disabled?: boolean
 }
 
 type Props<T extends string> = {
@@ -25,14 +27,14 @@ export function RadioCardGroup<T extends string>({ label, value, options, onChan
   return (
     <div role="radiogroup" aria-label={label} className={cx(styles.group, disabled && styles.disabled)}>
       {options.map((o) => (
-        <label key={o.value} className={cx(styles.card, o.value === value && styles.selected)}>
+        <label key={o.value} className={cx(styles.card, o.value === value && styles.selected, o.disabled && styles.cardDisabled)}>
           <input
             type="radio"
             className={styles.input}
             name={name}
             value={o.value}
             checked={o.value === value}
-            disabled={disabled}
+            disabled={disabled || o.disabled}
             onChange={() => onChange(o.value)}
           />
           <span className={styles.indicator} aria-hidden="true" />

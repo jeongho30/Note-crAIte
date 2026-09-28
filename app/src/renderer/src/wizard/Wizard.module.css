@@ -1,0 +1,101 @@
+.wizard {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--space-8) var(--space-6);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  width: min(560px, 100%);
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+}
+
+/* 초점은 화면 읽기용으로만 옮기므로 링을 그리지 않는다 */
+.title:focus {
+  outline: none;
+}
+
+.description {
+  margin: 0;
+  color: var(--color-text-2);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+/* [이전]은 왼쪽 끝 */
+.back {
+  margin-right: auto;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+}
+
+.facts dt {
+  color: var(--color-text-3);
+}
+
+.facts dd {
+  margin: 0;
+}
+
+.small {
+  margin: 0;
+  color: var(--color-text-3);
+  font-size: var(--font-size-sm);
+}
+
+.cardHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+  font-weight: var(--font-weight-semibold);
+}
+
+.row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.tree {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  color: var(--color-text-2);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  white-space: pre;
+}
