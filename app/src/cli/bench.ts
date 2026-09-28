@@ -23,7 +23,7 @@ export type BenchArgs = {
   ref?: string
   start: number
   duration?: number
-  configs: string[] // 엔진:모델:장치. 예) wcpp:small-q5_1:cpu, wcpp:large-v3-turbo-q5_0:gpu0, fw:small:cpu
+  configs: string[] // 엔진:모델:장치[:bsN]. 예) wcpp:small-q5_1:cpu, wcpp:large-v3-turbo-q8_0:cpu:bs1(greedy), fw:small:cpu
   threads?: number
   lang: string
   chunkS: number
@@ -77,7 +77,7 @@ function stamp(): string {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`
 }
 
-async function runWcpp(model: string, device: string, sample: string, work: string, a: BenchArgs,
+async function runWcpp(model: string, device: string, beam: number | undefined, sample: string, work: string, a: BenchArgs,
                        threads: number): Promise<{ prepS: number; segments: Segment[]; backend: string }> {
   const modelsDir = join(a.dataDir, 'models')
   const engine = new WhisperCpp({
@@ -86,6 +86,7 @@ async function runWcpp(model: string, device: string, sample: string, work: stri
     vadModel: await ensureModel('vad', 'silero-v6.2.0', modelsDir),
     threads,
     gpuDevice: device === 'cpu' ? null : Number(device.replace(/^gpu/, '')),
+    beamSize: beam,
     quiet: false
   })
   const t0 = performance.now()
@@ -137,14 +138,15 @@ export async function run(a: BenchArgs): Promise<void> {
   const csv = join(outDir, 'results.csv')
   await writeFile(csv, FIELDS.join(',') + '\n', 'utf8')
   for (const [i, config] of a.configs.entries()) {
-    const [engine, model, device] = config.split(':')
+    const [engine, model, device, opt] = config.split(':')
+    const beam = opt?.startsWith('bs') ? Number(opt.slice(2)) : undefined
     console.log(`[${i + 1}/${a.configs.length}] ${config}`)
     const work = join(outDir, `work-${String(i).padStart(2, '0')}`)
     const t0 = performance.now()
     let prepS = 0
     let segments: Segment[]
     let backend = 'CPU'
-    if (engine === 'wcpp') ({ prepS, segments, backend } = await runWcpp(model, device, sample, work, a, threads))
+    if (engine === 'wcpp') ({ prepS, segments, backend } = await runWcpp(model, device, beam, sample, work, a, threads))
     else if (engine === 'fw') segments = await runFw(model, device, sample, work, a, threads)
     else throw new EngineError('input', `모르는 엔진입니다: ${engine} (wcpp 또는 fw)`)
     const sttS = (performance.now() - t0) / 1000 - prepS

@@ -97,6 +97,10 @@ test('WhisperCpp 명령은 상대 경로와 장치 옵션을 쓴다', async () =
   engine.opts.quiet = false
   assert.ok(!engine.command(wav, 'ko').includes('-np'))
 
+  assert.ok(!cmd.includes('-bs')) // 기본은 whisper-cli의 beam search
+  engine.opts.beamSize = 1
+  assert.equal(engine.command(wav, 'ko')[engine.command(wav, 'ko').indexOf('-bs') + 1], '1')
+
   engine.opts.gpuDevice = 1
   const gpu = engine.command(wav, 'ko')
   assert.equal(gpu[gpu.indexOf('-dev') + 1], '1')

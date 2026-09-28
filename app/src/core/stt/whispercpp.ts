@@ -36,6 +36,7 @@ export type WhisperOptions = {
   threads: number
   gpuDevice: number | null // null이면 CPU만 쓴다
   quiet?: boolean // false면 -np 없이 돌려 백엔드 선택·처리 시간 로그를 lastLog에 남긴다
+  beamSize?: number // 없으면 whisper-cli 기본(beam search). 1이면 greedy라 빠르지만 품질이 떨어질 수 있다
 }
 
 export class WhisperCpp implements SttEngine {
@@ -59,6 +60,7 @@ export class WhisperCpp implements SttEngine {
       '-oj', '-of', argPath(wav, cwd), // 결과: <wav 이름>.json
       '-pp']
     if (o.quiet) cmd.push('-np')
+    if (o.beamSize !== undefined) cmd.push('-bs', String(o.beamSize))
     cmd.push(...(o.gpuDevice === null ? ['-ng'] : ['-dev', String(o.gpuDevice)]))
     if (o.vadModel !== null) cmd.push('--vad', '-vm', argPath(o.vadModel, cwd))
     return cmd
