@@ -72,3 +72,16 @@
 | 9/28 | `ggml-vulkan.dll`은 설치 파일에 포함 | artifact의 "GPU 파일은 필요할 때 다운로드"는 수백 MB인 CUDA 파일을 전제로 한 결정. S1에서 설치 파일이 너무 크면 다운로드로 바꿈 |
 | 9/28 | Ollama는 네이티브 `/api/chat` | OpenAI 호환 엔드포인트는 요청마다 컨텍스트 길이를 못 정해, VRAM 24GB 미만에서는 4k로 잘림 (Ollama 문서) |
 | 9/28 | 폴더 감시는 watchdog 대신 기존 폴링 | 클라우드 동기화 폴더에서 변경 이벤트가 누락될 수 있음. 기존 `watch_inbox.py` 방식은 검증됨 |
+| 9/28 | 저장소 라이선스는 MIT | 라이선스 파일이 없으면 공개 저장소여도 남이 쓸 권리가 없음. 의존 라이브러리 대부분(Electron, React, whisper.cpp, 모델 가중치)이 MIT라 맞음. 공모전 규정이 다른 라이선스를 요구하면 바꿈 |
+| 9/28 | 설치본의 ffmpeg는 LGPL 빌드 | 개발에 쓰는 Gyan `full_build`는 GPLv3라 재배포하면 소스 제공 의무가 생김. 쓰는 기능(디코딩, WAV 변환, Opus 인코딩)에 GPL 부품이 필요 없음. 빌드(BtbN `win64-lgpl` 또는 필요한 것만 직접 빌드)는 S1에서 ffmpeg를 넣을 때 정함 |
+
+## 라이선스 검토 (9/28)
+
+설치본에 들어가는 것 기준. 법률 자문이 아니라 각 라이선스 문서를 읽고 판단한 것이다.
+
+- 문제없음: Electron·React·electron-vite(MIT), NSIS(zlib), Python(PSF), PyInstaller(GPL이지만 부트로더 예외로 결과물은 자유), whisper.cpp/ggml과 `ggml-vulkan.dll`(MIT), Whisper 모델·ggml 변환본·Silero VAD(MIT, 실행 중 다운로드), Ollama(MIT, 넣지 않음).
+- MSVC 런타임: `build_whisper.ps1`이 `VCToolsRedistDir`의 `Microsoft.VC*.CRT`·`OpenMP`에서만 복사한다. 재배포가 허용된 폴더이고 디버그 DLL은 아니다.
+- `vulkan-1.dll`은 넣지 않고 GPU 드라이버 것을 쓴다.
+- faster-whisper·ctranslate2·onnxruntime·PyAV는 `engine.spec`에서 빠져 설치본에 없다. faster-whisper를 앱에 넣게 되면 PyAV 휠에 든 FFmpeg의 라이선스를 다시 본다.
+- 할 일: 설치본에 `THIRD_PARTY_NOTICES`(whisper.cpp, Python, PyInstaller, 엔진 의존성과 그 하위 의존성, ffmpeg와 소스 주소, 모델 가중치)를 넣고 앱 정보 화면에서 열게 한다(W2). 지금은 `LICENSE-whisper.cpp.txt`만 복사된다. Chromium 고지는 electron-builder가 넣는다.
+- 라이선스 밖: 강의는 교수의 저작물이라 녹음·노트 공유는 사용자 책임으로 첫 실행 안내에 둔다. ChatKHU API 결과물의 이용 조건과 공모전 제출 규정(소스 공개, 라이선스)은 아직 확인하지 않았다.
