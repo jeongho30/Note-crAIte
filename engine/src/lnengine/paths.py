@@ -9,8 +9,12 @@ from lnengine.errors import EngineError
 
 APP_NAME = "lecture-notes"
 EXE = ".exe" if os.name == "nt" else ""
-# 개발 모드에서만 쓰는 저장소 루트 (engine/src/lnengine/paths.py 기준). 설치본은 --bin-dir을 받는다.
-REPO_ROOT = Path(__file__).resolve().parents[3]
+FROZEN = getattr(sys, "frozen", False)  # PyInstaller로 묶인 설치본
+
+
+def repo_root() -> Path:
+    """개발 모드에서만 쓰는 저장소 루트 (engine/src/lnengine/paths.py 기준). 설치본은 --bin-dir을 받는다."""
+    return Path(__file__).resolve().parents[3]
 
 
 def default_data_dir() -> Path:
@@ -35,7 +39,8 @@ def find_whisper_cli(bin_dir: Path | None) -> Path:
     candidates = []
     if bin_dir is not None:
         candidates.append(bin_dir / "whisper" / f"whisper-cli{EXE}")
-    candidates.append(REPO_ROOT / ".cache" / "whisper" / "bin" / f"whisper-cli{EXE}")
+    if not FROZEN:
+        candidates.append(repo_root() / ".cache" / "whisper" / "bin" / f"whisper-cli{EXE}")
     for c in candidates:
         if c.exists():
             return c

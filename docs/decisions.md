@@ -2,19 +2,49 @@
 
 ## 0주차 실험
 
-### S3 로컬 STT 엔진 (진행 중)
+### S3 로컬 STT 엔진 (데스크톱 측정 완료, 노트북 9/30 예정)
 
 - 판정 규칙: 노트북 결과가 기준이다. whisper.cpp의 가장 빠른 설정이 faster-whisper CPU보다 1.5배 넘게 느리지 않고 한국어 품질이 비슷하면 whisper.cpp로 통일한다.
 - 측정 조건: 전원 연결, 앱이 실제로 쓸 스레드 수, 10분 샘플과 90분 강의. CER은 기존 파이프라인의 large-v3 결과를 기준으로 띄어쓰기·문장부호를 지우고 잰다(정답이 아니라 상대 비교용).
-- 결과: (측정 후 기록)
+
+**데스크톱 (9/28)**: Ryzen 7 9800X3D(8코어) 스레드 6, RX 9070 XT(Vulkan0), 내장 Radeon(Vulkan1). 77분 강의의 600~1200초 구간.
+
+| 설정 | 장치 | STT(초) | RTF | CER |
+|---|---|---|---|---|
+| whisper.cpp small-q5_1 | CPU | 48.0 | 0.080 | 0.283 |
+| faster-whisper small int8 | CPU | 24.8 | 0.041 | 0.368 |
+| whisper.cpp medium-q5_0 | CPU | 111.9 | 0.187 | 0.209 |
+| whisper.cpp large-v3-turbo-q5_0 | CPU | 100.2 | 0.167 | 0.178 |
+| whisper.cpp large-v3-turbo-q8_0 | CPU | 85.5 | 0.143 | 0.182 |
+| faster-whisper large-v3-turbo int8 | CPU | 43.8 | 0.073 | 0.226 |
+| whisper.cpp small-q5_1 | RX 9070 XT | 9.7 | 0.016 | 0.276 |
+| whisper.cpp medium-q5_0 | RX 9070 XT | 14.6 | 0.024 | 0.229 |
+| whisper.cpp large-v3-turbo-q5_0 | RX 9070 XT | 8.2 | 0.014 | 0.177 |
+| whisper.cpp large-v3-turbo-q8_0 | RX 9070 XT | 8.5 | 0.014 | 0.192 |
+| whisper.cpp large-v3-q5_0 | RX 9070 XT | 19.6 | 0.033 | 0.131 |
+| whisper.cpp large-v3-turbo-q5_0 | 내장 Radeon | 288.4 | 0.481 | 0.176 |
+
+- CPU에서는 같은 모델이면 faster-whisper가 약 2배 빠르다(turbo 44초 대 86초). 데스크톱에서는 판정 기준 1.5배를 넘는다.
+- faster-whisper turbo의 CER이 높은 이유는 대부분 누락이다(기준 대비 삭제 242자 대 121자, 치환은 163자 대 182자로 비슷). 가운데 구간을 직접 읽어 보면 둘 다 양호하다. 강의 노트에서는 누락이 더 나쁘다.
+- 편향: 기준 전사가 whisper.cpp large-v3라서 whisper.cpp, 특히 large-v3-q5_0이 유리하다. 숫자 표기(0 대 영) 차이도 CER에 들어간다.
+- GPU: Vulkan 빌드는 HIP 때의 멀티 GPU 우회(`HIP_VISIBLE_DEVICES`) 없이 `-dev 0`으로 외장 GPU를 쓴다. whisper-cli 로그에 장치 목록과 `uma`(내장 여부)가 찍혀 하드웨어 감지에 쓸 수 있다.
+- 데스크톱 내장 GPU는 CPU보다 3배 느리다. GPU 사용 여부는 장치 목록이 아니라 실측으로 정해야 한다.
+- CPU에서는 turbo-q8_0이 q5_0보다 빠르다(역양자화 비용). GPU에서는 비슷하다.
+- 크기: `ggml-vulkan.dll` 55.6MB, whisper 실행 파일 폴더 전체 66MB.
 
 ### S2 ChatKHU 실측 (9/30 예정)
 
 (측정 후 기록)
 
-### S1 걷는 뼈대 (9/29 예정)
+### S1 걷는 뼈대 (데스크톱 확인 9/28, 노트북 설치 테스트 남음)
 
-(측정 후 기록)
+- electron-vite 5.0(vite 7) + React 19 + Electron 44 ↔ PyInstaller 6.22 onedir 엔진(26MB). 설치본 구조(`resources/engine/engine.exe`)에서 ping 왕복을 확인했다. 앱을 강제 종료하면 engine.exe도 종료된다.
+- NSIS 설치 파일은 132MB다(Electron + 엔진 + whisper 66MB, ffmpeg 넣기 전).
+- Windows Defender: 설치 파일과 풀린 폴더 모두 위협 없음.
+- whisper 폴더가 폴더 밖에서 찾는 DLL은 Windows 기본 DLL과 `vulkan-1.dll`(GPU 드라이버)뿐이다. VC++ 런타임은 폴더 안에 있다.
+- 남은 확인: 노트북 새 계정에서 설치·실행과 SmartScreen 경고 문구, `vulkan-1.dll`이 없는 PC에서 CPU로 돌아가는지.
+- vite 8은 electron-vite 5가 아직 지원하지 않아 vite 7과 @vitejs/plugin-react 5로 고정했다.
+- npm 11은 의존 패키지의 설치 스크립트를 기본으로 막는다. Electron 44는 첫 실행 때 바이너리를 받아서 승인이 필요 없고, esbuild·electron-winstaller도 이 구성에서는 필요 없다.
 
 ## 구현 결정
 

@@ -12,6 +12,7 @@ dependencies = ["requests", "pyyaml", "psutil"]
 [project.optional-dependencies]
 dev = ["pytest"]
 bench = ["faster-whisper", "rapidfuzz"]
+build = ["pyinstaller"]
 
 [project.scripts]
 lnengine = "lnengine.cli:main"

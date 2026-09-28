@@ -1,0 +1,18 @@
+appId: io.github.jeongho30.lecture-notes
+productName: lecture-notes
+directories:
+  output: ../dist/installer
+files:
+  - out/**
+# 엔진(PyInstaller onedir)과 whisper 실행 파일은 asar 밖에 둔다 (실행해야 하므로).
+extraResources:
+  - from: ../dist/engine
+    to: engine
+  - from: ../.cache/whisper/bin
+    to: bin/whisper
+npmRebuild: false
+win:
+  target: nsis
+nsis:
+  oneClick: true
+  perMachine: false

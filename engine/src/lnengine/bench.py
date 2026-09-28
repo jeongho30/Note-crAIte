@@ -22,7 +22,9 @@ from lnengine.stt.base import transcribe_chunks
 from lnengine.stt.whispercpp import WhisperCpp, parse_whisper_json
 
 NORMALIZE_RE = re.compile(r"[^0-9A-Za-z가-힣]")
-FIELDS = ["config", "engine", "model", "device", "threads", "audio_s", "prep_s", "stt_s", "rtf", "cer", "chars"]
+BACKEND_RE = re.compile(r"using (\S+) backend")
+FIELDS = ["config", "engine", "model", "device", "backend", "threads", "audio_s", "prep_s", "stt_s", "rtf", "cer",
+          "chars"]
 
 
 def normalize(text: str) -> str:
@@ -45,6 +47,14 @@ def text_in_range(segments: list[dict], start_ms: float, end_ms: float) -> str:
     return " ".join(s["text"] for s in segments if start_ms <= s["start_ms"] < end_ms)
 
 
+def backend_used(log: list[str]) -> str:
+    """gpu 설정이어도 쓸 GPU가 없으면 whisper는 CPU로 돈다. 로그로 실제 백엔드를 확인한다."""
+    for line in log:
+        if m := BACKEND_RE.search(line):
+            return m.group(1)
+    return "CPU"
+
+
 def cpu_name() -> str:
     if os.name == "nt":
         import winreg
@@ -54,13 +64,14 @@ def cpu_name() -> str:
     return platform.processor()
 
 
-def _run_wcpp(model_name: str, device: str, sample: Path, work: Path, args, threads: int) -> tuple[float, list[dict]]:
+def _run_wcpp(model_name: str, device: str, sample: Path, work: Path, args,
+              threads: int) -> tuple[float, list[dict], str]:
     models_dir = args.data_dir / "models"
     model = downloads.ensure_model("whisper", model_name, models_dir)
     vad = downloads.ensure_model("vad", "silero-v6.2.0", models_dir)
     gpu = None if device == "cpu" else int(device.removeprefix("gpu"))
     engine = WhisperCpp([str(paths.find_whisper_cli(args.bin_dir))], model, vad_model=vad, threads=threads,
-                        gpu_device=gpu)
+                        gpu_device=gpu, quiet=False)
     t0 = time.perf_counter()
     chunks = prepare_local(paths.find_ffmpeg(args.bin_dir), sample, work, target_s=args.chunk_s)
     prep_s = time.perf_counter() - t0
@@ -70,7 +81,7 @@ def _run_wcpp(model_name: str, device: str, sample: Path, work: Path, args, thre
 
     segments = transcribe_chunks(engine, chunks, work / "chunks", work / "stt", language=args.lang, on_progress=show)
     print()
-    return prep_s, segments
+    return prep_s, segments, backend_used(engine.last_log)
 
 
 def _run_fw(model_name: str, device: str, sample: Path, args, threads: int) -> list[dict]:
@@ -130,9 +141,9 @@ def run(args) -> None:
             work = out_dir / f"work-{i:02d}"
             t0 = time.perf_counter()
             if engine == "wcpp":
-                prep_s, segments = _run_wcpp(model_name, device, sample, work, args, threads)
+                prep_s, segments, backend = _run_wcpp(model_name, device, sample, work, args, threads)
             elif engine == "fw":
-                prep_s, segments = 0.0, _run_fw(model_name, device, sample, args, threads)
+                prep_s, segments, backend = 0.0, _run_fw(model_name, device, sample, args, threads), "CPU"
             else:
                 raise EngineError("input", f"모르는 엔진입니다: {engine} (wcpp 또는 fw)")
             stt_s = time.perf_counter() - t0 - prep_s
@@ -141,7 +152,8 @@ def run(args) -> None:
             hyp = " ".join(s["text"] for s in segments)
             (out_dir / f"{i:02d}-{config.replace(':', '_')}.txt").write_text(hyp, encoding="utf-8")
             row = {
-                "config": config, "engine": engine, "model": model_name, "device": device, "threads": threads,
+                "config": config, "engine": engine, "model": model_name, "device": device, "backend": backend,
+                "threads": threads,
                 "audio_s": round(audio_s, 1), "prep_s": round(prep_s, 1), "stt_s": round(stt_s, 1),
                 "rtf": round(stt_s / audio_s, 3),
                 "cer": round(cer(ref_text, hyp), 4) if ref_text else "",

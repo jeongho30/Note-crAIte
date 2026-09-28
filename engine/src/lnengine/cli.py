@@ -1,4 +1,4 @@
-"""명령줄 진입점. 지금은 모델 다운로드와 S3 벤치만 있고 run/resume/serve는 이후에 붙인다."""
+"""명령줄 진입점. 지금은 모델 다운로드, S3 벤치, 앱용 serve(ping)만 있고 run/resume은 이후에 붙인다."""
 
 import argparse
 import sys
@@ -34,6 +34,16 @@ def cmd_bench(args) -> None:
     bench.run(args)
 
 
+def cmd_serve(args) -> None:
+    from lnengine import __version__, protocol
+
+    out = protocol.isolate_stdout()
+    if args.parent_pid:
+        protocol.exit_when_parent_dies(args.parent_pid)
+    server = protocol.Server(out, {"ping": lambda params: {"pong": True, "version": __version__}})
+    server.serve(sys.stdin.buffer)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="lnengine", description="강의 녹음을 마크다운 노트로 만드는 엔진")
     parser.add_argument("--data-dir", type=Path, default=paths.default_data_dir())
@@ -57,6 +67,10 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--lang", default="ko")
     b.add_argument("--chunk-s", type=float, default=600.0, help="whisper.cpp 조각 길이 (초). 0이면 나누지 않음")
     b.set_defaults(func=cmd_bench)
+
+    s = sub.add_parser("serve", help="앱(Electron)과 stdin/stdout 한 줄 JSON으로 통신")
+    s.add_argument("--parent-pid", type=int, default=None, help="이 프로세스가 사라지면 엔진도 종료")
+    s.set_defaults(func=cmd_serve)
 
     args = parser.parse_args(argv)
     try:

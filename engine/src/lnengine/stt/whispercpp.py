@@ -47,12 +47,14 @@ def _kill_on_cancel(proc: subprocess.Popen, cancel: threading.Event) -> None:
 
 class WhisperCpp:
     def __init__(self, cli: list[str], model: Path, *, vad_model: Path | None, threads: int,
-                 gpu_device: int | None):
+                 gpu_device: int | None, quiet: bool = True):
         self.cli = cli  # 실행 명령 (테스트에서는 가짜 스크립트)
         self.model = model
         self.vad_model = vad_model
         self.threads = threads
         self.gpu_device = gpu_device  # None이면 CPU만 쓴다
+        self.quiet = quiet  # False면 -np 없이 돌려 백엔드 선택·처리 시간 로그를 last_log에 남긴다
+        self.last_log: list[str] = []
 
     def command(self, wav: Path, language: str) -> list[str]:
         cwd = wav.parent
@@ -64,7 +66,9 @@ class WhisperCpp:
                # 긴 강의에서 같은 문장을 반복 출력하며 내용을 통째로 날리는 루프를 막는다 (VAD와 함께).
                "-mc", "0",
                "-oj", "-of", _arg_path(wav, cwd),  # 결과: <wav 이름>.json
-               "-np", "-pp"]
+               "-pp"]
+        if self.quiet:
+            cmd.append("-np")
         cmd += ["-ng"] if self.gpu_device is None else ["-dev", str(self.gpu_device)]
         if self.vad_model is not None:
             cmd += ["--vad", "-vm", _arg_path(self.vad_model, cwd)]
@@ -75,6 +79,8 @@ class WhisperCpp:
         out_json = wav.with_name(wav.name + ".json")
         out_json.unlink(missing_ok=True)
         tail = collections.deque(maxlen=40)
+        # 로그를 켜면 VAD가 구간마다 줄을 남겨 앞쪽의 백엔드 선택 줄이 밀려나므로 전부 보관한다.
+        log = None if self.quiet else []
         # -np여도 전사 구간은 stdout으로 나온다 (whisper.cpp examples/cli/cli.cpp). 읽지 않으면
         # 파이프가 가득 차 whisper가 멈추므로 버리고, 결과는 -oj JSON 파일에서 읽는다.
         proc = subprocess.Popen(self.command(wav, language), cwd=wav.parent, stdin=subprocess.DEVNULL,
@@ -88,7 +94,10 @@ class WhisperCpp:
                 on_progress(int(m.group(1)) / 100)
             elif line:
                 tail.append(line)
+                if log is not None:
+                    log.append(line)
         rc = proc.wait()
+        self.last_log = list(tail) if log is None else log
         if cancel is not None and cancel.is_set():
             raise EngineError("cancelled", "전사를 취소했습니다.")
         if rc != 0:

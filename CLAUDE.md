@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-lecture-notes: 강의 녹음(+선택적 필기 .md/.txt)을 요약·주요 키워드·전사문이 담긴 마크다운 노트로 만드는 PC 설치형 앱 (ChatKHU 공모전, 마감 2026-10-24). 화면은 Electron(`app/`, W2부터), 처리는 전부 Python 엔진(`engine/`)이 맡고 둘은 stdin/stdout 한 줄 JSON으로 통신할 예정이다. 결정과 실험 결과는 `docs/decisions.md`에 적는다.
+lecture-notes: 강의 녹음(+선택적 필기 .md/.txt)을 요약·주요 키워드·전사문이 담긴 마크다운 노트로 만드는 PC 설치형 앱 (ChatKHU 공모전, 마감 2026-10-24). 화면은 Electron(`app/`), 처리는 전부 Python 엔진(`engine/`)이 맡고, 둘은 stdin/stdout으로 한 줄에 JSON 하나씩 주고받는다(`engine/src/lnengine/protocol.py` ↔ `app/src/main/engine.ts`). 엔진은 원래 stdout을 프로토콜 전용으로 떼어 두므로, 엔진 코드에서 `print()`해도 프로토콜이 깨지지 않는다. 결정과 실험 결과는 `docs/decisions.md`에 적는다.
 
 엔진 코드의 상당 부분은 작성자의 개인용 파이프라인 `C:\ljh\Coding\STT_AutoLectureNote\pipeline\`에서 옮겨 왔다. 그 폴더는 따로 계속 쓰이므로 여기서 수정하지 않는다.
 
@@ -37,6 +37,22 @@ engine/.venv/Scripts/python -m lnengine bench --audio <녹음> --ref <기준 whi
 ```
 
 `build_whisper.ps1`의 결과는 `.cache/whisper/bin/`에 모이고, 엔진은 개발 모드에서 그곳의 `whisper-cli.exe`와 PATH의 `ffmpeg`를 쓴다 (설치본은 `--bin-dir`).
+
+앱(`app/`)은 개발 중에 저장소의 `engine/.venv`로 엔진을 띄우고, 설치본은 `resources/engine/engine.exe`를 띄운다. 설치 파일을 만들려면 엔진을 먼저 묶는다.
+
+```bash
+cd app && npm run dev
+```
+
+```bash
+cd engine && .venv/Scripts/pyinstaller engine.spec --noconfirm --distpath ../dist --workpath ../.cache/pyinstaller
+```
+
+```bash
+cd app && npm run dist:win
+```
+
+설치 파일은 `dist/installer/`에 생긴다. vite는 electron-vite 5가 지원하는 7로 고정돼 있다(8로 올리지 않는다).
 
 ## Architecture (지금까지)
 

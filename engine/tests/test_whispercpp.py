@@ -54,15 +54,19 @@ def test_transcribe_drains_stdout_and_reports_progress(tmp_path):
 
 def test_command_uses_relative_paths_and_device_flags(tmp_path):
     wav = tmp_path / "jobs" / "part_000.wav"
-    cmd = make_engine(tmp_path).command(wav, "ko")
+    engine = make_engine(tmp_path)
+    cmd = engine.command(wav, "ko")
     assert cmd[cmd.index("-m") + 1] == str(Path("..") / "models" / "ggml-test.bin")
     assert cmd[cmd.index("-f") + 1] == "part_000.wav"
     assert cmd[cmd.index("-mc") + 1] == "0"
     assert "-ng" in cmd and "-dev" not in cmd
+    assert "-np" in cmd
 
-    gpu_dir = tmp_path / "gpu"
-    gpu_dir.mkdir()
-    gpu_cmd = make_engine(gpu_dir, gpu_device=1).command(wav, "ko")
+    engine.quiet = False
+    assert "-np" not in engine.command(wav, "ko")
+
+    engine.gpu_device = 1
+    gpu_cmd = engine.command(wav, "ko")
     assert gpu_cmd[gpu_cmd.index("-dev") + 1] == "1" and "-ng" not in gpu_cmd
 
 
