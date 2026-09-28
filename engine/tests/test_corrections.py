@@ -16,6 +16,22 @@ def test_select_keeps_only_real_distinct_multichar_items():
     assert picked == [{"wrong": "렉시컬 애널리시스", "right": "Lexical Analysis"}]
 
 
+def test_select_rejects_harmful_items_seen_in_s2():
+    text = "80번 줄의 associativity를 보면 Pulse Tree가 나옵니다"
+    picked = select([
+        {"wrong": "80", "right": "Parsing"},                       # 숫자만: 다른 숫자까지 바뀐다
+        {"wrong": "associativity", "right": "Associativity"},     # 대소문자만 다름
+        {"wrong": "Pulse Tree", "right": "Parse Tree"},
+    ], text)
+    assert picked == [{"wrong": "Pulse Tree", "right": "Parse Tree"}]
+
+
+def test_apply_keeps_ascii_word_boundaries_but_allows_korean_particles():
+    fixed, applied = apply(["IDEA와 IDE를 비교"], [{"wrong": "IDE", "right": "id"}])
+    assert fixed == ["IDEA와 id를 비교"]
+    assert applied == [{"wrong": "IDE", "right": "id", "count": 1}]
+
+
 def test_select_caps_item_count():
     text = " ".join(f"단어{i}" for i in range(100))
     assert len(select([{"wrong": f"단어{i}", "right": f"word{i}"} for i in range(100)], text)) == MAX_ITEMS

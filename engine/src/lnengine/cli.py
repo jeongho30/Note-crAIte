@@ -1,4 +1,4 @@
-"""명령줄 진입점. 지금은 모델 다운로드, S3 벤치, 앱용 serve(ping)만 있고 run/resume은 이후에 붙인다."""
+"""명령줄 진입점. 지금은 모델 다운로드, S2·S3 실측, 앱용 serve(ping)만 있고 run/resume은 이후에 붙인다."""
 
 import argparse
 import sys
@@ -34,6 +34,12 @@ def cmd_bench(args) -> None:
     bench.run(args)
 
 
+def cmd_s2(args) -> None:
+    from lnengine import s2
+
+    s2.run(args)
+
+
 def cmd_serve(args) -> None:
     from lnengine import __version__, protocol
 
@@ -67,6 +73,16 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--lang", default="ko")
     b.add_argument("--chunk-s", type=float, default=600.0, help="whisper.cpp 조각 길이 (초). 0이면 나누지 않음")
     b.set_defaults(func=cmd_bench)
+
+    k = sub.add_parser("s2", help="S2: ChatKHU 요약 실측 (LN_API_KEY 필요, 크레딧을 쓴다)")
+    k.add_argument("--stt", type=Path, action="append", default=[], help="전사 JSON (whisper JSON 또는 bench 결과)")
+    k.add_argument("--notes", type=Path, help="필기 .md/.txt")
+    k.add_argument("--subject")
+    k.add_argument("--model", action="append", default=[])
+    k.add_argument("--repeat", type=int, default=1)
+    k.add_argument("--no-schema", action="store_true", help="json_schema 없이 프롬프트만으로 JSON 요청")
+    k.add_argument("--list-models", action="store_true", help="쓸 수 있는 모델 목록만 출력 (크레딧 안 씀)")
+    k.set_defaults(func=cmd_s2)
 
     s = sub.add_parser("serve", help="앱(Electron)과 stdin/stdout 한 줄 JSON으로 통신")
     s.add_argument("--parent-pid", type=int, default=None, help="이 프로세스가 사라지면 엔진도 종료")

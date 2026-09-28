@@ -150,7 +150,9 @@ def run(args) -> None:
             shutil.rmtree(work, ignore_errors=True)
 
             hyp = " ".join(s["text"] for s in segments)
-            (out_dir / f"{i:02d}-{config.replace(':', '_')}.txt").write_text(hyp, encoding="utf-8")
+            stem = f"{i:02d}-{config.replace(':', '_')}"
+            (out_dir / f"{stem}.txt").write_text(hyp, encoding="utf-8")
+            write_json_atomic(out_dir / f"{stem}.json", segments)  # S2 입력으로 쓴다
             row = {
                 "config": config, "engine": engine, "model": model_name, "device": device, "backend": backend,
                 "threads": threads,
