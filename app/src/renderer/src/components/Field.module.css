@@ -1,0 +1,72 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.hint,
+.error {
+  margin: 0;
+  font-size: var(--font-size-xs);
+}
+
+.hint {
+  color: var(--color-text-3);
+}
+
+.error {
+  color: var(--color-danger);
+}
+
+/* 입력칸과 선택 목록이 함께 쓰는 모양 */
+.control {
+  width: 100%;
+  height: var(--control-h-md);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.control::placeholder {
+  color: var(--color-text-3);
+}
+
+.control:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
+.invalid {
+  border-color: var(--color-danger);
+}
+
+.selectWrap {
+  position: relative;
+}
+
+.select {
+  appearance: none;
+  padding-right: var(--space-8);
+  cursor: pointer;
+}
+
+/* 아이콘을 정하기 전까지 선택 목록의 화살표는 CSS로 그린다 */
+.selectWrap::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: var(--space-3);
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid var(--color-text-2);
+  border-bottom: 1.5px solid var(--color-text-2);
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+}

@@ -1,0 +1,56 @@
+.group {
+  display: inline-flex;
+  /* 세로 flex 부모 안에서도 늘어나지 않게 */
+  width: fit-content;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+}
+
+.option {
+  display: inline-flex;
+  align-items: center;
+  height: calc(var(--control-h-md) - 4px);
+  padding: 0 var(--space-3);
+  border-radius: calc(var(--radius-md) - 2px);
+  color: var(--color-text-2);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.option:hover {
+  color: var(--color-text);
+}
+
+.selected {
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.option:has(.input:focus-visible) {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.disabled {
+  opacity: var(--opacity-disabled);
+}
+
+.disabled .option {
+  cursor: not-allowed;
+}
+
+/* 라디오는 보이지 않게 두고 라벨이 모양을 맡는다 */
+.input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}

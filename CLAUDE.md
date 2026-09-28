@@ -76,6 +76,7 @@ powershell -File ../scripts/build_whisper.ps1 -SourceDir <whisper.cpp 체크아�
 - `job.ts`: 작업 하나를 `audio→stt→clean→summarize→note→save` 단계로 돌리고 `<데이터 폴더>/jobs/<id>/job.json`에 단계 상태를 남긴다. 끝난 단계(`done`/`skipped`)는 건너뛰므로 실패·취소 뒤 `runJob`을 다시 부르면 이어서 한다. 필기는 작업 폴더에 복사해 두고, API 키는 `job.json`에 넣지 않고 실행할 때 `JobContext`로 받는다. 요약 설정(`settings.llm`)이 없으면 요약 단계는 `skipped`이고 전사만 담은 노트가 된다.
 - `probe.ts`: 샘플을 CPU와 Vulkan 장치마다 돌려(로그의 장치 목록·`uma`·처리 시간) 쓸 장치와 RTF를 정한다. GPU 전사가 CPU 전사와 CER 0.3 넘게 다르면 깨진 것으로 보고, 1.2배 이상 빠를 때만 GPU를 고른다. 결과는 `<데이터 폴더>/probe.json`, `run --device auto`(기본)가 장치·예상 시간에 쓴다. `compare.ts`: CER(벤치와 공용).
 - `note.ts`: 노트 마크다운(frontmatter 값은 JSON 문자열, 접는 부분은 `> [!quote]-` callout)과 저장(`<저장 폴더>/<과목|미분류>/<날짜> <제목>.md`, 겹치면 ` (2)`). `inputs.ts`: 녹음 옆 같은 이름 필기 찾기, UTF-8이 아니면 CP949로 읽기.
+- 화면(`src/renderer/src/`): 색·크기는 `styles/tokens.css`의 CSS 변수만 쓰고(라이트 B2, 다크 D4, OS 설정을 따름), 부품은 `components/`(CSS Modules)에 있다. 화면은 이 부품을 조합하고 색·치수를 직접 쓰지 않는다. 본문 글꼴은 내장한 Pretendard 가변 글꼴(`assets/fonts/`, 서브셋 아님). W2 화면이 생기기 전까지 `ComponentGallery.tsx`가 부품을 모아 보여 준다.
 - `src/cli/bench.ts`: S3용. RTF와, 기준 전사(기존 파이프라인의 large-v3 결과) 대비 CER을 잰다.
 
 ## 지금 상태와 다음 할 일 (9/28 노트북 세션 끝)

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import ComponentGallery from './ComponentGallery'
 
 type Ping = { version: string; whisperCli: string | null; ffmpeg: string | null }
 
@@ -25,6 +26,8 @@ export default function App(): React.JSX.Element {
       <h1>lecture-notes</h1>
       <p>{status}</p>
       <button onClick={ping}>다시 확인</button>
+      <hr />
+      <ComponentGallery />
     </main>
   )
 }

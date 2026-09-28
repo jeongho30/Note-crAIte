@@ -1,0 +1,46 @@
+.region {
+  position: fixed;
+  right: var(--space-6);
+  bottom: var(--space-6);
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+.toast {
+  max-width: 360px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-left-width: 3px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-1);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  pointer-events: auto;
+  transition:
+    opacity var(--duration-base) var(--ease-standard),
+    translate var(--duration-base) var(--ease-standard);
+}
+
+@starting-style {
+  .toast {
+    opacity: 0;
+    translate: 0 var(--space-2);
+  }
+}
+
+.neutral {
+  border-left-color: var(--color-border-strong);
+}
+
+.success {
+  border-left-color: var(--color-success);
+}
+
+.danger {
+  border-left-color: var(--color-danger);
+}

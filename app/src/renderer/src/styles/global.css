@@ -27,3 +27,17 @@ body {
   word-break: keep-all;
   overflow-wrap: anywhere;
 }
+
+/* 폼 요소는 기본값으로 시스템 글꼴을 써서, 본문 글꼴을 물려받게 한다 */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+/* 키보드 초점은 모든 부품이 같은 모양으로 */
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset);
+}

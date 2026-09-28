@@ -1,0 +1,92 @@
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.card:hover {
+  border-color: var(--color-border-strong);
+}
+
+.selected,
+.selected:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.card:has(.input:focus-visible) {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.indicator {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  /* 제목 첫 줄의 가운데에 맞춘다 */
+  margin-top: calc((var(--font-size-md) * var(--line-height-body) - 16px) / 2);
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+}
+
+.selected .indicator {
+  border-color: var(--color-primary);
+  background: radial-gradient(circle, var(--color-primary) 0 3.5px, var(--color-surface) 4px);
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.title {
+  font-weight: var(--font-weight-semibold);
+}
+
+.description {
+  color: var(--color-text-2);
+  font-size: var(--font-size-sm);
+}
+
+.meta {
+  flex: none;
+  color: var(--color-text-3);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.disabled {
+  opacity: var(--opacity-disabled);
+}
+
+.disabled .card {
+  cursor: not-allowed;
+}
+
+/* 라디오는 보이지 않게 두고 카드가 모양을 맡는다 */
+.input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}

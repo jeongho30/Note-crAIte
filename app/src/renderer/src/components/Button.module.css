@@ -1,0 +1,76 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.button:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
+.sm {
+  height: var(--control-h-sm);
+  padding: 0 var(--space-3);
+  font-size: var(--font-size-sm);
+}
+
+.md {
+  height: var(--control-h-md);
+  padding: 0 var(--space-4);
+  font-size: var(--font-size-md);
+}
+
+.lg {
+  height: var(--control-h-lg);
+  padding: 0 var(--space-5);
+  font-size: var(--font-size-md);
+}
+
+.primary {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
+.secondary {
+  background: var(--color-surface);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--color-surface-2);
+}
+
+.ghost {
+  background: transparent;
+  color: var(--color-text-2);
+}
+
+.ghost:hover:not(:disabled) {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+}
+
+.danger {
+  background: var(--color-danger);
+  color: var(--color-on-danger);
+}
+
+/* 위험색 hover 토큰은 따로 두지 않고 글자색 쪽으로 섞는다(라이트는 어둡게, 다크는 밝게) */
+.danger:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--color-danger), var(--color-text) 15%);
+}
