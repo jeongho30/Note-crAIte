@@ -2,7 +2,7 @@
 
 ## 0주차 실험
 
-### S3 로컬 STT 엔진 (데스크톱·노트북 측정 완료 9/28, 결정 대기)
+### S3 로컬 STT 엔진 (9/28 결정: whisper.cpp, CPU 기본 turbo-q8_0 greedy)
 
 - 판정 규칙: 노트북 결과가 기준이다. whisper.cpp의 가장 빠른 설정이 faster-whisper CPU보다 1.5배 넘게 느리지 않고 한국어 품질이 비슷하면 whisper.cpp로 통일한다.
 - 측정 조건: 전원 연결, 앱이 실제로 쓸 스레드 수, 10분 샘플과 90분 강의. CER은 기존 파이프라인의 large-v3 결과를 기준으로 띄어쓰기·문장부호를 지우고 잰다(정답이 아니라 상대 비교용).
@@ -52,7 +52,7 @@
 - 전사문 직접 비교(노트북 turbo, 9/28): 누락은 faster-whisper 227자 대 whisper.cpp 102자지만, faster-whisper의 가장 긴 누락(30자)은 강사가 같은 말을 서너 번 되풀이한 부분을 줄인 것이고, 그다음 긴 누락 두 곳은 두 엔진이 똑같이 빠뜨렸다. 나머지 차이는 몇 글자짜리가 흩어진 것이다. 나란히 읽으면 내용은 비슷하다. 전문용어는 서로 한 번씩 이겼다(polar coordinate를 fw는 "폴라코디니티", wcpp는 "콜라 코디니터"; fw는 "외우지"를 "넣으면 돼요"로 틀림). 기준 전사도 whisper 결과라 둘 다 틀리는 용어가 있고, 이런 것은 요약의 교정 목록이 고친다.
 - 따라서 **"faster-whisper는 누락이 많다"는 CER만큼 심각하지 않다.** 판단은 품질보다 속도(22분 대 32분), 배포 비용(Python 실행 파일), 타임스탬프 밀도(fw는 약 30초 단위로 묶여 정리본의 시각이 성김)로 옮겨 간다. 앞의 데스크톱 판단("강의 노트에서는 누락이 더 나쁘다")도 이 기준으로 다시 읽는다.
 - greedy(`-bs 1`, 노트북 같은 구간): turbo-q8_0 182.3초(RTF 0.304, CER 0.181, 90분 약 27분), turbo-q5_0 231.2초(0.385, 0.185). 같은 세션의 기본 설정 q8_0은 210.2초(0.350, 0.184). greedy는 13% 빨라지고 품질은 그대로지만, faster-whisper turbo(145.8초)와의 차이는 1.44배에서 1.25배로 줄 뿐이다. 계산 대부분이 디코딩이 아니라 인코더라서다. 벤치 설정 끝에 `:bs1`을 붙여 잰다.
-- **추천(결정 대기)**: whisper.cpp로 통일하고 CPU 기본은 large-v3-turbo-q8_0. 90분 강의 약 32분이고 뒤에서 처리하는 앱이라 받아들일 만하다. faster-whisper는 약 22분이지만 누락이 많고, 쓰려면 Python을 STT 전용 실행 파일로 다시 묶어야 한다(설치본 크기·백신 오탐·Mac 빌드 부담이 돌아옴). 결정되면 이 절, 구현 계획 artifact의 S3 표시, CLAUDE.md의 "지금 상태"를 바꾼다.
+- **결정(9/28)**: whisper.cpp로 통일하고 CPU 기본은 large-v3-turbo-q8_0 + greedy(`-bs 1`, 노트북 90분 약 27분). 아래는 결정 전 추천의 근거: whisper.cpp로 통일하고 CPU 기본은 large-v3-turbo-q8_0. 90분 강의 약 32분이고 뒤에서 처리하는 앱이라 받아들일 만하다. faster-whisper는 약 22분이지만 누락이 많고, 쓰려면 Python을 STT 전용 실행 파일로 다시 묶어야 한다(설치본 크기·백신 오탐·Mac 빌드 부담이 돌아옴). 결정되면 이 절, 구현 계획 artifact의 S3 표시, CLAUDE.md의 "지금 상태"를 바꾼다.
 
 ### S2 ChatKHU 요약 실측 (9/28)
 
@@ -89,7 +89,8 @@
 
 | 날짜 | 결정 | 이유 |
 |---|---|---|
-| 9/28 | 로컬 STT는 whisper.cpp 기준으로 짜고 S3로 확정 | 기존 명령과 반복 루프 해결책(`-mc 0` + VAD)을 그대로 쓰고 AMD·Intel·Mac GPU를 한 경로로 지원. faster-whisper가 이기면 `stt/` 어댑터 하나를 추가 |
+| 9/28 | 로컬 STT는 whisper.cpp로 확정(S3). CPU 기본 large-v3-turbo-q8_0 + greedy(`-bs 1`) | 노트북 90분 약 27분, 내용 품질은 faster-whisper(약 22분)와 비슷. Python 실행 파일 없이 엔진 하나로 AMD·Intel·Mac까지, 타임스탬프가 촘촘함. 내장 GPU는 결과가 깨질 수 있어 실측으로 거름 |
+| 9/28 | (처음 결정) 로컬 STT는 whisper.cpp 기준으로 짜고 S3로 확정 | 기존 명령과 반복 루프 해결책(`-mc 0` + VAD)을 그대로 쓰고 AMD·Intel·Mac GPU를 한 경로로 지원. faster-whisper가 이기면 `stt/` 어댑터 하나를 추가 |
 | 9/28 | STT를 약 10분 무음 조각 단위로 저장 | 노트북 CPU로 오래 걸리는 STT를 전원·종료로 날리지 않게. 분할 코드는 ChatKHU STT 분할(110분 초과)에도 씀 |
 | 9/28 | 엔진 Python은 python.org판 3.14 (→ 같은 날 엔진을 TypeScript로 옮겨 벤치용 `tools/.venv`에만 해당) | 이 PC의 3.13은 Microsoft Store판이라 `%LOCALAPPDATA%` 쓰기가 가상화되고 PyInstaller 문제가 날 수 있음. 필요한 wheel(ctranslate2, onnxruntime, av)이 3.14용으로 모두 있음 |
 | 9/28 | whisper.cpp는 공식 바이너리 대신 직접 빌드 | 공식 Windows x64 빌드는 CPU·BLAS·CUDA뿐이고 Vulkan이 없음 (커밋 1da4dc82의 `release.yml`) |

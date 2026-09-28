@@ -70,10 +70,11 @@ powershell -File ../scripts/build_whisper.ps1 -SourceDir <whisper.cpp 체크아�
 - 구현 계획: https://claude.ai/artifact/QEe654uyQBhZaYgXfY5xsd (일정, 완료 기준, 결정 기록, 접힌 "구조 전환 검토")
 - 화면 흐름 초안: https://claude.ai/artifact/16v7z6VAGTSd9miaCUxQZ4 (설치부터 미리보기까지 와이어프레임, 오류 문구, 열린 질문 9개)
 
+S3는 9/28에 정했다: 로컬 STT는 whisper.cpp, CPU 기본 `large-v3-turbo-q8_0` + greedy(`-bs 1`, 노트북 90분 강의 약 27분). 앱의 기본 모델·옵션은 이것으로 둔다(`WhisperCpp`의 `beamSize: 1`).
+
 사용자가 정해야 하는 것:
 
-1. **S3 로컬 STT 엔진.** 데스크톱·노트북 측정 끝(`docs/decisions.md` S3). 추천은 whisper.cpp 통일 + CPU 기본 `large-v3-turbo-q8_0`(노트북 90분 강의 약 32분). faster-whisper는 약 22분이지만 누락이 많고 Python 실행 파일을 다시 묶어야 한다. 정해지면 decisions.md S3 절, 구현 계획 artifact의 S3 표시, 이 절을 고친다.
-2. **화면 흐름의 열린 질문 9개.** 특히 마법사 순서('이 PC 확인'을 키보다 먼저), 창 닫기 동작, 요약 실패 시 [전사만 저장].
+1. **화면 흐름의 열린 질문 9개.** 특히 마법사 순서('이 PC 확인'을 키보다 먼저), 창 닫기 동작, 요약 실패 시 [전사만 저장].
 
 그다음 작업(M1, 10/4): 작업 저장·재개(job.json), 노트 작성·저장, CLI `run`/`resume`, 하드웨어 감지·예상 시간, 과목별 강의 언어(`-l`). 그 뒤 W2 화면은 화면 흐름 초안을 따른다.
 
