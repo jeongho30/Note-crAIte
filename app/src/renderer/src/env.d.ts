@@ -7,6 +7,7 @@ declare global {
     api: {
       call: (method: string, params?: unknown) => Promise<unknown>
       on: (event: string, cb: (data: unknown) => void) => () => void
+      pathForFile: (file: File) => string
     }
   }
 }

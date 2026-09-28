@@ -12,9 +12,17 @@ export type Settings = {
   outDir: string | null
   /** 연결된 요약 서비스. null이면 요약 없이 전사문만 담은 노트를 만든다 */
   provider: ProviderId | null
+  /** 시작 전 확인에서 마지막으로 고른 과목 (다음 녹음의 기본값). null이면 미분류 */
+  lastSubject: string | null
+  /** 과목별 강의 언어 기본값. 없는 과목은 한국어. 바꾸는 곳은 설정 > 과목 */
+  subjectLanguage: Record<string, Language>
 }
 
-export const DEFAULT_SETTINGS: Settings = { wizardStep: 0, wizardDone: false, outDir: null, provider: null }
+export type Language = 'ko' | 'en'
+
+export const DEFAULT_SETTINGS: Settings = {
+  wizardStep: 0, wizardDone: false, outDir: null, provider: null, lastSubject: null, subjectLanguage: {}
+}
 
 function settingsPath(dataDir: string): string {
   return join(dataDir, 'settings.json')

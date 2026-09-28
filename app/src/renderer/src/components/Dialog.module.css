@@ -8,6 +8,24 @@
   color: var(--color-text);
 }
 
+/* 내용이 길면 대화상자 안에서 스크롤한다 */
+.lg {
+  width: min(600px, calc(100vw - 2 * var(--space-6)));
+  max-height: calc(100vh - 2 * var(--space-6));
+  overflow: hidden;
+}
+
+/* 제목과 버튼 줄은 두고 본문만 스크롤 */
+.lg .body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  /* 스크롤 영역 가장자리에서 초점 링이 잘리지 않게 */
+  margin: calc(-1 * var(--space-1));
+  padding: var(--space-1);
+  color: var(--color-text);
+}
+
 .dialog[open] {
   display: flex;
   flex-direction: column;

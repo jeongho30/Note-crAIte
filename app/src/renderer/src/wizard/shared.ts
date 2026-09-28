@@ -9,7 +9,7 @@ export type StepProps = {
   headingRef: RefObject<HTMLHeadingElement | null>
 }
 
-export type LlmStatus = { provider: string | null; name?: string; keyHint?: string; credits?: number | null }
+export type LlmStatus = { provider: string | null; name?: string; keyHint?: string; credits?: number | null; summariesLeft?: number | null }
 
 /** 모델 받기·속도 재기 상태. 메인이 바뀔 때마다 보내 준다. */
 export function useSetup(): SetupState | null {

@@ -1,13 +1,24 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell } from 'electron'
-import { mkdir, statfs } from 'node:fs/promises'
-import { join } from 'path'
+import { mkdir, stat, statfs } from 'node:fs/promises'
+import { basename, join, relative } from 'path'
+import { probe as probeAudio } from '../core/audio.ts'
 import { EngineError } from '../core/errors.ts'
-import { detect } from '../core/hardware.ts'
+import { readJson } from '../core/files.ts'
+import { defaultThreads, detect } from '../core/hardware.ts'
+import { AUDIO_EXTS, NOTE_EXTS, pairInputs } from '../core/inputs.ts'
+import { DEFAULT_MODEL } from '../core/job.ts'
+import type { LlmSettings } from '../core/job.ts'
 import { defaultDataDir, findFfmpeg, findWhisperCli } from '../core/paths.ts'
-import { CREDITS_PER_90MIN_SUMMARY, PROVIDERS, verifyKey } from '../core/providers.ts'
+import { estimateSttSeconds } from '../core/probe.ts'
+import type { ProbeResult } from '../core/probe.ts'
+import { CREDITS_PER_90MIN_SUMMARY, PRESETS, PROVIDERS, verifyKey } from '../core/providers.ts'
 import type { ProviderId } from '../core/providers.ts'
+import { recentNotes } from '../core/recent.ts'
 import { loadSettings, updateSettings } from '../core/settings.ts'
+import type { Language } from '../core/settings.ts'
 import { inspectFolder, useFolder } from '../core/vault.ts'
+import { createJobRunner } from './jobs.ts'
+import type { JobInput } from './jobs.ts'
 import { fitContent } from './fit.ts'
 import type { Size } from './fit.ts'
 import { keyHint, readKey, saveKey } from './secrets.ts'
@@ -35,7 +46,114 @@ function emit(name: string, data: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) win.webContents.send('api:event', name, data)
 }
 
-const setup = createSetup({ dataDir, whisperCli: () => findWhisperCli(whisperDirs), sample: probeSample, emit: (s) => emit('setup', s) })
+const setup = createSetup({
+  dataDir,
+  whisperCli: () => findWhisperCli(whisperDirs),
+  sample: probeSample,
+  emit: (s) => {
+    emit('setup', s)
+    // 모델을 다 받고 속도 재기도 끝나면 기다리던 작업을 돌린다
+    if (s.model.state === 'ready' && (s.probe.state === 'done' || s.probe.state === 'error')) runner.kick()
+  }
+})
+
+/** 지금 모델로 잰 받아쓰기 속도 (probe.json) */
+async function loadProbe(): Promise<ProbeResult | null> {
+  try {
+    const p = await readJson<ProbeResult>(join(dataDir, 'probe.json'))
+    return p.model === DEFAULT_MODEL ? p : null
+  } catch {
+    return null
+  }
+}
+
+async function outDir(): Promise<string> {
+  const { outDir } = await loadSettings(dataDir)
+  if (!outDir) throw new EngineError('input', '저장 폴더가 정해지지 않았어요.')
+  return outDir
+}
+
+const runner = createJobRunner({
+  dataDir,
+  ffmpeg: () => findFfmpeg(binDir),
+  whisperCli: () => findWhisperCli(whisperDirs),
+  whenSttReady: () => setup.whenReady(),
+  sttReady: () => {
+    const s = setup.get()
+    return s.model.state === 'ready' && (s.probe.state === 'done' || s.probe.state === 'error')
+  },
+  probe: loadProbe,
+  defaultThreads: async () => defaultThreads(await detect()),
+  llm: async (): Promise<LlmSettings | null> => {
+    const { provider } = await loadSettings(dataDir)
+    if (provider !== 'chatkhu' || !(await readKey(dataDir, provider))) return null
+    const p = PRESETS['chatkhu']
+    return { endpoint: p.endpoint, model: p.model, creditsUrl: p.credits }
+  },
+  apiKey: async () => {
+    const { provider } = await loadSettings(dataDir)
+    return provider ? readKey(dataDir, provider) : null
+  },
+  outDir,
+  emit: (jobs) => emit('jobs', jobs)
+})
+
+type Prepared = {
+  recordings: {
+    audio: string
+    name: string
+    notes: string | null
+    notesName: string | null
+    durationS: number | null
+    recordedAt: string
+    /** 이 PC에서 받아쓰기 예상 시간(초). 속도를 아직 안 쟀으면 null */
+    sttS: number | null
+    /** 요약 예상 크레딧 (ChatKHU일 때만) */
+    credits: number | null
+  }[]
+  rejected: { name: string; reason: string }[]
+}
+
+/** 시작 전 확인에 보여 줄 것: 녹음마다 길이·녹음 시각·예상 시간·예상 크레딧, 넣을 수 없는 파일과 이유. */
+async function prepare(paths: string[]): Promise<Prepared> {
+  const { recordings, ignored } = pairInputs(paths)
+  const rejected = ignored.map((p) => ({
+    name: basename(p),
+    reason: NOTE_EXTS.some((e) => p.toLowerCase().endsWith('.' + e)) ? '같은 이름의 녹음이 없는 필기예요' : '녹음 파일이 아니에요'
+  }))
+  const [probe, settings] = await Promise.all([loadProbe(), loadSettings(dataDir)])
+  const ffmpeg = findFfmpeg(binDir)
+  const out: Prepared['recordings'] = []
+  for (const r of recordings) {
+    try {
+      const info = await probeAudio(ffmpeg, r.audio)
+      const meta = info.creationTime ? new Date(info.creationTime) : null
+      const recordedAt =
+        meta && !Number.isNaN(meta.getTime()) && meta.getFullYear() >= 2000 ? meta.toISOString() : (await stat(r.audio)).mtime.toISOString()
+      out.push({
+        audio: r.audio,
+        name: basename(r.audio),
+        notes: r.notes,
+        notesName: r.notes ? basename(r.notes) : null,
+        durationS: info.durationS,
+        recordedAt,
+        sttS: probe && info.durationS ? Math.round(estimateSttSeconds(info.durationS, probe)) : null,
+        credits: settings.provider === 'chatkhu' && info.durationS ? Math.max(1, Math.round((info.durationS / 5400) * CREDITS_PER_90MIN_SUMMARY)) : null
+      })
+    } catch {
+      rejected.push({ name: basename(r.audio), reason: '소리를 읽을 수 없는 파일이에요' })
+    }
+  }
+  return { recordings: out, rejected }
+}
+
+/** 저장 폴더 안의 .md만 연다 (화면이 임의의 파일을 열지 못하게). */
+async function openNote(path: string): Promise<void> {
+  const rel = relative(await outDir(), path)
+  if (!path.toLowerCase().endsWith('.md') || rel.startsWith('..') || rel === path) throw new EngineError('input', '저장 폴더의 노트만 열 수 있어요.')
+  const err = await shell.openPath(path)
+  if (err) throw new EngineError('input', '노트를 열지 못했어요: ' + err)
+}
 
 function providerOf(id: unknown): ProviderId {
   const p = PROVIDERS.find((x) => x.id === id && x.available)
@@ -43,13 +161,19 @@ function providerOf(id: unknown): ProviderId {
   return p.id
 }
 
-async function llmStatus(): Promise<{ provider: ProviderId | null; name?: string; keyHint?: string; credits?: number | null }> {
+async function llmStatus(): Promise<{ provider: ProviderId | null; name?: string; keyHint?: string; credits?: number | null; summariesLeft?: number | null }> {
   const { provider } = await loadSettings(dataDir)
   const key = provider ? await readKey(dataDir, provider) : null
   if (!provider || !key) return { provider: null }
   // 잔액은 참고용이라 못 불러와도(오프라인) 연결 상태는 그대로 보인다.
   const credits = await verifyKey(provider, key).then((r) => r.credits, () => null)
-  return { provider, name: PROVIDERS.find((x) => x.id === provider)?.name, keyHint: keyHint(key), credits }
+  return {
+    provider,
+    name: PROVIDERS.find((x) => x.id === provider)?.name,
+    keyHint: keyHint(key),
+    credits,
+    summariesLeft: credits == null ? null : Math.floor(credits / CREDITS_PER_90MIN_SUMMARY)
+  }
 }
 
 // 화면이 부를 수 있는 처리 (허용 목록).
@@ -116,7 +240,45 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     const info = await useFolder(String(p))
     await updateSettings(dataDir, { outDir: info.path })
     return info
-  }
+  },
+  'folder.openOut': async () => {
+    const err = await shell.openPath(await outDir())
+    if (err) throw new EngineError('input', '폴더를 열지 못했어요: ' + err)
+  },
+
+  'inputs.pick': async () => {
+    const win = BrowserWindow.getFocusedWindow()
+    const opts = {
+      properties: ['openFile', 'multiSelections'] as ('openFile' | 'multiSelections')[],
+      filters: [{ name: '녹음과 필기', extensions: [...AUDIO_EXTS, ...NOTE_EXTS] }]
+    }
+    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    return r.canceled ? [] : r.filePaths
+  },
+  'inputs.prepare': (p) => prepare((p as unknown[]).map(String)),
+  // 과목 목록(저장 폴더의 하위 폴더), 마지막 과목, 과목별 강의 언어
+  'subjects.get': async () => {
+    const s = await loadSettings(dataDir)
+    const info = await inspectFolder(await outDir())
+    return { subjects: info.subjects, lastSubject: s.lastSubject, subjectLanguage: s.subjectLanguage }
+  },
+
+  'jobs.list': () => runner.list(),
+  'jobs.start': async (p) => {
+    const items: JobInput[] = (p as JobInput[]).map((i) => ({
+      audio: String(i.audio),
+      notes: i.notes ? String(i.notes) : null,
+      subject: i.subject ? String(i.subject).trim() || null : null,
+      language: (i.language === 'en' ? 'en' : 'ko') as Language
+    }))
+    if (!items.length) throw new EngineError('input', '넣은 녹음이 없어요.')
+    await updateSettings(dataDir, { lastSubject: items[0].subject })
+    await runner.start(items)
+  },
+  'jobs.retry': (p) => runner.retry(String(p)),
+
+  'notes.recent': async () => recentNotes(await outDir()),
+  'notes.open': (p) => openNote(String(p))
 }
 
 // 창의 화면 영역(창 틀·메뉴 줄 제외)은 4:3. 마법사는 최소 크기로 열고, 끝나면 홈 크기로 키운다.
@@ -200,6 +362,7 @@ app.whenReady().then(async () => {
     }
   })
   void setup.init()
+  runner.kick() // 앱이 꺼져 멈췄던 작업을 이어서 한다
   // 설치본에는 기본 메뉴 줄(File·Edit·View…)을 두지 않는다. 개발 실행에서는 새로 고침·개발자 도구 단축키 때문에 남긴다.
   if (app.isPackaged) Menu.setApplicationMenu(null)
   createWindow((await loadSettings(dataDir)).wizardDone ? HOME_CONTENT : WIZARD_CONTENT)

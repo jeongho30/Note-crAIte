@@ -25,7 +25,7 @@ test('동시에 여러 번 고쳐도 변경이 모두 남는다', async () => {
     updateSettings(dir, { provider: 'chatkhu' }),
     updateSettings(dir, { wizardDone: true })
   ])
-  const expected = { wizardStep: 2, wizardDone: true, outDir: 'D:\\notes', provider: 'chatkhu' }
+  const expected = { ...DEFAULT_SETTINGS, wizardStep: 2, wizardDone: true, outDir: 'D:\\notes', provider: 'chatkhu' }
   assert.deepEqual(writes.at(-1), expected)
   assert.deepEqual(await loadSettings(dir), expected)
 })

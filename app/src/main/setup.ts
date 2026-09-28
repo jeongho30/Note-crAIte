@@ -48,9 +48,21 @@ export function createSetup({ dataDir, whisperCli, sample, emit }: Deps) {
     probe: { state: 'idle' }
   }
 
+  // whenReady()를 기다리는 작업들
+  const waiters: { resolve: () => void; reject: (e: Error) => void }[] = []
+
+  function settle(): void {
+    if (state.model.state === 'error') {
+      for (const w of waiters.splice(0)) w.reject(new EngineError('download', state.model.error ?? '모델을 받지 못했어요.'))
+    } else if (state.model.state === 'ready' && (state.probe.state === 'done' || state.probe.state === 'error')) {
+      for (const w of waiters.splice(0)) w.resolve()
+    }
+  }
+
   function update(patch: Partial<SetupState>): void {
     Object.assign(state, patch)
     emit(structuredClone(state))
+    settle()
   }
 
   function summarize(p: ProbeResult): SetupState['probe'] {
@@ -115,5 +127,17 @@ export function createSetup({ dataDir, whisperCli, sample, emit }: Deps) {
     if (state.model.state === 'ready' && state.probe.state === 'idle') void runProbe()
   }
 
-  return { get: () => structuredClone(state), download, init }
+  /**
+   * 받아쓰기를 시작해도 되면(모델이 있고 속도 재기가 끝남) 끝난다. 모델이 없으면 받기를 시작한다
+   * (마법사에서 건너뛴 사람이 녹음을 넣고 [받고 시작]을 누른 경우). 속도를 재는 동안 받아쓰기를 겹쳐 돌리지 않는다.
+   */
+  function whenReady(): Promise<void> {
+    const p = new Promise<void>((resolve, reject) => waiters.push({ resolve, reject }))
+    if (state.model.state === 'missing' || state.model.state === 'error') void download()
+    else if (state.model.state === 'ready' && state.probe.state === 'idle') void runProbe()
+    settle()
+    return p
+  }
+
+  return { get: () => structuredClone(state), download, init, whenReady }
 }

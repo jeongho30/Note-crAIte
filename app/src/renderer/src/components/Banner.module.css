@@ -22,6 +22,15 @@
   flex: none;
 }
 
+.info {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.info .title {
+  color: var(--color-primary);
+}
+
 .success {
   border-color: var(--color-success);
   background: var(--color-success-soft);

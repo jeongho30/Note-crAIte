@@ -1,0 +1,185 @@
+.home {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: var(--content-max-w);
+  margin: 0 auto;
+}
+
+.bannerBar {
+  margin-top: var(--space-2);
+}
+
+/* 끌어 놓기 칸: 할 일이 이것 하나라 가장 크게 */
+.drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 160px;
+  padding: var(--space-6);
+  border: 1.5px dashed var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  text-align: center;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.over {
+  border-style: solid;
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.wave {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 28px;
+}
+
+.wave i {
+  width: 4px;
+  border-radius: 2px;
+  background: var(--color-primary);
+  opacity: 0.75;
+}
+
+.dropTitle {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+}
+
+.types,
+.hint,
+.meta {
+  margin: 0;
+  color: var(--color-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.types {
+  font-size: var(--font-size-sm);
+}
+
+.hint,
+.meta {
+  font-size: var(--font-size-xs);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.sectionHead h2 {
+  margin: 0;
+  color: var(--color-text-2);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.sectionHead h2 span {
+  margin-left: var(--space-1);
+  color: var(--color-text-3);
+  font-weight: var(--font-weight-regular);
+  font-variant-numeric: tabular-nums;
+}
+
+.jobs,
+.notes {
+  gap: 0;
+  padding: 0;
+}
+
+.job {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+}
+
+.job + .job {
+  border-top: 1px solid var(--color-border);
+}
+
+.jobTop {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.jobName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: var(--font-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stage {
+  color: var(--color-text-2);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.notes {
+  padding: var(--space-1);
+}
+
+.note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 40px;
+  padding: var(--space-1) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.note:hover {
+  background: var(--color-surface-2);
+}
+
+.noteTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-4);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  color: var(--color-text-3);
+  font-size: var(--font-size-sm);
+}
+
+.empty b {
+  color: var(--color-text-2);
+  font-weight: var(--font-weight-semibold);
+}
