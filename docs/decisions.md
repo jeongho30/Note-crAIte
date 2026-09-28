@@ -115,6 +115,8 @@
 | 9/28 | 앱 이름은 W4 전에 정함 | 그때까지 lecture-notes |
 | 9/28 | GPU PC의 기본 모델도 CPU와 같은 large-v3-turbo-q8_0 + greedy | 모델을 하나만 받으면 되고(874MB) PC마다 결과가 같다. RX 9070 XT에서 10분 샘플 8.5초라 90분도 2분 안쪽 |
 | 9/28 | 설치본의 ffmpeg는 LGPL 빌드 | 개발에 쓰는 Gyan `full_build`는 GPLv3라 재배포하면 소스 제공 의무가 생김. 쓰는 기능(디코딩, WAV 변환, Opus 인코딩)에 GPL 부품이 필요 없음. 빌드(BtbN `win64-lgpl` 또는 필요한 것만 직접 빌드)는 S1에서 ffmpeg를 넣을 때 정함 |
+| 9/28 | 스타일은 CSS 변수 토큰(`app/src/renderer/src/styles/tokens.css`) + CSS Modules. 본문 글꼴은 Pretendard 내장. 다크 모드는 OS 설정을 따름. 아이콘은 나중에 정함 | 화면 코드가 색·크기 값을 직접 쓰지 않아 일관되고, 다크 모드가 토큰 교체만으로 됨. 오프라인에서도 같은 글꼴 |
+| 9/28 | 색: 라이트 B2(크림 `#FAF8F1` 바탕, 청록 `#34656D` 주색), 다크 D4(따뜻한 먹색 `#1A1918`, 주색 `#9EBCBF`). 경희 크림슨 `#990E17`은 선택 표시 같은 좁은 포인트만 | 경희대 사이트 네 곳의 색 중 ChatKHU(종이색 바탕 + 청록)를 바탕으로 Color Hunt 조합(`#FAF8F1 #FAEAB1 #34656D #334443`)으로 다듬음. 다크는 라이트 계열 다크를 OKLCH에서 채도만 낮추고, 바탕은 라이트의 크림 종이 쪽 색상으로. 두 모드 모두 글자 4.5:1, 테두리·포커스 3:1 이상. 견본: https://claude.ai/artifact/RrykzwVrj66M6fh7DDVnXF |
 
 ## 엔진을 TypeScript로 (9/28)
 

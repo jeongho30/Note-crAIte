@@ -1,0 +1,150 @@
+/*
+ * 디자인 토큰. 화면 코드(CSS Modules)는 색·크기 값을 직접 쓰지 않고 여기 이름만 쓴다.
+ * 색: 라이트 B2(크림과 깊은 청록), 다크 D4(따뜻한 먹색). 다크는 OS 설정을 따른다.
+ * 근거와 대비 검사: docs/decisions.md "디자인 토큰" (9/28)
+ */
+
+:root {
+  color-scheme: light;
+
+  /* 바탕과 면 */
+  --color-bg: #faf8f1;
+  --color-surface: #fffefb;
+  --color-surface-2: #f2eee2;
+  --color-overlay: rgb(31 45 46 / 0.32);
+
+  /* 글자 */
+  --color-text: #1f2d2e;
+  --color-text-2: #46514f;
+  --color-text-3: #646e6a;
+
+  /* 선 */
+  --color-border: #e7e2d3;
+  --color-border-strong: #969181;
+  --color-focus: #34656d;
+
+  /* 주색 */
+  --color-primary: #34656d;
+  --color-primary-hover: #28525a;
+  --color-primary-soft: #e3eeec;
+  --color-on-primary: #ffffff;
+  --color-brand: #990e17;
+
+  /* 상태 */
+  --color-warning: #7b6214;
+  --color-warning-soft: #fbf1cc;
+  --color-danger: #a8323a;
+  --color-danger-soft: #fbecea;
+  --color-on-danger: #ffffff;
+  --color-success: #3c6e4e;
+  --color-success-soft: #e6f0e6;
+
+  /* 그림자: 떠 있는 층(메뉴, 대화상자, 알림)에만 */
+  --shadow-1: 0 1px 2px rgb(31 45 46 / 0.08), 0 4px 12px rgb(31 45 46 / 0.08);
+  --shadow-2: 0 2px 6px rgb(31 45 46 / 0.1), 0 12px 32px rgb(31 45 46 / 0.14);
+
+  /* 글꼴. Pretendard는 앱에 내장한다(내장 전에는 시스템 글꼴로 보임) */
+  --font-sans: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Malgun Gothic',
+    'Apple SD Gothic Neo', system-ui, sans-serif;
+  --font-mono: 'Cascadia Mono', Consolas, ui-monospace, monospace;
+
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 24px;
+
+  --font-weight-regular: 400;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.3;
+  --line-height-body: 1.6;
+
+  /* 간격: 4px 단위 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* 모서리 */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 9999px;
+
+  /* 컨트롤 높이: 작은 것, 기본, 첫 실행 마법사 */
+  --control-h-sm: 28px;
+  --control-h-md: 32px;
+  --control-h-lg: 40px;
+
+  /* 배치 */
+  --sidebar-w: 176px;
+  --content-max-w: 720px;
+
+  /* 상태 */
+  --opacity-disabled: 0.45;
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+
+  /* 움직임 */
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* 쌓임 순서 */
+  --z-base: 0;
+  --z-sticky: 10;
+  --z-dropdown: 100;
+  --z-overlay: 200;
+  --z-toast: 300;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --color-bg: #1a1918;
+    --color-surface: #232221;
+    --color-surface-2: #2e2d2c;
+    --color-overlay: rgb(0 0 0 / 0.56);
+
+    --color-text: #eeebe5;
+    --color-text-2: #bdb9b3;
+    --color-text-3: #98958f;
+
+    --color-border: #3e3d3c;
+    --color-border-strong: #716f6e;
+    --color-focus: #9ebcbf;
+
+    --color-primary: #9ebcbf;
+    --color-primary-hover: #b4ccce;
+    --color-primary-soft: #28383a;
+    --color-on-primary: #172324;
+    --color-brand: #d69093;
+
+    --color-warning: #e3d49e;
+    --color-warning-soft: #343020;
+    --color-danger: #e3a1a2;
+    --color-danger-soft: #372122;
+    --color-on-danger: #2a1a1b;
+    --color-success: #9ec5a7;
+    --color-success-soft: #203025;
+
+    /* 어두운 바탕에서는 그림자가 잘 안 보여 더 진하게 */
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 12px rgb(0 0 0 / 0.3);
+    --shadow-2: 0 2px 6px rgb(0 0 0 / 0.35), 0 12px 32px rgb(0 0 0 / 0.45);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+  }
+}
