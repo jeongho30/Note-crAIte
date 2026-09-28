@@ -18,11 +18,12 @@ import { loadSettings, updateSettings } from '../core/settings.ts'
 import type { Language } from '../core/settings.ts'
 import { inspectFolder, useFolder } from '../core/vault.ts'
 import { createJobRunner } from './jobs.ts'
-import type { JobInput } from './jobs.ts'
+import type { JobInput, JobView } from './jobs.ts'
 import { fitContent } from './fit.ts'
 import type { Size } from './fit.ts'
 import { keyHint, readKey, saveKey } from './secrets.ts'
 import { createSetup } from './setup.ts'
+import { createTray } from './tray.ts'
 
 // 설치본은 extraResources로 넣은 resources/bin, 개발 중에는 저장소의 .cache/whisper/bin과 PATH의 ffmpeg.
 const binDir = app.isPackaged ? join(process.resourcesPath, 'bin') : undefined
@@ -32,6 +33,10 @@ const whisperDirs = app.isPackaged
 const probeSample = app.isPackaged ? join(process.resourcesPath, 'probe-ko.wav') : join(app.getAppPath(), 'resources', 'probe-ko.wav')
 // LN_DATA_DIR: 개발 중 첫 실행 상태를 따로 시험할 때만 쓴다 (CLI의 --data-dir과 같은 역할)
 const dataDir = process.env['LN_DATA_DIR'] || defaultDataDir()
+
+// 앱은 하나만 띄운다: 두 번째로 실행하면 이미 떠 있는 창을 앞으로 가져온다 (같은 설정·작업 파일을 두 곳에서 쓰지 않게)
+const primary = app.requestSingleInstanceLock()
+if (!primary) app.quit()
 
 function found(find: () => string): string | null {
   try {
@@ -95,8 +100,76 @@ const runner = createJobRunner({
     return provider ? readKey(dataDir, provider) : null
   },
   outDir,
-  emit: (jobs) => emit('jobs', jobs)
+  emit: (jobs) => {
+    emit('jobs', jobs)
+    onJobs(jobs)
+  }
 })
+
+// ── 창 닫기와 트레이 ──
+// 작업(대기 포함)이 있을 때 창을 닫으면 트레이로 숨어 계속하고, 없으면 앱을 끝낸다(9/28 결정).
+let quitting = false
+let closeHintShown = false
+let lastJobs: JobView[] = []
+let seenStatus = new Map<string, JobView['status']>()
+
+const tray = createTray({ open: showWindow, quit: () => void quitFromTray() })
+
+function showWindow(): void {
+  if (!mainWindow) return
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+  updateTray()
+}
+
+/** 작업 중이거나 창이 숨어 있으면 트레이를 두고, 아니면 없앤다. */
+function updateTray(): void {
+  const active = lastJobs.filter((j) => j.status === 'running' || j.status === 'queued')
+  const hidden = !!mainWindow && !mainWindow.isVisible()
+  if (!active.length && !hidden) return tray.destroy()
+  tray.ensure()
+  const run = active.find((j) => j.status === 'running' && j.stage)
+  const waiting = active.length - (run ? 1 : 0)
+  tray.status(
+    ['lecture-notes', run ? `${run.name} ${run.stage === 'stt' ? `받아쓰기 ${Math.floor(run.frac * 100)}%` : '처리 중'}` : null, waiting ? `대기 ${waiting}개` : null]
+      .filter(Boolean)
+      .join(' · ')
+  )
+}
+
+function onJobs(jobs: JobView[]): void {
+  // 창이 숨어 있는 동안 끝나거나 실패한 작업은 트레이 알림으로 알린다 (창이 보이면 화면이 알린다)
+  if (mainWindow && !mainWindow.isVisible()) {
+    for (const j of jobs) {
+      const before = seenStatus.get(j.id)
+      if (before !== 'running' && before !== 'queued') continue
+      if (j.status === 'done') tray.notify('노트가 만들어졌어요', `${j.subject ?? '미분류'} · ${j.name}`)
+      if (j.status === 'failed') tray.notify('노트를 만들지 못했어요', `${j.name} · ${j.error?.message.split('\n')[0] ?? ''}`)
+    }
+  }
+  seenStatus = new Map(jobs.map((j) => [j.id, j.status]))
+  lastJobs = jobs
+  updateTray()
+}
+
+async function quitFromTray(): Promise<void> {
+  if (runner.activeCount() > 0) {
+    const { response } = await dialog.showMessageBox({
+      type: 'question',
+      title: 'lecture-notes',
+      message: '받아쓰기 중이에요',
+      detail: '끝내면 지금 작업이 멈추고, 다음에 앱을 켜면 멈춘 곳부터 이어서 해요.',
+      buttons: ['계속하기', '끝내기'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true
+    })
+    if (response !== 1) return
+  }
+  quitting = true
+  app.quit()
+}
 
 type Prepared = {
   recordings: {
@@ -345,6 +418,21 @@ function createWindow(target: Size): void {
   resizeContent(win, target)
   mainWindow = win
   win.on('closed', () => (mainWindow = null))
+  win.on('close', (event) => {
+    if (quitting || runner.activeCount() === 0) return
+    event.preventDefault()
+    win.hide()
+    updateTray()
+    if (!closeHintShown) {
+      closeHintShown = true
+      tray.notify('창을 닫아도 계속해요', '받아쓰기가 끝나면 알려 드려요. 작업 표시줄 오른쪽 아이콘으로 다시 열 수 있어요.')
+    }
+  })
+  win.on('show', updateTray)
+  // Windows 로그아웃·종료 때는 트레이로 숨지 않고 끝낸다
+  win.on('query-session-end', () => {
+    quitting = true
+  })
   if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
     win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
@@ -352,7 +440,22 @@ function createWindow(target: Size): void {
   }
 }
 
+app.on('second-instance', showWindow)
+
+// 끝낼 때 돌고 있는 받아쓰기(whisper-cli)를 멈추고 작업을 대기로 되돌린다. 다음에 켜면 이어서 한다.
+let stopped = false
+app.on('before-quit', (event) => {
+  quitting = true
+  if (stopped || !runner.busy()) return
+  event.preventDefault()
+  void runner.shutdown().finally(() => {
+    stopped = true
+    app.quit()
+  })
+})
+
 app.whenReady().then(async () => {
+  if (!primary) return
   ipcMain.handle('api:call', async (_event, method: string, params: unknown) => {
     const handler = Object.hasOwn(handlers, method) ? handlers[method] : undefined
     if (!handler) throw new Error(`허용되지 않은 메서드: ${method}`)

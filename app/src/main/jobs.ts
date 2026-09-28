@@ -52,6 +52,10 @@ export function createJobRunner(d: Deps) {
   let current: { id: string; stage: StageName; frac: number; stageStartedAt: number } | null = null
   let lastEmit = 0
   let probeCache: ProbeResult | null = null
+  let last: JobView[] = [] // 마지막으로 보낸 목록 (트레이·창 닫기 판단용)
+  let loopDone: Promise<void> = Promise.resolve()
+  let controller: AbortController | null = null
+  let stopping = false
 
   function view(job: Job, firstQueued: boolean): JobView {
     const live = current?.id === job.id ? current : null
@@ -87,7 +91,8 @@ export function createJobRunner(d: Deps) {
 
   async function emitNow(): Promise<void> {
     lastEmit = Date.now()
-    d.emit(await list())
+    last = await list()
+    d.emit(last)
   }
 
   // 앞에서부터(오래된 것부터) 끝나지 않은 작업. 실행 중이던 작업(앱이 꺼져 멈춘 것)도 다시 돌린다.
@@ -95,12 +100,17 @@ export function createJobRunner(d: Deps) {
     return (await listJobs(d.dataDir)).find((j) => j.status === 'queued' || j.status === 'running') ?? null
   }
 
-  async function loop(): Promise<void> {
-    if (running) return
+  function loop(): Promise<void> {
+    if (running || stopping) return loopDone
     running = true
+    loopDone = run()
+    return loopDone
+  }
+
+  async function run(): Promise<void> {
     let blocker: number | null = null
     try {
-      for (let job = await nextPending(); job; job = await nextPending()) {
+      for (let job = await nextPending(); job && !stopping; job = await nextPending()) {
         blocker ??= powerSaveBlocker.start('prevent-app-suspension') // 작업 중에는 PC가 잠들지 않게
         await emitNow()
         try {
@@ -117,12 +127,15 @@ export function createJobRunner(d: Deps) {
           job.settings.threads = probeCache.threads
           await writeJsonAtomic(join(jobDir, 'job.json'), job)
         }
+        if (stopping) break
         current = { id: job.id, stage: 'audio', frac: 0, stageStartedAt: Date.now() }
+        controller = new AbortController()
         const ctx: JobContext = {
           ffmpeg: d.ffmpeg(),
           whisperCli: [d.whisperCli()],
           modelPath: async (kind, name) => join(d.dataDir, 'models', MODELS[kind][name].file),
           apiKey: await d.apiKey(),
+          signal: controller.signal,
           onProgress: (stage, frac) => {
             if (!current) return
             if (stage !== current.stage) current = { ...current, stage, frac: 0, stageStartedAt: Date.now() }
@@ -134,7 +147,9 @@ export function createJobRunner(d: Deps) {
           await runJob(jobDir, ctx)
         } catch {
           // 실패 이유는 job.json에 남는다 (화면이 error로 보여 준다)
+          if (stopping) await requeue(jobDir) // 앱을 끄느라 멈춘 것은 실패가 아니다: 다음에 켜면 이어서 한다
         }
+        controller = null
         current = null
       }
     } finally {
@@ -173,6 +188,29 @@ export function createJobRunner(d: Deps) {
     void loop()
   }
 
-  return { list, start, retry, kick: () => void loop() }
+  async function requeue(jobDir: string): Promise<void> {
+    const job = await loadJob(jobDir)
+    job.status = 'queued'
+    delete job.error
+    await writeJsonAtomic(join(jobDir, 'job.json'), job)
+  }
+
+  /** 앱을 끌 때: 돌고 있는 받아쓰기를 멈추고(whisper-cli 종료) 작업은 대기로 되돌린다. 최대 waitMs만 기다린다. */
+  async function shutdown(waitMs = 5000): Promise<void> {
+    stopping = true
+    controller?.abort()
+    await Promise.race([loopDone, new Promise((r) => setTimeout(r, waitMs))])
+  }
+
+  return {
+    list,
+    start,
+    retry,
+    shutdown,
+    kick: () => void loop(),
+    /** 대기 중이거나 도는 작업 수 */
+    activeCount: () => last.filter((j) => j.status === 'running' || j.status === 'queued').length,
+    busy: () => running
+  }
 }
 

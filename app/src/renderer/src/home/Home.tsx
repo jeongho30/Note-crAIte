@@ -187,8 +187,8 @@ function JobRow({ job }: { job: JobView }): React.JSX.Element {
   if (job.status === 'running' && job.stage) {
     right = <span className={styles.stage}>{job.stage === 'stt' ? `${stage} ${Math.floor(job.frac * 100)}%` : `${stage} 중`}</span>
     const parts = [job.durationS ? `${lengthMinutes(job.durationS)} 녹음` : null, job.etaS != null ? `${aboutMinutes(job.etaS)} 남음` : null]
-    // 트레이를 넣기 전까지는 창을 닫으면 앱이 끝난다 (다시 열면 끝난 조각부터 이어 한다)
-    meta = [...parts.filter(Boolean), '창을 닫으면 멈추고, 다시 열면 이어서 해요'].join(' · ')
+    // 작업 중에 창을 닫으면 트레이로 숨어 계속한다
+    meta = [...parts.filter(Boolean), '창을 닫아도 계속돼요'].join(' · ')
   } else if (failed) {
     const at = job.error ? STAGE_LABEL[job.error.stage] : null
     right = <StatusPill tone="danger">{job.status === 'cancelled' ? '취소됨' : at ? `${at} 실패` : '실패'}</StatusPill>
