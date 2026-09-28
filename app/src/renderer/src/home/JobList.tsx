@@ -187,8 +187,10 @@ function JobRow({ job: j, now, open, onToggle, act, onConnect }: RowProps): Reac
     <div className={cx(styles.row, open && styles.open)}>
       <div className={styles.top} onClick={onToggle}>
         <button className={styles.chev} aria-expanded={open} aria-label={`${title} 자세히`} onClick={(e) => (stop(e), onToggle())} />
-        <StatusPill>{j.subject ?? '미분류'}</StatusPill>
-        <span className={styles.name}>
+        <StatusPill className={styles.subject} title={j.subject ?? '미분류'}>
+          {j.subject ?? '미분류'}
+        </StatusPill>
+        <span className={styles.name} title={title}>
           {title}
           {j.status === 'done' && summarySkipped && <small>전사만</small>}
         </span>
@@ -204,7 +206,9 @@ function JobRow({ job: j, now, open, onToggle, act, onConnect }: RowProps): Reac
           <ProgressBar value={j.frac} label={`${j.name} 받아쓰기`} />
         </div>
       )}
-      {meta && <p className={styles.meta}>{meta}</p>}
+      {/* 펼치면 설명 대신 잘리지 않은 전체 이름 (오류는 펼친 칸의 단계 목록에 있다). 받아쓰기 중이면 남은 시간이 여기뿐이라 설명도 둔다 */}
+      {open && <p className={styles.fullName}>{title}</p>}
+      {meta && (!open || j.status === 'running') && <p className={styles.meta}>{meta}</p>}
       {open && <Detail job={j} act={act} />}
     </div>
   )

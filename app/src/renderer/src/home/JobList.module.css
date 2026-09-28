@@ -112,6 +112,24 @@
   white-space: nowrap;
 }
 
+/* 과목 칩은 최대 폭까지만: 파일 이름에 자리를 남긴다. 전체 과목 이름은 마우스를 올리면 뜬다 */
+.subject {
+  display: inline-block;
+  flex: none;
+  max-width: 120px;
+  overflow: hidden;
+  line-height: 20px;
+  text-overflow: ellipsis;
+}
+
+/* 펼쳤을 때 둘째 줄: 잘리지 않은 전체 이름 (이름과 같은 글꼴) */
+.fullName {
+  margin: 0;
+  padding-left: 24px;
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
 .name small {
   margin-left: 6px;
   color: var(--color-text-3);

@@ -7,8 +7,15 @@ type Props = {
   tone?: 'neutral' | 'progress' | 'waiting' | 'success' | 'warning' | 'danger'
   /** 색만으로 상태를 전하지 않도록 항상 글자로 쓴다 (예: "받아쓰기 42%", "요약 실패") */
   children: ReactNode
+  /** 마우스를 올리면 뜨는 글 (줄여 보일 때 전체 이름) */
+  title?: string
+  className?: string
 }
 
-export function StatusPill({ tone = 'neutral', children }: Props): React.JSX.Element {
-  return <span className={cx(styles.pill, styles[tone])}>{children}</span>
+export function StatusPill({ tone = 'neutral', children, title, className }: Props): React.JSX.Element {
+  return (
+    <span className={cx(styles.pill, styles[tone], className)} title={title}>
+      {children}
+    </span>
+  )
 }
