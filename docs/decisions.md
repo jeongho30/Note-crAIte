@@ -2,7 +2,7 @@
 
 ## 0주차 실험
 
-### S3 로컬 STT 엔진 (데스크톱 측정 완료, 노트북 9/30 예정)
+### S3 로컬 STT 엔진 (데스크톱·노트북 측정 완료 9/28, 결정 대기)
 
 - 판정 규칙: 노트북 결과가 기준이다. whisper.cpp의 가장 빠른 설정이 faster-whisper CPU보다 1.5배 넘게 느리지 않고 한국어 품질이 비슷하면 whisper.cpp로 통일한다.
 - 측정 조건: 전원 연결, 앱이 실제로 쓸 스레드 수, 10분 샘플과 90분 강의. CER은 기존 파이프라인의 large-v3 결과를 기준으로 띄어쓰기·문장부호를 지우고 잰다(정답이 아니라 상대 비교용).
@@ -32,6 +32,25 @@
 - CPU에서는 turbo-q8_0이 q5_0보다 빠르다(역양자화 비용). GPU에서는 비슷하다.
 - 크기: `ggml-vulkan.dll` 55.6MB, whisper 실행 파일 폴더 전체 66MB.
 
+**노트북 (9/28)**: Ryzen 7 5700U(8코어) 스레드 6, 전원 연결, 내장 Radeon(Vulkan0). 데스크톱과 같은 녹음(`9.22 game`)의 같은 구간. TypeScript로 옮긴 벤치(`npm run cli -- bench`)로 잼. 결과는 노트북의 `%LOCALAPPDATA%/lecture-notes/bench/20260928-185503/`.
+
+| 설정 | 장치 | STT(초) | RTF | CER | 90분 강의 |
+|---|---|---|---|---|---|
+| whisper.cpp small-q5_1 | CPU | 121.6 | 0.203 | 0.273 | 약 18분 |
+| faster-whisper small int8 | CPU | 74.0 | 0.123 | 0.371 | 약 11분 |
+| whisper.cpp medium-q5_0 | CPU | 338.1 | 0.563 | 0.219 | 약 51분 |
+| whisper.cpp large-v3-turbo-q5_0 | CPU | 256.6 | 0.428 | 0.161 | 약 39분 |
+| whisper.cpp large-v3-turbo-q8_0 | CPU | 209.8 | 0.350 | 0.184 | 약 32분 |
+| faster-whisper large-v3-turbo int8 | CPU | 145.8 | 0.243 | 0.226 | 약 22분 |
+| whisper.cpp small-q5_1 | 내장 Radeon | 402.0 | 0.670 | 0.933 | 못 씀 |
+| whisper.cpp large-v3-turbo-q5_0 | 내장 Radeon | 508.7 | 0.848 | 0.837 | 못 씀 |
+| whisper.cpp large-v3-turbo-q8_0 | 내장 Radeon | 433.8 | 0.723 | 0.877 | 못 씀 |
+
+- 판정 규칙으로는 경계선이다. 가장 빠른 설정끼리는 whisper.cpp small이 faster-whisper small보다 1.64배 느려 기준을 넘고, 같은 turbo끼리는 q8_0이 1.44배로 기준 안이다. 누락은 데스크톱과 같이 faster-whisper가 더 많다.
+- **노트북 내장 GPU는 쓸 수 없다.** CPU보다 2~3배 느리고 전사가 깨진다("(끄덕) (끄덕)…" 반복, 깨진 글자, 글자 수 절반). 첫 실행 속도 측정은 빠른 쪽만 고르지 말고 결과가 정상인지(글자 수, 반복)도 봐야 한다.
+- CPU에서 turbo-q8_0이 q5_0보다 빠른 것은 노트북에서도 같다(210초 대 257초).
+- **추천(결정 대기)**: whisper.cpp로 통일하고 CPU 기본은 large-v3-turbo-q8_0. 90분 강의 약 32분이고 뒤에서 처리하는 앱이라 받아들일 만하다. faster-whisper는 약 22분이지만 누락이 많고, 쓰려면 Python을 STT 전용 실행 파일로 다시 묶어야 한다(설치본 크기·백신 오탐·Mac 빌드 부담이 돌아옴). 결정되면 이 절, 구현 계획 artifact의 S3 표시, CLAUDE.md의 "지금 상태"를 바꾼다.
+
 ### S2 ChatKHU 요약 실측 (9/28)
 
 입력: 63분 컴파일러 강의(`9.21 compiler`)의 정리된 전사 약 18,300자 + 필기, 과목 "컴파일러". 크레딧은 호출 전후 `/credits/` 잔액 차이로 쟀다.
@@ -50,13 +69,16 @@
 - 오치환 방지 규칙을 추가했다: 숫자·기호로만 된 표현과 대소문자만 다른 교정은 버리고, 영문으로 시작하거나 끝나는 표현은 단어 경계를 지킨다. flash-lite 목록에서 정확히 해로운 두 항목만 빠졌다.
 - 교정 개수는 같은 입력에서 2회 모두 11개로 안정적이었다. 오히려 더 좋은 전사(large-v3)에서 37개로 많았다.
 
-### S1 걷는 뼈대 (데스크톱 확인 9/28, 노트북 설치 테스트 남음)
+### S1 걷는 뼈대 (데스크톱 9/28, 노트북 이 계정 설치 9/28, 새 계정 테스트 남음)
 
 - electron-vite 5.0(vite 7) + React 19 + Electron 44 ↔ PyInstaller 6.22 onedir 엔진(26MB). 설치본 구조(`resources/engine/engine.exe`)에서 ping 왕복을 확인했다. 앱을 강제 종료하면 engine.exe도 종료된다.
 - NSIS 설치 파일은 132MB다(Electron + 엔진 + whisper 66MB, ffmpeg 넣기 전).
 - Windows Defender: 설치 파일과 풀린 폴더 모두 위협 없음.
 - whisper 폴더가 폴더 밖에서 찾는 DLL은 Windows 기본 DLL과 `vulkan-1.dll`(GPU 드라이버)뿐이다. VC++ 런타임은 폴더 안에 있다.
-- 남은 확인: 노트북 새 계정에서 설치·실행과 SmartScreen 경고 문구, `vulkan-1.dll`이 없는 PC에서 CPU로 돌아가는지.
+- 위는 옛 구조(Python 엔진) 기준이다. TypeScript로 옮긴 뒤 노트북에서 다시 만든 설치 파일은 115.2MB(옛 구조 125.9MB), 설치 후 433MB. 이 계정에 `/S`로 설치해 앱 화면의 "whisper-cli 있음"과 설치 위치(`resources/bin/whisper`)의 whisper-cli 실행을 확인했다. 서명은 없음(`NotSigned`).
+- 이 PC에서 만든 파일은 인터넷에서 받은 표시가 없어 SmartScreen이 뜨지 않는다. 경고 문구는 내려받은 설치 파일로 봐야 한다.
+- ffmpeg는 아직 설치 파일에 없다. 노트북 화면의 "ffmpeg 있음"은 winget으로 깐 PATH의 ffmpeg다.
+- 남은 확인: 새 계정에서 설치·실행과 SmartScreen 경고 문구, `vulkan-1.dll`이 없는 PC에서 CPU로 돌아가는지.
 - vite 8은 electron-vite 5가 아직 지원하지 않아 vite 7과 @vitejs/plugin-react 5로 고정했다.
 - npm 11은 의존 패키지의 설치 스크립트를 기본으로 막는다. Electron 44는 첫 실행 때 바이너리를 받아서 승인이 필요 없고, esbuild·electron-winstaller도 이 구성에서는 필요 없다.
 
@@ -74,6 +96,10 @@
 | 9/28 | 폴더 감시는 watchdog 대신 기존 폴링 | 클라우드 동기화 폴더에서 변경 이벤트가 누락될 수 있음. 기존 `watch_inbox.py` 방식은 검증됨 |
 | 9/28 | 저장소 라이선스는 MIT | 라이선스 파일이 없으면 공개 저장소여도 남이 쓸 권리가 없음. 의존 라이브러리 대부분(Electron, React, whisper.cpp, 모델 가중치)이 MIT라 맞음. 공모전 규정이 다른 라이선스를 요구하면 바꿈 |
 | 9/28 | Python 엔진을 없애고 처리 로직을 Electron 메인 프로세스의 TypeScript(`app/src/core/`)로 옮김 | 아래 "엔진을 TypeScript로" 참고 |
+| 9/28 | ChatKHU 키가 없으면 마법사에서 건너뛰고 전사문만 담은 노트를 만듦 | 다른 공급자(W3·W4)가 생기기 전 최소 제출선에서도 키 발급이 막힌 사람이 앱을 쓸 수 있게. 키를 넣으면 요약만 추가 |
+| 9/28 | 강의 언어는 과목별로 정함(기본 한국어), 요약은 항상 한국어 | 영어 강의가 많음. 자동 감지는 한국어·영어가 섞인 강의에서 틀릴 수 있음. `whisper-cli -l`에 과목 언어를 넘김 |
+| 9/28 | 과목은 처리할 때 고름(저장 폴더의 하위 폴더가 과목 목록), 마법사에 과목 단계 없음 | 첫 실행을 짧게. 과목 폴더가 곧 목록이라 따로 저장할 것이 없음 |
+| 9/28 | 자동 처리(폴더 감시)는 설정에서만 켬 | 첫 실행에서 개념을 줄임. 계획의 "GPU 없는 PC면 마법사에서 권장"은 뺌 |
 | 9/28 | 설치본의 ffmpeg는 LGPL 빌드 | 개발에 쓰는 Gyan `full_build`는 GPLv3라 재배포하면 소스 제공 의무가 생김. 쓰는 기능(디코딩, WAV 변환, Opus 인코딩)에 GPL 부품이 필요 없음. 빌드(BtbN `win64-lgpl` 또는 필요한 것만 직접 빌드)는 S1에서 ffmpeg를 넣을 때 정함 |
 
 ## 엔진을 TypeScript로 (9/28)
