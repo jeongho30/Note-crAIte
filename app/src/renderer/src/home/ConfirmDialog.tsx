@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ApiError, call } from '../api'
 import { Banner, Button, Dialog, SegmentedControl, Select, TextField } from '../components'
 import type { Language } from '../../../core/settings'
-import { gpuLabel, mb, useSetup, type LlmStatus } from '../wizard/shared'
+import { mb, useSetup, type LlmStatus } from '../wizard/shared'
 import { aboutMinutes, lengthMinutes } from './shared'
 import styles from './ConfirmDialog.module.css'
 
@@ -15,6 +15,7 @@ type Recording = {
   recordedAt: string
   sttS: number | null
   credits: number | null
+  totalS: number | null
 }
 type Prepared = { recordings: Recording[]; rejected: { name: string; reason: string }[] }
 type Subjects = { subjects: string[]; lastSubject: string | null; subjectLanguage: Record<string, Language> }
@@ -120,13 +121,13 @@ export function ConfirmDialog({ paths, llm, onClose }: Props): React.JSX.Element
   const modelReady = setup?.model.state === 'ready'
   const sttTotal = recs.every((r) => r.sttS !== null) ? recs.reduce((n, r) => n + r.sttS!, 0) : null
   const creditTotal = recs.every((r) => r.credits !== null) ? recs.reduce((n, r) => n + r.credits!, 0) : null
-  const device = setup?.probe.state === 'done' ? (setup.probe.gpuName ? `그래픽카드(${gpuLabel(setup.probe.gpuName)})` : '프로세서') : null
+  const total = recs.every((r) => r.totalS !== null) ? recs.reduce((n, r) => n + r.totalS!, 0) : null
 
+  // 받아쓰는 장치는 보여 주지 않고 걸리는 시간만 안내한다
   const sttLine = useMemo(() => {
     if (!modelReady) return `받아쓰기 모델(${setup ? mb(setup.model.total) : '약 875MB'})을 받은 뒤 시작해요`
-    const where = device ? `이 PC의 ${device}` : '이 PC'
-    return sttTotal !== null ? `${where} · ${aboutMinutes(sttTotal)}` : `${where} · 예상 시간은 속도를 잰 뒤 보여요`
-  }, [modelReady, device, sttTotal, setup])
+    return sttTotal !== null ? aboutMinutes(sttTotal) : '이 PC의 속도를 잰 뒤 알려 드려요'
+  }, [modelReady, sttTotal, setup])
 
   async function start(): Promise<void> {
     setStarting(true)
@@ -265,10 +266,22 @@ export function ConfirmDialog({ paths, llm, onClose }: Props): React.JSX.Element
               <dt>요약</dt>
               <dd>
                 {llm?.provider
-                  ? [llm.name, creditTotal !== null ? `약 ${creditTotal}크레딧` : null, llm.credits != null ? `남은 크레딧 ${llm.credits.toLocaleString()}` : null]
+                  ? [
+                      llm.name,
+                      creditTotal !== null ? `약 ${creditTotal}크레딧 소모 예상` : null,
+                      llm.credits != null ? `남은 크레딧 ${llm.credits.toLocaleString()}` : null
+                    ]
                       .filter(Boolean)
                       .join(' · ')
                   : '요약 없이 전사문만 만들어요'}
+              </dd>
+              <dt>예상 총 소요 시간</dt>
+              <dd className={styles.total}>
+                {total !== null && modelReady
+                  ? aboutMinutes(total)
+                  : modelReady
+                    ? '이 PC의 속도를 잰 뒤 알려 드려요'
+                    : '모델을 받고 속도를 잰 뒤 알려 드려요'}
               </dd>
             </dl>
           </>

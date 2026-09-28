@@ -135,3 +135,12 @@ export async function probeDevices(o: ProbeOptions): Promise<ProbeResult> {
 export function estimateSttSeconds(durationS: number, p: Pick<ProbeResult, 'rtf' | 'loadS'>): number {
   return durationS * p.rtf + Math.ceil(durationS / 600) * p.loadS
 }
+
+// 받아쓰기 밖의 단계 (데스크톱 63분 강의 실측, 9/29): 오디오 준비 1.2~1.4초, 요약 5.6~11.4초. 넉넉하게 잡는다.
+const PREP_S_PER_AUDIO_S = 1 / 1800
+const SUMMARY_S = 15
+
+/** 작업 하나의 예상 총 소요 시간(초): 오디오 준비 + 받아쓰기 + 요약(할 때만). */
+export function estimateJobSeconds(durationS: number, p: Pick<ProbeResult, 'rtf' | 'loadS'>, withSummary: boolean): number {
+  return durationS * PREP_S_PER_AUDIO_S + estimateSttSeconds(durationS, p) + (withSummary ? SUMMARY_S : 0)
+}

@@ -115,3 +115,7 @@
 .summary dd {
   margin: 0;
 }
+
+.total {
+  font-weight: var(--font-weight-semibold);
+}

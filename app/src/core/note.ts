@@ -57,7 +57,8 @@ export function renderNote(n: NoteInput): string {
     parts.push(`## 요약\n\n${n.summary}`)
     parts.push(`## 주요 키워드\n\n${n.keywords.length ? n.keywords.map((k) => `- ${k}`).join('\n') : '(없음)'}`)
   }
-  parts.push(`## 전사문\n\n${n.transcript.join('\n\n')}`)
+  // 전사문도 원문 정리본·교정 내역처럼 접어 둔다 (길어서 요약을 읽는 데 방해되지 않게)
+  parts.push(callout('전사문', n.transcript.flatMap((p, i) => [...(i ? [''] : []), p])))
   parts.push(callout('원문 정리본 (타임스탬프)',
                      n.original.flatMap((p, i) => [...(i ? [''] : []), `**[${timestamp(p.startMs)}]** ${p.text}`])))
   if (n.applied.length) {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { EngineError } from '../src/core/errors.ts'
-import { choose, estimateSttSeconds, parseTimings, parseVulkanDevices } from '../src/core/probe.ts'
+import { choose, estimateJobSeconds, estimateSttSeconds, parseTimings, parseVulkanDevices } from '../src/core/probe.ts'
 import type { Trial } from '../src/core/probe.ts'
 
 // 데스크톱(외장 RX 9070 XT + 내장 Radeon)의 실제 whisper-cli 로그 형식
@@ -43,4 +43,11 @@ test('choose는 정상인 GPU 중 가장 빠른 것을, CPU보다 충분히 빠�
 test('estimateSttSeconds는 처리 속도에 조각마다 모델 로드를 더한다', () => {
   // 90분, RTF 0.3, 조각 9개 × 로드 2초
   assert.equal(estimateSttSeconds(5400, { rtf: 0.3, loadS: 2 }), 5400 * 0.3 + 9 * 2)
+})
+
+test('estimateJobSeconds는 받아쓰기에 오디오 준비와 요약(할 때만)을 더한다', () => {
+  const p = { rtf: 0.3, loadS: 2 }
+  const stt = estimateSttSeconds(5400, p)
+  assert.equal(estimateJobSeconds(5400, p, false), stt + 3) // 90분 오디오 준비 3초
+  assert.equal(estimateJobSeconds(5400, p, true), stt + 3 + 15)
 })

@@ -33,7 +33,7 @@ test('renderNote는 frontmatter를 이스케이프하고 접는 부분의 모든
   assert.match(md, /^---\ntitle: "파싱과 \\"LL\(1\)\\""\nsubject: "자료 구조"\ndate: 2026-10-05\n/)
   assert.match(md, /tags: \["lecture","자료_구조"\]/)
   assert.match(md, /## 요약\n\n\*\*파싱\*\*을 다뤘다\.\n\n## 주요 키워드\n\n- LL\(1\)\n- FIRST/)
-  assert.match(md, /## 전사문\n\n교정된 첫 문단\n\n둘째 문단/)
+  assert.match(md, /> \[!quote\]- 전사문\n> 교정된 첫 문단\n>\n> 둘째 문단\n/)
   const start = md.indexOf('> [!quote]- 원문 정리본')
   const quote = md.slice(start, md.indexOf('\n\n', start)) // 다음 callout과는 빈 줄로 나뉜다
   assert.ok(quote.split('\n').every((line) => line.startsWith('>')), '콜아웃 밖으로 새는 줄이 없어야 함')
@@ -44,7 +44,7 @@ test('renderNote는 frontmatter를 이스케이프하고 접는 부분의 모든
 test('요약이 없으면 요약·키워드 없이 전사만 담고, 교정이 없으면 교정 내역도 없다', () => {
   const md = renderNote({ ...BASE, llm: null, summary: null, keywords: [], applied: [] })
   assert.doesNotMatch(md, /## 요약|## 주요 키워드|교정 내역|^llm:/m)
-  assert.match(md, /## 전사문/)
+  assert.match(md, /> \[!quote\]- 전사문/)
 })
 
 test('safeName은 Windows에서 못 쓰는 이름을 고친다', () => {

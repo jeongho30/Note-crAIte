@@ -9,7 +9,7 @@ import { AUDIO_EXTS, NOTE_EXTS, pairInputs } from '../core/inputs.ts'
 import { DEFAULT_MODEL } from '../core/job.ts'
 import type { LlmSettings } from '../core/job.ts'
 import { defaultDataDir, findFfmpeg, findWhisperCli } from '../core/paths.ts'
-import { estimateSttSeconds } from '../core/probe.ts'
+import { estimateJobSeconds, estimateSttSeconds } from '../core/probe.ts'
 import type { ProbeResult } from '../core/probe.ts'
 import { CREDITS_PER_90MIN_SUMMARY, PRESETS, PROVIDERS, verifyKey } from '../core/providers.ts'
 import type { ProviderId } from '../core/providers.ts'
@@ -110,6 +110,8 @@ type Prepared = {
     sttS: number | null
     /** 요약 예상 크레딧 (ChatKHU일 때만) */
     credits: number | null
+    /** 오디오 준비부터 노트 저장까지 예상 시간(초). 속도를 아직 안 쟀으면 null */
+    totalS: number | null
   }[]
   rejected: { name: string; reason: string }[]
 }
@@ -138,6 +140,7 @@ async function prepare(paths: string[]): Promise<Prepared> {
         durationS: info.durationS,
         recordedAt,
         sttS: probe && info.durationS ? Math.round(estimateSttSeconds(info.durationS, probe)) : null,
+        totalS: probe && info.durationS ? Math.round(estimateJobSeconds(info.durationS, probe, settings.provider !== null)) : null,
         credits: settings.provider === 'chatkhu' && info.durationS ? Math.max(1, Math.round((info.durationS / 5400) * CREDITS_PER_90MIN_SUMMARY)) : null
       })
     } catch {
