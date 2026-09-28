@@ -28,9 +28,16 @@ export async function loadSettings(dataDir: string): Promise<Settings> {
   }
 }
 
-export async function updateSettings(dataDir: string, patch: Partial<Settings>): Promise<Settings> {
-  const next = { ...(await loadSettings(dataDir)), ...patch }
-  await mkdir(dataDir, { recursive: true })
-  await writeJsonAtomic(settingsPath(dataDir), next)
-  return next
+// 읽고-고치고-쓰기를 한 번에 하나씩 한다. 겹치면 앞의 변경이 사라지거나(나중 쓰기가 옛 값을 덮음) rename이 실패한다.
+let queue: Promise<unknown> = Promise.resolve()
+
+export function updateSettings(dataDir: string, patch: Partial<Settings>): Promise<Settings> {
+  const run = queue.then(async () => {
+    const next = { ...(await loadSettings(dataDir)), ...patch }
+    await mkdir(dataDir, { recursive: true })
+    await writeJsonAtomic(settingsPath(dataDir), next)
+    return next
+  })
+  queue = run.catch(() => {})
+  return run
 }

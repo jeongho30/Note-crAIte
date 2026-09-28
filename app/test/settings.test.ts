@@ -16,6 +16,20 @@ test('설정은 없으면 기본값이고, 고친 값만 바뀐 채 저장된다
   assert.deepEqual(await loadSettings(dir), { ...DEFAULT_SETTINGS, wizardStep: 2, outDir: 'D:\\notes' })
 })
 
+test('동시에 여러 번 고쳐도 변경이 모두 남는다', async () => {
+  const dir = await tempDir()
+  const writes = await Promise.all([
+    updateSettings(dir, { wizardStep: 1 }),
+    updateSettings(dir, { outDir: 'D:\\notes' }),
+    updateSettings(dir, { wizardStep: 2 }),
+    updateSettings(dir, { provider: 'chatkhu' }),
+    updateSettings(dir, { wizardDone: true })
+  ])
+  const expected = { wizardStep: 2, wizardDone: true, outDir: 'D:\\notes', provider: 'chatkhu' }
+  assert.deepEqual(writes.at(-1), expected)
+  assert.deepEqual(await loadSettings(dir), expected)
+})
+
 test('깨진 설정 파일은 기본값으로 읽는다', async () => {
   const dir = await tempDir()
   await writeFile(join(dir, 'settings.json'), '{쓰다 만')
