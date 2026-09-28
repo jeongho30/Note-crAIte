@@ -2,12 +2,13 @@
 import { existsSync, statSync } from 'node:fs'
 import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { EngineError } from './errors.ts'
 
 export type FolderInfo = {
   path: string
   exists: boolean
-  /** 없는 폴더는 가장 가까운 상위 폴더에 만들 수 있는지로 본다 */
-  writable: boolean
+  /** 아직 없는 폴더는 null: 미리 판단하지 않고 useFolder로 만들 때 확인한다 */
+  writable: boolean | null
   /** 이 폴더나 상위 폴더에 .obsidian이 있으면 그 볼트 폴더 */
   vaultRoot: string | null
   /** 하위 폴더 이름 = 과목 목록 (숨김 폴더 제외) */
@@ -55,11 +56,18 @@ export async function inspectFolder(path: string): Promise<FolderInfo> {
         .map((d) => d.name)
         .sort((a, b) => a.localeCompare(b, 'ko'))
     : []
-  return { path, exists, writable: await canWrite(nearestExisting(path)), vaultRoot: findVaultRoot(nearestExisting(path)), subjects }
+  return { path, exists, writable: exists ? await canWrite(path) : null, vaultRoot: findVaultRoot(nearestExisting(path)), subjects }
 }
 
-/** 저장 폴더로 정한다: 없으면 만들고 다시 검사한다. */
+/** 저장 폴더로 정한다: 없으면 만들고, 실제로 쓸 수 있는지 확인한다. */
 export async function useFolder(path: string): Promise<FolderInfo> {
-  await mkdir(path, { recursive: true })
-  return inspectFolder(path)
+  try {
+    await mkdir(path, { recursive: true })
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code ?? (e as Error).name
+    throw new EngineError('input', `폴더를 만들지 못했어요(${code}). 다른 폴더를 골라 주세요.`)
+  }
+  const info = await inspectFolder(path)
+  if (!info.writable) throw new EngineError('input', '이 폴더에는 저장할 수 없어요. 다른 폴더를 골라 주세요.')
+  return info
 }

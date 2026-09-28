@@ -36,13 +36,19 @@ test('폴더 검사: 하위 폴더가 과목 목록이고, 상위 폴더의 .obs
   assert.deepEqual(info.subjects, ['자료구조', '컴파일러'], '숨김 폴더와 파일은 빼고 가나다순')
 })
 
-test('없는 폴더는 상위 폴더 기준으로 검사하고, useFolder가 만든다', async () => {
+test('없는 폴더는 쓰기 여부를 미리 판단하지 않고, useFolder가 만들면서 확인한다', async () => {
   const base = await tempDir()
   const target = join(base, '새 폴더', '9.14 노트') // 이름의 점은 확장자가 아니다
   const before = await inspectFolder(target)
-  assert.deepEqual([before.exists, before.writable, before.vaultRoot, before.subjects], [false, true, null, []])
+  assert.deepEqual([before.exists, before.writable, before.vaultRoot, before.subjects], [false, null, null, []])
   const after = await useFolder(target)
-  assert.equal(after.exists, true)
+  assert.deepEqual([after.exists, after.writable], [true, true])
+})
+
+test('폴더를 만들 수 없으면 useFolder는 이유를 담은 input 오류를 낸다', async () => {
+  const base = await tempDir()
+  await writeFile(join(base, '파일'), '')
+  await assert.rejects(useFolder(join(base, '파일', '노트')), (e: EngineError) => e.code === 'input' && e.message.startsWith('폴더를 만들지 못했어요('))
 })
 
 test('verifyKey: ChatKHU는 크레딧 잔액을 돌려주고, 401은 auth 오류다', async (t) => {

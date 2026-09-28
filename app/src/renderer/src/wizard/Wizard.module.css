@@ -1,17 +1,22 @@
-/* 바깥 여백은 창 둘레만 두고 내용이 창 폭을 채운다 */
+/* 바깥 여백은 창 둘레만 두고 내용이 창 폭을 채운다.
+   창 높이까지 늘려서 버튼 줄(.actions)이 창 크기와 상관없이 맨 아래에 붙게 한다. */
 .wizard {
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
   padding: var(--space-5) var(--space-6);
 }
 
 .panel {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: var(--space-6);
 }
 
 .step {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: var(--space-4);
 }
@@ -38,7 +43,8 @@
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-2);
-  margin-top: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-2);
 }
 
 /* [이전]은 왼쪽 끝 */

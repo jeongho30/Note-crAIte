@@ -71,7 +71,7 @@ export function FolderStep({ next, back, headingRef }: StepProps): React.JSX.Ele
           <Button variant="ghost" className={styles.back} onClick={back}>
             이전
           </Button>
-          <Button variant="primary" size="lg" disabled={!info?.writable || saving} onClick={() => void onNext()}>
+          <Button variant="primary" size="lg" disabled={!info || info.writable === false || saving} onClick={() => void onNext()}>
             다음
           </Button>
         </>
@@ -85,7 +85,7 @@ export function FolderStep({ next, back, headingRef }: StepProps): React.JSX.Ele
       </div>
 
       {info?.vaultRoot && <Banner tone="success">옵시디언 볼트로 인식했어요. 노트가 볼트 안에 과목별로 저장돼요.</Banner>}
-      {info && !info.writable && <Banner tone="danger">이 폴더에는 저장할 수 없어요. 다른 폴더를 골라 주세요.</Banner>}
+      {info?.writable === false && <Banner tone="danger">이 폴더에는 저장할 수 없어요. 다른 폴더를 골라 주세요.</Banner>}
       {error && <Banner tone="danger">{error}</Banner>}
 
       {info && (
@@ -94,6 +94,7 @@ export function FolderStep({ next, back, headingRef }: StepProps): React.JSX.Ele
             {tree(info)}
           </pre>
           <p className={styles.small}>
+            {!info.exists && '아직 없는 폴더라 [다음]을 누르면 새로 만들어요. '}
             {info.subjects.length ? '이 폴더 안의 하위 폴더가 과목 목록이 돼요. ' : '과목을 고르면 이 폴더 안에 과목 폴더가 생겨요. '}
             녹음 파일은 이 폴더로 복사하지 않고 노트만 저장해요.
           </p>

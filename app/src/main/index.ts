@@ -109,24 +109,55 @@ const handlers: Record<string, (params: unknown) => unknown> = {
   'folder.inspect': (p) => inspectFolder(String(p)),
   'folder.use': async (p) => {
     const info = await useFolder(String(p))
-    if (!info.writable) throw new EngineError('input', '이 폴더에는 저장할 수 없어요. 다른 폴더를 골라 주세요.')
     await updateSettings(dataDir, { outDir: info.path })
     return info
   }
 }
 
+const ASPECT = 4 / 3
+const MIN_CONTENT = { width: 800, height: 600 }
+
+// 창 크기를 바꿀 때 화면 영역(창 틀·메뉴 줄 제외)을 4:3으로 맞춘다.
+// Windows의 setAspectRatio는 창 틀까지 포함한 크기에 비율을 맞춰서 화면 영역 비율이 틀어진다.
+function keepContentAspect(win: BrowserWindow): void {
+  win.on('will-resize', (event, next, { edge }) => {
+    const outer = win.getBounds()
+    const inner = win.getContentBounds()
+    const frameW = outer.width - inner.width
+    const frameH = outer.height - inner.height
+    let w = next.width - frameW
+    let h = next.height - frameH
+    if (edge === 'bottom') w = Math.round(h * ASPECT)
+    else h = Math.round(w / ASPECT)
+    if (w < MIN_CONTENT.width || h < MIN_CONTENT.height) ({ width: w, height: h } = MIN_CONTENT)
+    const width = w + frameW
+    const height = h + frameH
+    event.preventDefault()
+    // 끄는 쪽의 반대편 모서리는 제자리에 둔다
+    win.setBounds({
+      x: edge.includes('left') ? outer.x + outer.width - width : outer.x,
+      y: edge.includes('top') ? outer.y + outer.height - height : outer.y,
+      width,
+      height
+    })
+  })
+}
+
 function createWindow(): void {
+  // 화면 영역 기준 기본 1000x750, 최소 800x600 (4:3)
   const win = new BrowserWindow({
     width: 1000,
-    height: 700,
-    minWidth: 880,
-    minHeight: 600,
+    height: 750,
+    minWidth: MIN_CONTENT.width,
+    minHeight: MIN_CONTENT.height,
+    useContentSize: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
       contextIsolation: true
     }
   })
+  keepContentAspect(win)
   if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
     win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
