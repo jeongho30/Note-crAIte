@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { backendUsed, cer, normalize, textInRange } from '../src/cli/bench.ts'
+import { textInRange } from '../src/cli/bench.ts'
+import { cer, normalize } from '../src/core/compare.ts'
+import { backendUsed } from '../src/core/stt/whispercpp.ts'
 
 test('normalize는 띄어쓰기·문장부호를 무시한다', () => {
   assert.equal(normalize('안녕 하세요, AI 강의!'), '안녕하세요ai강의')

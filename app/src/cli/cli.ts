@@ -3,16 +3,21 @@
 //   node app/src/cli/cli.ts models download small-q5_1 silero-v6.2.0
 //   node app/src/cli/cli.ts bench --audio <녹음> --ref <기준 JSON> --config wcpp:small-q5_1:cpu
 import { existsSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
+import { probe as probeAudio } from '../core/audio.ts'
 import { ensureModel } from '../core/downloads.ts'
 import { EngineError } from '../core/errors.ts'
 import { defaultThreads, detect } from '../core/hardware.ts'
 import { findNotes } from '../core/inputs.ts'
-import { createJob, DEFAULT_BEAM_SIZE, DEFAULT_MODEL, jobsDir, listJobs, runJob } from '../core/job.ts'
+import { createJob, DEFAULT_BEAM_SIZE, DEFAULT_MODEL, jobsDir, listJobs, runJob, VAD_MODEL } from '../core/job.ts'
 import type { JobContext, LlmSettings, StageName } from '../core/job.ts'
 import { MODELS } from '../core/models.ts'
 import { defaultDataDir, findFfmpeg, findWhisperCli } from '../core/paths.ts'
+import { writeJsonAtomic } from '../core/files.ts'
+import { estimateSttSeconds, probeDevices } from '../core/probe.ts'
+import type { ProbeResult } from '../core/probe.ts'
 import { PRESETS } from '../core/providers.ts'
 import { run as bench } from './bench.ts'
 
@@ -20,10 +25,13 @@ const REPO = resolve(import.meta.dirname, '..', '..', '..')
 
 const USAGE = `사용법:
   cli.ts [--data-dir D] [--bin-dir B] run <녹음> --out <저장 폴더> [--subject 과목] [--notes 필기]
-         [--lang ko] [--model large-v3-turbo-q8_0] [--device cpu|gpu0] [--threads N]
+         [--lang ko] [--model large-v3-turbo-q8_0] [--device auto|cpu|gpu0] [--threads N]
+         auto는 probe 결과(장치, 예상 시간)를 쓴다. probe를 안 했으면 CPU.
          필기를 주지 않으면 녹음 옆의 같은 이름 .md/.txt를 쓴다. 환경변수 LN_API_KEY(ChatKHU 키)가 없으면 요약 없이 전사만 담는다.
   cli.ts [--data-dir D] [--bin-dir B] resume <작업 ID>
   cli.ts [--data-dir D] jobs
+  cli.ts [--data-dir D] [--bin-dir B] probe [--sample 16kHz 모노 WAV] [--threads N]
+         CPU와 GPU마다 샘플을 돌려 쓸 장치와 속도를 정하고 <데이터 폴더>/probe.json에 남긴다.
   cli.ts [--data-dir D] [--bin-dir B] models download <이름...>
   cli.ts [--data-dir D] [--bin-dir B] bench --audio A [--ref R] --config 엔진:모델:장치 [--config ...]
          [--start 초] [--duration 초] [--threads N] [--lang ko] [--chunk-s 600] [--python P]
@@ -60,7 +68,8 @@ async function main(argv: string[]): Promise<void> {
       subject: { type: 'string' },
       notes: { type: 'string' },
       model: { type: 'string', default: DEFAULT_MODEL },
-      device: { type: 'string', default: 'cpu', description: 'cpu | gpu0 | gpu1 ...' }
+      device: { type: 'string', default: 'auto', description: 'auto | cpu | gpu0 | gpu1 ...' },
+      sample: { type: 'string', default: join(REPO, 'app', 'resources', 'probe-ko.wav') }
     }
   })
   const dataDir = v['data-dir'] ?? defaultDataDir()
@@ -75,12 +84,24 @@ async function main(argv: string[]): Promise<void> {
     if (!llm) console.log('LN_API_KEY가 없어 요약 없이 전사만 담은 노트를 만듭니다.')
     if (!existsSync(sub)) throw new EngineError('input', `녹음 파일이 없습니다: ${sub}`)
     const notes = v.notes ?? findNotes(sub)
+    const probed = await loadProbe(dataDir, v.model!)
+    let gpuDevice: number | null
+    if (v.device === 'auto') gpuDevice = probed?.gpuDevice ?? null
+    else gpuDevice = v.device === 'cpu' ? null : Number(v.device!.replace('gpu', ''))
+    const threads = v.threads ? Number(v.threads) : probed?.threads ?? defaultThreads(await detect())
+    const { durationS } = await probeAudio(findFfmpeg(binDir), sub)
+    if (probed && durationS && gpuDevice === probed.gpuDevice) {
+      const minutes = Math.ceil(estimateSttSeconds(durationS, probed) / 60)
+      console.log(`녹음 ${Math.round(durationS / 60)}분 · ${gpuDevice === null ? 'CPU' : `GPU ${gpuDevice}`} · 예상 전사 시간 약 ${minutes}분`)
+    } else if (!probed) {
+      console.log('예상 시간은 probe를 한 번 돌리면 보입니다.')
+    }
     const jobDir = await createJob(dataDir, resolve(sub), notes ? resolve(notes) : null, v.subject ?? null, {
       language: v.lang!,
       model: v.model!,
       beamSize: DEFAULT_BEAM_SIZE,
-      gpuDevice: v.device === 'cpu' ? null : Number(v.device!.replace('gpu', '')),
-      threads: v.threads ? Number(v.threads) : defaultThreads(await detect()),
+      gpuDevice,
+      threads,
       outDir: resolve(v.out),
       llm
     })
@@ -88,6 +109,28 @@ async function main(argv: string[]): Promise<void> {
     await runAndReport(jobDir, jobContext(dataDir, binDir, whisperDirs, apiKey))
   } else if (cmd === 'resume' && sub) {
     await runAndReport(join(jobsDir(dataDir), sub), jobContext(dataDir, binDir, whisperDirs, process.env['LN_API_KEY'] || null))
+  } else if (cmd === 'probe') {
+    if (!existsSync(v.sample!)) throw new EngineError('input', `감지용 샘플이 없습니다: ${v.sample} (--sample로 지정)`)
+    const modelsDir = join(dataDir, 'models')
+    const result = await probeDevices({
+      cli: [findWhisperCli(whisperDirs)],
+      model: await ensureModel('whisper', v.model!, modelsDir, progressPrinter(`${v.model} 받는 중`)),
+      modelName: v.model!,
+      vadModel: await ensureModel('vad', VAD_MODEL, modelsDir),
+      threads: v.threads ? Number(v.threads) : defaultThreads(await detect()),
+      beamSize: DEFAULT_BEAM_SIZE,
+      language: v.lang!,
+      sample: v.sample!,
+      workDir: join(dataDir, 'probe'),
+      onTrial: (name) => console.log(`${name} 확인 중...`)
+    })
+    for (const t of result.trials) {
+      const speed = t.ok ? `처리 ${(t.processMs / 1000).toFixed(1)}초 · 로드 ${(t.loadMs / 1000).toFixed(1)}초 · ${t.chars}자` : t.reason
+      console.log(`  ${t.device === null ? 'CPU' : `GPU ${t.device}`} ${t.name}: ${speed}`)
+    }
+    const choice = result.gpuDevice === null ? 'CPU' : `GPU ${result.gpuDevice}`
+    console.log(`선택: ${choice} · 90분 강의 예상 전사 시간 약 ${Math.ceil(estimateSttSeconds(5400, result) / 60)}분`)
+    await writeJsonAtomic(join(dataDir, 'probe.json'), result)
   } else if (cmd === 'jobs') {
     for (const j of await listJobs(dataDir)) {
       const detail = j.error ? `${j.error.stage}: ${j.error.message.split('\n')[0]}` : j.output?.notePath ?? ''
@@ -118,6 +161,16 @@ async function main(argv: string[]): Promise<void> {
   } else {
     console.error(USAGE)
     process.exitCode = 2
+  }
+}
+
+/** 같은 모델로 잰 probe 결과가 있으면 돌려준다. */
+async function loadProbe(dataDir: string, model: string): Promise<ProbeResult | null> {
+  try {
+    const p = JSON.parse(await readFile(join(dataDir, 'probe.json'), 'utf8')) as ProbeResult
+    return p.model === model ? p : null
+  } catch {
+    return null
   }
 }
 

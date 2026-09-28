@@ -4,6 +4,7 @@ import { appendFile, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { prepareLocal } from '../core/audio.ts'
 import { ensureModel } from '../core/downloads.ts'
+import { cer, normalize } from '../core/compare.ts'
 import { EngineError } from '../core/errors.ts'
 import { readJson, writeJsonAtomic } from '../core/files.ts'
 import { defaultThreads, detect } from '../core/hardware.ts'
@@ -11,11 +12,9 @@ import { findFfmpeg, findWhisperCli } from '../core/paths.ts'
 import { runCapture } from '../core/proc.ts'
 import { transcribeChunks } from '../core/stt/base.ts'
 import type { Segment } from '../core/stt/base.ts'
-import { parseWhisperJson, WhisperCpp } from '../core/stt/whispercpp.ts'
+import { backendUsed, parseWhisperJson, WhisperCpp } from '../core/stt/whispercpp.ts'
 import { wavDuration } from '../core/wav.ts'
 
-const NORMALIZE_RE = /[^0-9A-Za-z가-힣]/g
-const BACKEND_RE = /using (\S+) backend/
 const FIELDS = ['config', 'engine', 'model', 'device', 'backend', 'threads', 'audio_s', 'prep_s', 'stt_s', 'rtf', 'cer', 'chars'] as const
 
 export type BenchArgs = {
@@ -34,42 +33,10 @@ export type BenchArgs = {
   fwScript: string
 }
 
-/** 띄어쓰기·문장부호 차이는 오류로 세지 않는다. */
-export function normalize(text: string): string {
-  return text.replace(NORMALIZE_RE, '').toLowerCase()
-}
-
-function levenshtein(a: string[], b: string[]): number {
-  let prev = new Int32Array(b.length + 1).map((_, j) => j)
-  let cur = new Int32Array(b.length + 1)
-  for (let i = 1; i <= a.length; i++) {
-    cur[0] = i
-    const ai = a[i - 1]
-    for (let j = 1; j <= b.length; j++) {
-      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ai === b[j - 1] ? 0 : 1))
-    }
-    ;[prev, cur] = [cur, prev]
-  }
-  return prev[b.length]
-}
-
-export function cer(ref: string, hyp: string): number {
-  const r = [...normalize(ref)]
-  return levenshtein(r, [...normalize(hyp)]) / Math.max(1, r.length)
-}
-
 export function textInRange(segments: Segment[], startMs: number, endMs: number): string {
   return segments.filter((s) => startMs <= s.startMs && s.startMs < endMs).map((s) => s.text).join(' ')
 }
 
-/** gpu 설정이어도 쓸 GPU가 없으면 whisper는 CPU로 돈다. 로그로 실제 백엔드를 확인한다. */
-export function backendUsed(log: string[]): string {
-  for (const line of log) {
-    const m = BACKEND_RE.exec(line)
-    if (m) return m[1]
-  }
-  return 'CPU'
-}
 
 function stamp(): string {
   const d = new Date()

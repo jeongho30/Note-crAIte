@@ -9,6 +9,7 @@ import { EngineError } from '../errors.ts'
 import type { Segment, SttEngine, TranscribeOptions } from './base.ts'
 
 const PROGRESS_RE = /progress\s*=\s*(\d+)%/
+const BACKEND_RE = /using (\S+) backend/
 const TAIL_LINES = 40
 
 type WhisperJson = { transcription?: { text?: string; offsets?: { from?: number; to?: number } }[] }
@@ -21,6 +22,15 @@ export async function parseWhisperJson(path: string): Promise<Segment[]> {
     if (text) segments.push({ startMs: seg.offsets?.from ?? 0, endMs: seg.offsets?.to ?? 0, text })
   }
   return segments
+}
+
+/** gpu 설정이어도 쓸 GPU가 없으면 whisper는 CPU로 돈다. 로그(quiet: false)로 실제 백엔드를 확인한다. */
+export function backendUsed(log: string[]): string {
+  for (const line of log) {
+    const m = BACKEND_RE.exec(line)
+    if (m) return m[1]
+  }
+  return 'CPU'
 }
 
 function argPath(p: string, cwd: string): string {
