@@ -122,15 +122,18 @@
   text-overflow: ellipsis;
 }
 
-/* 펼쳤을 때 둘째 줄: 잘리지 않은 전체 이름 (이름과 같은 글꼴) */
+/* 펼쳤을 때 둘째 줄의 이름 (이름과 같은 글꼴). 그래도 넘치면 …로 줄이고 마우스를 올리면 전체 */
 .fullName {
   margin: 0;
   padding-left: 24px;
+  overflow: hidden;
   font-weight: var(--font-weight-semibold);
-  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.name small {
+.name small,
+.fullName small {
   margin-left: 6px;
   color: var(--color-text-3);
   font-size: var(--font-size-xs);

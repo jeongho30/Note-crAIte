@@ -190,9 +190,10 @@ function JobRow({ job: j, now, open, onToggle, act, onConnect }: RowProps): Reac
         <StatusPill className={styles.subject} title={j.subject ?? '미분류'}>
           {j.subject ?? '미분류'}
         </StatusPill>
-        <span className={styles.name} title={title}>
-          {title}
-          {j.status === 'done' && summarySkipped && <small>전사만</small>}
+        {/* 펼치면 윗줄 이름은 비우고(자리만 차지해 버튼을 오른쪽에 둔다) 둘째 줄에 이름을 보여 준다 */}
+        <span className={styles.name} title={open ? undefined : title}>
+          {!open && title}
+          {!open && j.status === 'done' && summarySkipped && <small>전사만</small>}
         </span>
         {status}
         {actions.length > 0 && (
@@ -207,7 +208,12 @@ function JobRow({ job: j, now, open, onToggle, act, onConnect }: RowProps): Reac
         </div>
       )}
       {/* 펼치면 설명 대신 잘리지 않은 전체 이름 (오류는 펼친 칸의 단계 목록에 있다). 받아쓰기 중이면 남은 시간이 여기뿐이라 설명도 둔다 */}
-      {open && <p className={styles.fullName}>{title}</p>}
+      {open && (
+        <p className={styles.fullName} title={title}>
+          {title}
+          {j.status === 'done' && summarySkipped && <small>전사만</small>}
+        </p>
+      )}
       {meta && (!open || j.status === 'running') && <p className={styles.meta}>{meta}</p>}
       {open && <Detail job={j} act={act} />}
     </div>
