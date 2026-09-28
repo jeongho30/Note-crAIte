@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, screen, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell } from 'electron'
 import { mkdir, statfs } from 'node:fs/promises'
 import { join } from 'path'
 import { EngineError } from '../core/errors.ts'
@@ -200,6 +200,8 @@ app.whenReady().then(async () => {
     }
   })
   void setup.init()
+  // 설치본에는 기본 메뉴 줄(File·Edit·View…)을 두지 않는다. 개발 실행에서는 새로 고침·개발자 도구 단축키 때문에 남긴다.
+  if (app.isPackaged) Menu.setApplicationMenu(null)
   createWindow((await loadSettings(dataDir)).wizardDone ? HOME_CONTENT : WIZARD_CONTENT)
 })
 
