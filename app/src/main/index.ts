@@ -352,6 +352,21 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     await runner.start(items)
   },
   'jobs.retry': (p) => runner.retry(String(p)),
+  'jobs.transcriptOnly': (p) => runner.transcriptOnly(String(p)),
+  'jobs.cancel': (p) => runner.cancel(String(p)),
+  'jobs.remove': (p) => runner.remove(String(p)),
+  // 끝난 작업의 노트 열기·폴더에서 보기 (경로는 화면이 아니라 job.json에서 가져온다)
+  'jobs.openNote': async (p) => {
+    const path = await runner.notePath(String(p))
+    if (!path) throw new EngineError('input', '노트를 찾지 못했어요.')
+    const err = await shell.openPath(path)
+    if (err) throw new EngineError('input', '노트를 열지 못했어요: ' + err)
+  },
+  'jobs.revealNote': async (p) => {
+    const path = await runner.notePath(String(p))
+    if (!path) throw new EngineError('input', '노트를 찾지 못했어요.')
+    shell.showItemInFolder(path)
+  },
 
   'notes.recent': async () => recentNotes(await outDir()),
   'notes.open': (p) => openNote(String(p))

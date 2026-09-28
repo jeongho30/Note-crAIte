@@ -4,7 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, mock, test } from 'node:test'
 import { EngineError } from '../src/core/errors.ts'
-import { createJob, loadJob, runJob } from '../src/core/job.ts'
+import { createJob, listJobs, loadJob, runJob } from '../src/core/job.ts'
 import type { JobContext, JobSettings } from '../src/core/job.ts'
 import { findFfmpeg } from '../src/core/paths.ts'
 import { tempDir, writeWav } from './helpers.ts'
@@ -104,4 +104,12 @@ test('취소하면 cancelled로 남고, 재개하면 그 단계부터 다시 한
   assert.equal(cancelled.status, 'cancelled')
   assert.equal(cancelled.stages.audio.status, 'failed')
   assert.equal((await runJob(jobDir, context(dir, null))).status, 'done')
+})
+
+test('listJobs는 넣은 순서(createdAt)대로 돌려준다: 같은 초에 만든 작업도 id 꼬리와 상관없이', async () => {
+  const dir = await tempDir()
+  const audio = await recording(dir)
+  const ids: string[] = []
+  for (let i = 0; i < 4; i++) ids.push((await loadJob(await createJob(dir, audio, null, `과목${i}`, settings(dir, false)))).id)
+  assert.deepEqual((await listJobs(dir)).map((j) => j.id), ids)
 })

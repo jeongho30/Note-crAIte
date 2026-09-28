@@ -1,16 +1,20 @@
 // 작업 실행기: 시작 전 확인에서 넣은 녹음을 작업으로 만들고, 한 번에 하나씩 돌린다.
 // 진행 상황은 바뀔 때마다 화면에 'jobs' 이벤트로 보낸다. 앱을 껐다 켜면 끝나지 않은 작업을 이어서 한다.
 import { powerSaveBlocker } from 'electron'
+import { readdirSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { writeJsonAtomic } from '../core/files.ts'
-import { createJob, DEFAULT_BEAM_SIZE, DEFAULT_MODEL, jobsDir, listJobs, loadJob, runJob } from '../core/job.ts'
-import type { Job, JobContext, LlmSettings, StageName } from '../core/job.ts'
+import { createJob, DEFAULT_BEAM_SIZE, DEFAULT_MODEL, jobsDir, listJobs, loadJob, runJob, STAGES } from '../core/job.ts'
+import type { Job, JobContext, LlmSettings, StageName, StageState } from '../core/job.ts'
 import { MODELS } from '../core/models.ts'
 import { estimateSttSeconds } from '../core/probe.ts'
 import type { ProbeResult } from '../core/probe.ts'
 import type { Language } from '../core/settings.ts'
 
 export type JobInput = { audio: string; notes: string | null; subject: string | null; language: Language }
+
+export type StageView = { name: StageName; status: StageState['status']; ms: number | null }
 
 export type JobView = {
   id: string
@@ -27,6 +31,19 @@ export type JobView = {
   waiting: 'model' | 'turn' | null
   error: Job['error'] | null
   notePath: string | null
+  // ── 작업 목록에서 펼쳐 보는 것 ──
+  createdAt: string
+  recordedAt: string | null
+  language: string
+  audioPath: string
+  hasNotes: boolean
+  stages: StageView[]
+  /** 요약에 쓴 크레딧 (잔액 차이로 잰 값) */
+  credits: number | null
+  /** 받아쓰기 조각 진행 (받아쓰기를 끝내지 못한 작업만) */
+  sttChunks: { done: number; total: number } | null
+  /** 요청이 몰려(429) 저절로 다시 시도할 시각 (ms). 없으면 null */
+  autoRetryAt: number | null
 }
 
 type Deps = {
@@ -46,6 +63,7 @@ type Deps = {
 }
 
 const EMIT_INTERVAL_MS = 500
+const RATE_LIMIT_RETRY_MS = 60_000 // 요청 몰림(429)은 1분 뒤 한 번만 저절로 다시 시도한다 (9/28 결정)
 
 export function createJobRunner(d: Deps) {
   let running = false
@@ -56,6 +74,28 @@ export function createJobRunner(d: Deps) {
   let loopDone: Promise<void> = Promise.resolve()
   let controller: AbortController | null = null
   let stopping = false
+  const autoRetryAt = new Map<string, number>() // 저절로 다시 시도할 작업 → 시각
+  const autoRetried = new Set<string>() // 이미 한 번 저절로 다시 시도한 작업
+
+  const dirOf = (id: string): string => join(jobsDir(d.dataDir), id)
+
+  function sttChunks(job: Job): JobView['sttChunks'] {
+    const total = job.audio?.chunks.length
+    if (!total || job.stages.stt.status === 'done') return null
+    try {
+      return { done: readdirSync(join(dirOf(job.id), 'stt')).filter((f) => /^part_\d+\.json$/.test(f)).length, total }
+    } catch {
+      return { done: 0, total }
+    }
+  }
+
+  function stageViews(job: Job): StageView[] {
+    return STAGES.map((name) => {
+      const s = job.stages[name]
+      const ms = s.startedAt && s.endedAt ? new Date(s.endedAt).getTime() - new Date(s.startedAt).getTime() : null
+      return { name, status: current?.id === job.id && current.stage === name ? 'running' : s.status, ms }
+    })
+  }
 
   function view(job: Job, firstQueued: boolean): JobView {
     const live = current?.id === job.id ? current : null
@@ -79,7 +119,16 @@ export function createJobRunner(d: Deps) {
       durationS,
       waiting: job.status === 'queued' || (job.status === 'running' && !live) ? (firstQueued && !d.sttReady() ? 'model' : 'turn') : null,
       error: job.error ?? null,
-      notePath: job.output?.notePath ?? null
+      notePath: job.output?.notePath ?? null,
+      createdAt: job.createdAt,
+      recordedAt: job.audio?.recordedAt ?? null,
+      language: job.settings.language,
+      audioPath: job.input.audio,
+      hasNotes: job.input.notes !== null,
+      stages: stageViews(job),
+      credits: job.cost?.summaryCredits ?? null,
+      sttChunks: job.status === 'done' ? null : sttChunks(job),
+      autoRetryAt: autoRetryAt.get(job.id) ?? null
     }
   }
 
@@ -120,7 +169,7 @@ export function createJobRunner(d: Deps) {
           break
         }
         probeCache = await d.probe()
-        const jobDir = join(jobsDir(d.dataDir), job.id)
+        const jobDir = dirOf(job.id)
         // 받아쓰기 전이면 지금 잰 장치·스레드로 맞춘다 (모델 없이 넣은 작업은 만들 때 몰랐다)
         if (job.stages.stt.status === 'pending' && probeCache) {
           job.settings.gpuDevice = probeCache.gpuDevice
@@ -148,6 +197,7 @@ export function createJobRunner(d: Deps) {
         } catch {
           // 실패 이유는 job.json에 남는다 (화면이 error로 보여 준다)
           if (stopping) await requeue(jobDir) // 앱을 끄느라 멈춘 것은 실패가 아니다: 다음에 켜면 이어서 한다
+          else await scheduleAutoRetry(job.id)
         }
         controller = null
         current = null
@@ -158,6 +208,17 @@ export function createJobRunner(d: Deps) {
       running = false
       await emitNow()
     }
+  }
+
+  async function scheduleAutoRetry(id: string): Promise<void> {
+    const job = await loadJob(dirOf(id))
+    if (job.error?.code !== 'rate_limit' || autoRetried.has(id)) return
+    autoRetried.add(id)
+    autoRetryAt.set(id, Date.now() + RATE_LIMIT_RETRY_MS)
+    setTimeout(() => {
+      if (!autoRetryAt.delete(id)) return // 그사이 사용자가 다시 시도하거나 지움
+      void retry(id)
+    }, RATE_LIMIT_RETRY_MS)
   }
 
   async function start(inputs: JobInput[]): Promise<void> {
@@ -178,14 +239,58 @@ export function createJobRunner(d: Deps) {
     void loop()
   }
 
+  async function save(job: Job): Promise<void> {
+    await writeJsonAtomic(join(dirOf(job.id), 'job.json'), job)
+  }
+
   /** 실패·취소한 작업을 끝난 단계 다음부터 다시 한다 (받아쓰기를 다시 하지 않는다). */
   async function retry(id: string): Promise<void> {
-    const jobDir = join(jobsDir(d.dataDir), id)
-    const job = await loadJob(jobDir)
+    autoRetryAt.delete(id)
+    const job = await loadJob(dirOf(id))
     if (job.status !== 'failed' && job.status !== 'cancelled') return
     job.status = 'queued'
-    await writeJsonAtomic(join(jobDir, 'job.json'), job)
+    delete job.error
+    await save(job)
+    await emitNow()
     void loop()
+  }
+
+  /** 요약을 건너뛰고 전사문만 담은 노트를 저장한다 (크레딧 부족·너무 긴 전사). 받아쓰기가 끝난 작업만. */
+  async function transcriptOnly(id: string): Promise<void> {
+    autoRetryAt.delete(id)
+    const job = await loadJob(dirOf(id))
+    if ((job.status !== 'failed' && job.status !== 'cancelled') || job.stages.stt.status !== 'done') return
+    job.settings.llm = null
+    job.stages.summarize = { status: 'skipped' }
+    job.status = 'queued'
+    delete job.error
+    await save(job)
+    await emitNow()
+    void loop()
+  }
+
+  /** 도는 작업은 받아쓰기를 멈추고(끝난 조각은 남김), 대기 중인 작업은 바로 취소한다. */
+  async function cancel(id: string): Promise<void> {
+    if (current?.id === id) {
+      controller?.abort() // runJob이 취소됨으로 남긴다. 요약 요청 중이면 그 요청이 끝난 뒤 멈춘다
+      return
+    }
+    const job = await loadJob(dirOf(id))
+    if (job.status !== 'queued' && job.status !== 'running') return
+    job.status = 'cancelled'
+    const stage = STAGES.find((s) => job.stages[s].status !== 'done' && job.stages[s].status !== 'skipped') ?? 'save'
+    job.error = { code: 'cancelled', message: '작업을 취소했어요.', stage }
+    await save(job)
+    await emitNow()
+  }
+
+  /** 멈춘 작업·취소한 작업의 작업 폴더를 지운다. 녹음과 저장한 노트는 건드리지 않는다. */
+  async function remove(id: string): Promise<void> {
+    const job = await loadJob(dirOf(id))
+    if (job.status !== 'failed' && job.status !== 'cancelled') return
+    autoRetryAt.delete(id)
+    await rm(dirOf(id), { recursive: true, force: true })
+    await emitNow()
   }
 
   async function requeue(jobDir: string): Promise<void> {
@@ -202,10 +307,19 @@ export function createJobRunner(d: Deps) {
     await Promise.race([loopDone, new Promise((r) => setTimeout(r, waitMs))])
   }
 
+  /** 끝난 작업의 노트 경로 (화면이 임의의 경로를 열지 못하게 작업 id로만 연다) */
+  async function notePath(id: string): Promise<string | null> {
+    return (await loadJob(dirOf(id))).output?.notePath ?? null
+  }
+
   return {
     list,
     start,
     retry,
+    transcriptOnly,
+    cancel,
+    remove,
+    notePath,
     shutdown,
     kick: () => void loop(),
     /** 대기 중이거나 도는 작업 수 */
@@ -213,4 +327,3 @@ export function createJobRunner(d: Deps) {
     busy: () => running
   }
 }
-

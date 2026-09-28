@@ -12,12 +12,13 @@ type Props = {
   jobs: JobView[] | null
   llm: LlmStatus | null
   onConnect: () => void
+  onShowJobs: () => void
 }
 
 // 녹음 파형 모양 (끌어 놓기 칸 장식)
 const WAVE = [10, 18, 26, 14, 22, 8, 16]
 
-export function Home({ jobs, llm, onConnect }: Props): React.JSX.Element {
+export function Home({ jobs, llm, onConnect, onShowJobs }: Props): React.JSX.Element {
   const setup = useSetup()
   const toast = useToast()
   const [over, setOver] = useState(false)
@@ -62,10 +63,9 @@ export function Home({ jobs, llm, onConnect }: Props): React.JSX.Element {
   }
 
   const model = setup?.model
-  // 진행 중인 것은 처리 순서대로(도는 것이 맨 위), 실패한 것은 그 아래 최근 것부터. 목록은 최근 것부터 온다.
-  const all = jobs ?? []
-  const shown = [...all.filter(isActive).reverse(), ...all.filter((j) => j.status === 'failed' || j.status === 'cancelled')]
-  const active = shown.filter(isActive).length
+  // 진행 중인 것만 처리 순서대로(도는 것이 맨 위). 목록은 최근 것부터 온다. 멈춘 작업은 작업 목록에서 다룬다.
+  const shown = (jobs ?? []).filter(isActive).reverse()
+  const stopped = (jobs ?? []).filter((j) => j.status === 'failed' || j.status === 'cancelled').length
 
   return (
     <div
@@ -75,7 +75,7 @@ export function Home({ jobs, llm, onConnect }: Props): React.JSX.Element {
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
-      {/* 상황 배너: 한 번에 하나, 모델이 먼저 */}
+      {/* 상황 배너: 한 번에 하나. 모델 → 멈춘 작업 → 요약 서비스 순 */}
       {model && (model.state === 'missing' || model.state === 'error') ? (
         <Banner
           tone="warning"
@@ -94,6 +94,18 @@ export function Home({ jobs, llm, onConnect }: Props): React.JSX.Element {
           <div className={styles.bannerBar}>
             <ProgressBar value={model.done / model.total} label="받아쓰기 모델 받기" />
           </div>
+        </Banner>
+      ) : stopped > 0 ? (
+        <Banner
+          tone="warning"
+          title={`멈춘 작업 ${stopped}개`}
+          action={
+            <Button size="sm" onClick={onShowJobs}>
+              작업 목록 보기
+            </Button>
+          }
+        >
+          이어서 다시 시도하거나 전사문만 저장할 수 있어요.
         </Banner>
       ) : (
         llm &&
@@ -134,9 +146,11 @@ export function Home({ jobs, llm, onConnect }: Props): React.JSX.Element {
         <section className={styles.section}>
           <div className={styles.sectionHead}>
             <h2>
-              {active > 0 ? '진행 중' : '멈춘 작업'}
-              <span>{active > 0 ? active : shown.length}</span>
+              진행 중<span>{shown.length}</span>
             </h2>
+            <Button variant="link" onClick={onShowJobs}>
+              작업 목록 보기
+            </Button>
           </div>
           <Card className={styles.jobs}>
             {shown.map((j) => (
@@ -180,7 +194,6 @@ export function Home({ jobs, llm, onConnect }: Props): React.JSX.Element {
 }
 
 function JobRow({ job }: { job: JobView }): React.JSX.Element {
-  const failed = job.status === 'failed' || job.status === 'cancelled'
   const stage = job.stage ? STAGE_LABEL[job.stage] : null
   let right: React.JSX.Element
   let meta: string
@@ -189,10 +202,6 @@ function JobRow({ job }: { job: JobView }): React.JSX.Element {
     const parts = [job.durationS ? `${lengthMinutes(job.durationS)} 녹음` : null, job.etaS != null ? `${aboutMinutes(job.etaS)} 남음` : null]
     // 작업 중에 창을 닫으면 트레이로 숨어 계속한다
     meta = [...parts.filter(Boolean), '창을 닫아도 계속돼요'].join(' · ')
-  } else if (failed) {
-    const at = job.error ? STAGE_LABEL[job.error.stage] : null
-    right = <StatusPill tone="danger">{job.status === 'cancelled' ? '취소됨' : at ? `${at} 실패` : '실패'}</StatusPill>
-    meta = job.error?.message.split('\n')[0] ?? ''
   } else {
     right = <StatusPill tone="waiting">대기</StatusPill>
     meta = job.waiting === 'model' ? '받아쓰기 모델을 다 받으면 시작해요' : '앞의 작업이 끝나면 시작해요'
@@ -203,11 +212,6 @@ function JobRow({ job }: { job: JobView }): React.JSX.Element {
         <StatusPill>{job.subject ?? '미분류'}</StatusPill>
         <span className={styles.jobName}>{job.name}</span>
         {right}
-        {failed && (
-          <Button size="sm" onClick={() => void call('jobs.retry', job.id)}>
-            이어서 다시 시도
-          </Button>
-        )}
       </div>
       {job.status === 'running' && job.stage === 'stt' && <ProgressBar value={job.frac} label={`${job.name} 받아쓰기`} />}
       {meta && <p className={styles.meta}>{meta}</p>}

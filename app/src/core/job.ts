@@ -117,14 +117,15 @@ export async function listJobs(dataDir: string): Promise<Job[]> {
     return []
   }
   const jobs: Job[] = []
-  for (const id of ids.sort()) {
+  for (const id of ids) {
     try {
       jobs.push(await loadJob(join(jobsDir(dataDir), id)))
     } catch {
       // job.json이 없거나 깨진 폴더는 건너뛴다
     }
   }
-  return jobs
+  // 넣은 순서대로. id는 초 단위라 한 번에 넣은 녹음끼리는 무작위 꼬리로 순서가 뒤바뀌므로 createdAt(밀리초)로 정렬한다
+  return jobs.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
 }
 
 /** 녹음 날짜: 녹음 파일 메타데이터 → 파일 수정 시각 → 지금. 휴대폰에서 복사하면 수정 시각이 복사한 시각으로 바뀌기도 한다. */

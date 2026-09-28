@@ -55,6 +55,17 @@
   background: var(--color-surface-2);
 }
 
+.outline {
+  background: transparent;
+  border-color: var(--color-border-strong);
+  color: var(--color-text-2);
+}
+
+.outline:hover:not(:disabled) {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+}
+
 .ghost {
   background: transparent;
   color: var(--color-text-2);

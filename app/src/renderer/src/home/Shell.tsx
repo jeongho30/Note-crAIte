@@ -4,6 +4,7 @@ import { useToast } from '../components'
 import { cx } from '../components/cx'
 import type { LlmStatus } from '../wizard/shared'
 import { Home } from './Home'
+import { JobList } from './JobList'
 import { isActive, useJobs } from './shared'
 import styles from './Shell.module.css'
 
@@ -44,7 +45,8 @@ export default function Shell({ onConnect }: Props): React.JSX.Element {
       const before = prev.get(j.id)
       if (before === j.status || (before !== 'running' && before !== 'queued')) continue
       if (j.status === 'done') toast(`노트가 만들어졌어요 · ${j.subject ?? '미분류'}`, 'success')
-      if (j.status === 'failed') toast(`${j.name} · ${j.error?.message ?? '노트를 만들지 못했어요.'}`, 'danger')
+      // 요청 몰림으로 1분 뒤 저절로 다시 시도하는 것은 알리지 않는다 (그래도 안 되면 그때 알린다)
+      if (j.status === 'failed' && !j.autoRetryAt) toast(`${j.name} · ${j.error?.message ?? '노트를 만들지 못했어요.'}`, 'danger')
     }
   }, [jobs, toast])
 
@@ -82,8 +84,9 @@ export default function Shell({ onConnect }: Props): React.JSX.Element {
         </div>
       </nav>
       <main className={styles.main}>
-        {view === 'home' && <Home jobs={jobs} llm={llm} onConnect={onConnect} />}
-        {view !== 'home' && (
+        {view === 'home' && <Home jobs={jobs} llm={llm} onConnect={onConnect} onShowJobs={() => setView('jobs')} />}
+        {view === 'jobs' && <JobList jobs={jobs} onConnect={onConnect} onHome={() => setView('home')} />}
+        {view === 'settings' && (
           <div className={styles.placeholder}>
             <h1>{NAV.find((n) => n.view === view)!.label}</h1>
             <p>다음 작업에서 만들어요.</p>

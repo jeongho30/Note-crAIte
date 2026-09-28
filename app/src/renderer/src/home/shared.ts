@@ -40,3 +40,31 @@ export function aboutMinutes(seconds: number): string {
 export function lengthMinutes(seconds: number): string {
   return `${Math.max(1, Math.round(seconds / 60))}분`
 }
+
+/** 단계에 걸린 시간 "27분 12초", "8초", "1초 안쪽" */
+export function elapsed(ms: number): string {
+  const s = Math.round(ms / 1000)
+  if (s < 1) return '1초 안쪽'
+  if (s < 60) return `${s}초`
+  return `${Math.floor(s / 60)}분${s % 60 ? ` ${s % 60}초` : ''}`
+}
+
+const pad = (n: number): string => String(n).padStart(2, '0')
+
+/** "2026-09-26" */
+export function localDate(iso: string): string {
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+/** "2026-09-26 15:02" */
+export function localDateTime(iso: string): string {
+  const d = new Date(iso)
+  return `${localDate(iso)} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+/** 노트 파일 이름 "2026-09-21 Lexical Analysis.md" → "Lexical Analysis" */
+export function noteTitle(path: string): string {
+  const name = path.split(/[\\/]/).pop() ?? path
+  return name.replace(/\.md$/i, '').replace(/^\d{4}-\d{2}-\d{2} /, '')
+}

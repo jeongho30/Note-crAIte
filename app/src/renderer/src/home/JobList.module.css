@@ -1,0 +1,299 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: var(--content-max-w);
+  margin: 0 auto;
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.head h1 {
+  margin: 0;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+}
+
+.head span {
+  color: var(--color-text-3);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.group h2 {
+  margin: 0;
+  color: var(--color-text-2);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.group h2 span {
+  margin-left: var(--space-1);
+  color: var(--color-text-3);
+  font-weight: var(--font-weight-regular);
+  font-variant-numeric: tabular-nums;
+}
+
+.card {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px var(--space-4);
+}
+
+.row + .row {
+  border-top: 1px solid var(--color-border);
+}
+
+/* 과목 칩(surface-2)이 묻히지 않게 창 바탕색으로 */
+.open {
+  background: var(--color-bg);
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+/* 펼치기 화살표: 아이콘을 정하기 전까지 CSS로 그린다 */
+.chev {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+}
+
+.chev::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--color-text-3);
+  border-bottom: 1.5px solid var(--color-text-3);
+  transform: rotate(-45deg);
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.open .chev::before {
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: var(--font-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.name small {
+  margin-left: 6px;
+  color: var(--color-text-3);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+}
+
+.stage {
+  color: var(--color-text-2);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  flex: none;
+  gap: 6px;
+  cursor: default;
+}
+
+/* 화살표 너비만큼 들여 이름과 줄을 맞춘다 */
+.indent,
+.meta {
+  padding-left: 24px;
+}
+
+.meta {
+  margin: 0;
+  color: var(--color-text-3);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: var(--space-4);
+  margin: var(--space-1) 0 var(--space-1) 24px;
+  padding: var(--space-3) 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+@media (max-width: 860px) {
+  .detail {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+.stages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  font-size: var(--font-size-sm);
+  list-style: none;
+}
+
+.stages li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dot {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: var(--radius-full);
+  font-size: 10px;
+  font-weight: var(--font-weight-bold);
+}
+
+.done .dot {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.fail .dot {
+  border-color: var(--color-danger);
+  background: var(--color-danger);
+  color: var(--color-on-danger);
+}
+
+.run .dot {
+  border-width: 5px;
+  border-color: var(--color-primary);
+}
+
+.skip .dot {
+  border-style: dashed;
+}
+
+.stageText {
+  flex: 1;
+  min-width: 0;
+}
+
+.fail .stageText {
+  color: var(--color-danger);
+  font-weight: var(--font-weight-semibold);
+}
+
+.todo .stageText,
+.skip .stageText {
+  color: var(--color-text-3);
+}
+
+.time {
+  color: var(--color-text-3);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.info {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-content: start;
+  gap: 3px var(--space-3);
+  margin: 0;
+  font-size: var(--font-size-xs);
+}
+
+.info dt {
+  color: var(--color-text-3);
+}
+
+.info dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* 펼친 칸 맨 아래 오른쪽: 안내 문구와 [목록에서 지우기] */
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
+}
+
+.foot span {
+  color: var(--color-text-3);
+  font-size: var(--font-size-xs);
+}
+
+.more {
+  display: flex;
+  justify-content: center;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-6);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  color: var(--color-text-3);
+  font-size: var(--font-size-sm);
+  text-align: center;
+}
+
+.empty b {
+  color: var(--color-text-2);
+  font-size: var(--font-size-md);
+}
+
+.empty div {
+  margin-top: var(--space-2);
+}
