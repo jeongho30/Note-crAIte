@@ -10,6 +10,8 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"test/**/*.test.ts\"",
+    "cli": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/cli/cli.ts",
     "dist:win": "electron-vite build && electron-builder --win"
   },
   "devDependencies": {

@@ -1,10 +1,29 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
-import { Engine } from './engine'
+import { findFfmpeg, findWhisperCli } from '../core/paths.ts'
 
-// 화면이 부를 수 있는 엔진 메서드 (허용 목록). W2에서 늘린다.
-const ALLOWED = new Set(['ping'])
-const engine = new Engine()
+// 설치본은 extraResources로 넣은 resources/bin, 개발 중에는 저장소의 .cache/whisper/bin과 PATH의 ffmpeg.
+const binDir = app.isPackaged ? join(process.resourcesPath, 'bin') : undefined
+const whisperDirs = app.isPackaged
+  ? [join(process.resourcesPath, 'bin', 'whisper')]
+  : [join(app.getAppPath(), '..', '.cache', 'whisper', 'bin')]
+
+function found(find: () => string): string | null {
+  try {
+    return find()
+  } catch {
+    return null
+  }
+}
+
+// 화면이 부를 수 있는 처리 (허용 목록). W2에서 늘린다.
+const handlers: Record<string, (params: unknown) => unknown> = {
+  ping: () => ({
+    version: app.getVersion(),
+    whisperCli: found(() => findWhisperCli(whisperDirs)),
+    ffmpeg: found(() => findFfmpeg(binDir))
+  })
+}
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -24,19 +43,14 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  engine.start()
-  engine
-    .call('ping')
-    .then((result) => console.log('[engine] ping', JSON.stringify(result)))
-    .catch((err) => console.error('[engine] ping 실패:', err.message))
-  ipcMain.handle('engine:call', (_event, method: string, params: unknown) => {
-    if (!ALLOWED.has(method)) throw new Error(`허용되지 않은 메서드: ${method}`)
-    return engine.call(method, params)
+  ipcMain.handle('api:call', (_event, method: string, params: unknown) => {
+    const handler = Object.hasOwn(handlers, method) ? handlers[method] : undefined
+    if (!handler) throw new Error(`허용되지 않은 메서드: ${method}`)
+    return handler(params)
   })
   createWindow()
 })
 
 app.on('window-all-closed', () => {
-  engine.stop()
   app.quit()
 })

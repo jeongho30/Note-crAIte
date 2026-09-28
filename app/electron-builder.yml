@@ -4,10 +4,8 @@ directories:
   output: ../dist/installer
 files:
   - out/**
-# 엔진(PyInstaller onedir)과 whisper 실행 파일은 asar 밖에 둔다 (실행해야 하므로).
+# whisper(와 이후 ffmpeg) 실행 파일은 asar 밖에 둔다 (실행해야 하므로). 앱에서는 resources/bin/...으로 찾는다.
 extraResources:
-  - from: ../dist/engine
-    to: engine
   - from: ../.cache/whisper/bin
     to: bin/whisper
 npmRebuild: false
