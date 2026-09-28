@@ -29,6 +29,14 @@ npm run typecheck
 ```
 
 ```bash
+npm run cli -- run <녹음> --out <저장 폴더> [--subject 과목] [--device gpu0]
+```
+
+```bash
+npm run cli -- resume <작업 ID>
+```
+
+```bash
 npm run cli -- models download small-q5_1 silero-v6.2.0
 ```
 
@@ -61,6 +69,8 @@ powershell -File ../scripts/build_whisper.ps1 -SourceDir <whisper.cpp 체크아�
 - `stt/base.ts`의 `transcribeChunks`: 조각별 결과를 `part_NNN.json`으로 저장해 끝난 조각은 다시 돌리지 않고, 조각 시작 시각만큼 밀어 하나로 합친다. 엔진 구현(`stt/whispercpp.ts`)은 `SttEngine`만 따르면 된다.
 - `downloads.ts` + `models.ts`: 모델 URL·크기·sha256 목록과 `.part` 이어받기.
 - `clean.ts`(반복·환각 정리), `corrections.ts`(교정 목록 적용), `llm.ts`·`summarize.ts`·`prompts.ts`(요약 호출 1회), `credits.ts`, `providers.ts`.
+- `job.ts`: 작업 하나를 `audio→stt→clean→summarize→note→save` 단계로 돌리고 `<데이터 폴더>/jobs/<id>/job.json`에 단계 상태를 남긴다. 끝난 단계(`done`/`skipped`)는 건너뛰므로 실패·취소 뒤 `runJob`을 다시 부르면 이어서 한다. 필기는 작업 폴더에 복사해 두고, API 키는 `job.json`에 넣지 않고 실행할 때 `JobContext`로 받는다. 요약 설정(`settings.llm`)이 없으면 요약 단계는 `skipped`이고 전사만 담은 노트가 된다.
+- `note.ts`: 노트 마크다운(frontmatter 값은 JSON 문자열, 접는 부분은 `> [!quote]-` callout)과 저장(`<저장 폴더>/<과목|미분류>/<날짜> <제목>.md`, 겹치면 ` (2)`). `inputs.ts`: 녹음 옆 같은 이름 필기 찾기, UTF-8이 아니면 CP949로 읽기.
 - `src/cli/bench.ts`: S3용. RTF와, 기준 전사(기존 파이프라인의 large-v3 결과) 대비 CER을 잰다.
 
 ## 지금 상태와 다음 할 일 (9/28 노트북 세션 끝)
@@ -76,7 +86,7 @@ S3는 9/28에 정했다: 로컬 STT는 whisper.cpp, CPU 기본 `large-v3-turbo-q
 
 1. **화면 흐름의 열린 질문 9개.** 특히 마법사 순서('이 PC 확인'을 키보다 먼저), 창 닫기 동작, 요약 실패 시 [전사만 저장].
 
-그다음 작업(M1, 10/4): 작업 저장·재개(job.json), 노트 작성·저장, CLI `run`/`resume`, 하드웨어 감지·예상 시간, 과목별 강의 언어(`-l`). 그 뒤 W2 화면은 화면 흐름 초안을 따른다.
+M1(10/4) 진행: 작업 저장·재개(`job.ts`), 노트 작성·저장(`note.ts`), CLI `run`/`resume`/`jobs`, 강의 언어(`--lang` → `-l`)는 됐다(데스크톱에서 63분 강의를 외장 GPU로 30초, 요약 없이 확인). 남은 M1: 노트북 CPU로 90분 강의 `run`(요약 포함), 잘못된 키로 요약을 실패시킨 뒤 `resume`해 STT를 다시 안 돌리는지 실제 강의로 확인, 하드웨어 감지·예상 시간. 잠자기 방지는 앱에서 Electron `powerSaveBlocker`로 한다(W2). 그 뒤 W2 화면은 화면 흐름 초안을 따른다.
 
 남은 확인: S1 새 계정 설치와 SmartScreen 문구(내려받은 설치 파일이어야 뜸), 설치 파일에 ffmpeg LGPL 빌드 넣기, 첫 실행 속도 측정에서 결과가 정상인지 보는 검사(노트북 내장 GPU는 전사가 깨졌다).
 
