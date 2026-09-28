@@ -90,6 +90,7 @@ export function ProviderStep({ next, back, headingRef }: StepProps): React.JSX.E
     >
       <RadioCardGroup
         label="요약 서비스"
+        columns={2}
         value={selected}
         onChange={(v) => {
           setSelected(v)

@@ -121,7 +121,6 @@ function createWindow(): void {
     height: 700,
     minWidth: 880,
     minHeight: 600,
-    useContentSize: true, // 크기는 창 틀을 뺀 화면 영역 기준
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,

@@ -1,15 +1,13 @@
+/* 바깥 여백은 창 둘레만 두고 내용이 창 폭을 채운다 */
 .wizard {
-  display: flex;
-  justify-content: center;
   min-height: 100vh;
-  padding: var(--space-8) var(--space-6);
+  padding: var(--space-5) var(--space-6);
 }
 
 .panel {
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
-  width: min(560px, 100%);
 }
 
 .step {

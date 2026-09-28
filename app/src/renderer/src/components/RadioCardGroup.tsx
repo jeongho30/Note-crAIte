@@ -19,13 +19,20 @@ type Props<T extends string> = {
   options: Option<T>[]
   onChange: (value: T) => void
   disabled?: boolean
+  /** 2 이상이면 격자로 놓는다 (기본은 세로 한 줄) */
+  columns?: number
 }
 
 // 설명이 필요한 선택지 중 하나 (예: 받아쓰기 방식). 같은 name의 라디오라 화살표 키로 옮겨 다닌다.
-export function RadioCardGroup<T extends string>({ label, value, options, onChange, disabled }: Props<T>): React.JSX.Element {
+export function RadioCardGroup<T extends string>({ label, value, options, onChange, disabled, columns = 1 }: Props<T>): React.JSX.Element {
   const name = useId()
   return (
-    <div role="radiogroup" aria-label={label} className={cx(styles.group, disabled && styles.disabled)}>
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className={cx(styles.group, disabled && styles.disabled)}
+      style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+    >
       {options.map((o) => (
         <label key={o.value} className={cx(styles.card, o.value === value && styles.selected, o.disabled && styles.cardDisabled)}>
           <input

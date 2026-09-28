@@ -1,6 +1,6 @@
+/* 열 수는 columns로 인라인 지정 */
 .group {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: var(--space-2);
 }
 
