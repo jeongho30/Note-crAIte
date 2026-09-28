@@ -28,5 +28,7 @@ node_modules/
 *.amr
 *.3gp
 *.wma
+# 예외: 하드웨어 감지용 샘플 (작성자가 직접 녹음, 공개해도 됨)
+!app/resources/probe-ko.wav
 jobs/
 bench/

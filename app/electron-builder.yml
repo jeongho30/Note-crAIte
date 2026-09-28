@@ -8,6 +8,8 @@ files:
 extraResources:
   - from: ../.cache/whisper/bin
     to: bin/whisper
+  - from: resources/probe-ko.wav
+    to: probe-ko.wav
 npmRebuild: false
 win:
   target: nsis
