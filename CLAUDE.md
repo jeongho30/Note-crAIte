@@ -91,7 +91,7 @@ S3는 9/28에 정했다: 로컬 STT는 whisper.cpp, CPU 기본 `large-v3-turbo-q
 
 1. **화면 흐름의 열린 질문 9개.** 특히 마법사 순서('이 PC 확인'을 키보다 먼저), 창 닫기 동작, 요약 실패 시 [전사만 저장].
 
-M1(10/4) 진행: 작업 저장·재개(`job.ts`), 노트 작성·저장(`note.ts`), CLI `run`/`resume`/`jobs`, 강의 언어(`--lang` → `-l`)는 됐다데스크톱에서 63분 강의로 확인: 외장 GPU로 30초에 전사만 담은 노트, 잘못된 키로 요약 단계에서 멈춘 뒤 `resume`하면 STT 없이 6초에 요약(10.17크레딧)까지 끝나 노트 다섯 요소가 모두 나옴. 하드웨어 감지·예상 시간(`probe`)도 됐다. 데스크톱: 외장 GPU를 고르고 내장 GPU(CPU보다 느림)는 뺌, 63분 강의 예상 약 1분에 실제 29초. 남은 M1: 노트북 CPU로 90분 강의 `run`(사용자). 감지용 샘플은 사용자가 녹음 중이다(CLAUDE.md에 적힌 글, 공개됨) — 받으면 16kHz 모노 WAV로 `app/resources/probe-ko.wav`에 두고 `.gitignore`에 예외를 넣고 `electron-builder.yml`의 `extraResources`에 추가한다. 그 전까지는 로컬에서 만든 TTS 샘플을 `--sample`로 쓴다(커밋하지 않음). TTS 샘플은 쉼이 없어 RTF가 실제 강의보다 높게 나온다(예상 시간이 넉넉함). 실제 작업의 전사 시간으로 예상치를 고치는 것은 W2. 잠자기 방지는 앱에서 Electron `powerSaveBlocker`로 한다(W2). 그 뒤 W2 화면은 화면 흐름 초안을 따른다.
+M1(10/4) 진행: 작업 저장·재개(`job.ts`), 노트 작성·저장(`note.ts`), CLI `run`/`resume`/`jobs`, 강의 언어(`--lang` → `-l`)는 됐다데스크톱에서 63분 강의로 확인: 외장 GPU로 30초에 전사만 담은 노트, 잘못된 키로 요약 단계에서 멈춘 뒤 `resume`하면 STT 없이 6초에 요약(10.17크레딧)까지 끝나 노트 다섯 요소가 모두 나옴. 하드웨어 감지·예상 시간(`probe`)도 됐다. 데스크톱: 외장 GPU를 고르고 내장 GPU(CPU보다 느림)는 뺌, 63분 강의 예상 약 1분에 실제 29초. 남은 M1: 노트북 CPU로 90분 강의 `run`(사용자). 감지용 샘플은 사용자가 녹음 중이다(대본은 `app/resources/probe-ko.txt`, 녹음은 공개됨) — 받으면 16kHz 모노 WAV로 `app/resources/probe-ko.wav`에 두고 `.gitignore`에 예외를 넣고 `electron-builder.yml`의 `extraResources`에 추가한다. 그 전까지는 로컬에서 만든 TTS 샘플을 `--sample`로 쓴다(커밋하지 않음). TTS 샘플은 쉼이 없어 RTF가 실제 강의보다 높게 나온다(예상 시간이 넉넉함). 실제 작업의 전사 시간으로 예상치를 고치는 것은 W2. 잠자기 방지는 앱에서 Electron `powerSaveBlocker`로 한다(W2). 그 뒤 W2 화면은 화면 흐름 초안을 따른다.
 
 남은 확인: S1 새 계정 설치와 SmartScreen 문구(내려받은 설치 파일이어야 뜸), 설치 파일에 ffmpeg LGPL 빌드 넣기, 첫 실행 속도 측정에서 결과가 정상인지 보는 검사(노트북 내장 GPU는 전사가 깨졌다).
 
