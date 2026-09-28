@@ -21,7 +21,7 @@ export default function App(): React.JSX.Element {
   }, [])
 
   return (
-    <main style={{ fontFamily: 'system-ui, sans-serif', padding: 24 }}>
+    <main style={{ padding: 24 }}>
       <h1>lecture-notes</h1>
       <p>{status}</p>
       <button onClick={ping}>다시 확인</button>
