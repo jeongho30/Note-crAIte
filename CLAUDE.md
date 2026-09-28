@@ -81,10 +81,10 @@ powershell -File ../scripts/build_whisper.ps1 -SourceDir <whisper.cpp 체크아�
 
 ## 지금 상태와 다음 할 일 (9/28 노트북 세션 끝)
 
-계획과 진행은 claude.ai artifact 두 개에 있다(`Artifact` 도구 `action: "read"`로 읽고, 고칠 때는 `url`을 넘겨 같은 artifact를 갱신한다).
+계획·화면 설계·색은 claude.ai artifact 하나(**lecture-notes 설계 모음**)에 탭으로 모여 있다: https://claude.ai/artifact/P82LYdRRnFqYerPEo7YDxX (9/29에 따로 있던 9개를 합치고 원본은 지웠다).
 
-- 구현 계획: https://claude.ai/artifact/QEe654uyQBhZaYgXfY5xsd (일정, 완료 기준, 결정 기록, 접힌 "구조 전환 검토")
-- 화면 흐름 초안: https://claude.ai/artifact/16v7z6VAGTSd9miaCUxQZ4 (설치부터 미리보기까지 와이어프레임, 오류 문구, 9/28에 정리한 질문 표)
+- 탭: 구현 계획(`#plan`: 일정, 완료 기준, 결정 기록, 접힌 "구조 전환 검토"), 화면 흐름(`#flow`: 설치부터 미리보기까지 와이어프레임, 오류 문구, 질문 표), 홈 시안(`#home`), 작업 목록 시안(`#jobs`), 최종 색(`#colors`, 안에 "색 고른 과정" 견본 `#c1`~`#c4`)
+- 고치는 법: `Artifact` 도구 `action: "read"`로 받은 HTML의 `const DATA = {...}`(문서별 HTML이 `DATA.docs.<탭 id>`에 JSON 문자열로 들어 있음)에서 해당 탭만 바꿔 같은 `url`로 다시 올린다. 두 시안에 같은 Pretendard 글꼴은 한 번만(`DATA.font`, 문서 안에서는 `__FONT__` 자리표시) 들어 있다.
 
 S3는 9/28에 정했다: 로컬 STT는 whisper.cpp, CPU 기본 `large-v3-turbo-q8_0` + greedy(`-bs 1`, 노트북 90분 강의 약 27분). 앱의 기본 모델·옵션은 이것으로 둔다(`WhisperCpp`의 `beamSize: 1`).
 
