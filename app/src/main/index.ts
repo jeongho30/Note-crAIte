@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, screen, shell } from 'electron'
 import { mkdir, statfs } from 'node:fs/promises'
 import { join } from 'path'
 import { EngineError } from '../core/errors.ts'
@@ -8,6 +8,8 @@ import { CREDITS_PER_90MIN_SUMMARY, PROVIDERS, verifyKey } from '../core/provide
 import type { ProviderId } from '../core/providers.ts'
 import { loadSettings, updateSettings } from '../core/settings.ts'
 import { inspectFolder, useFolder } from '../core/vault.ts'
+import { fitContent } from './fit.ts'
+import type { Size } from './fit.ts'
 import { keyHint, readKey, saveKey } from './secrets.ts'
 import { createSetup } from './setup.ts'
 
@@ -60,12 +62,15 @@ const handlers: Record<string, (params: unknown) => unknown> = {
 
   'settings.get': () => loadSettings(dataDir),
   // 화면이 직접 바꿀 수 있는 것은 마법사 진행 상태뿐이다. 폴더와 요약 서비스는 검사를 거치는 전용 메서드로 바꾼다.
-  'settings.setWizard': (p) => {
+  'settings.setWizard': async (p) => {
     const { step, done } = p as { step?: number; done?: boolean }
-    return updateSettings(dataDir, {
+    const settings = await updateSettings(dataDir, {
       ...(Number.isInteger(step) ? { wizardStep: step } : {}),
       ...(typeof done === 'boolean' ? { wizardDone: done } : {})
     })
+    // 마법사를 끝내면 창을 홈 크기로 키운다
+    if (done && mainWindow) resizeContent(mainWindow, HOME_CONTENT)
+    return settings
   },
 
   'system.info': async () => {
@@ -114,8 +119,23 @@ const handlers: Record<string, (params: unknown) => unknown> = {
   }
 }
 
+// 창의 화면 영역(창 틀·메뉴 줄 제외)은 4:3. 마법사는 최소 크기로 열고, 끝나면 홈 크기로 키운다.
 const ASPECT = 4 / 3
-const MIN_CONTENT = { width: 800, height: 600 }
+const MIN_CONTENT: Size = { width: 800, height: 600 }
+const WIZARD_CONTENT: Size = MIN_CONTENT
+const HOME_CONTENT: Size = { width: 1000, height: 750 }
+
+let mainWindow: BrowserWindow | null = null
+
+/** 화면 영역을 target으로 바꾸되, 창 틀까지 모니터 작업 영역에 들어가게 줄이고 가운데에 둔다. */
+function resizeContent(win: BrowserWindow, target: Size): void {
+  const outer = win.getBounds()
+  const inner = win.getContentBounds()
+  const frame = { width: outer.width - inner.width, height: outer.height - inner.height }
+  const size = fitContent(target, screen.getDisplayMatching(outer).workArea, frame, ASPECT, MIN_CONTENT)
+  win.setContentSize(size.width, size.height)
+  win.center()
+}
 
 // 창 크기를 바꿀 때 화면 영역(창 틀·메뉴 줄 제외)을 4:3으로 맞춘다.
 // Windows의 setAspectRatio는 창 틀까지 포함한 크기에 비율을 맞춰서 화면 영역 비율이 틀어진다.
@@ -143,11 +163,10 @@ function keepContentAspect(win: BrowserWindow): void {
   })
 }
 
-function createWindow(): void {
-  // 화면 영역 기준 기본 1000x750, 최소 800x600 (4:3)
+function createWindow(target: Size): void {
   const win = new BrowserWindow({
-    width: 1000,
-    height: 750,
+    width: target.width,
+    height: target.height,
     minWidth: MIN_CONTENT.width,
     minHeight: MIN_CONTENT.height,
     useContentSize: true,
@@ -158,6 +177,9 @@ function createWindow(): void {
     }
   })
   keepContentAspect(win)
+  resizeContent(win, target)
+  mainWindow = win
+  win.on('closed', () => (mainWindow = null))
   if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
     win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
@@ -165,7 +187,7 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   ipcMain.handle('api:call', async (_event, method: string, params: unknown) => {
     const handler = Object.hasOwn(handlers, method) ? handlers[method] : undefined
     if (!handler) throw new Error(`허용되지 않은 메서드: ${method}`)
@@ -178,7 +200,7 @@ app.whenReady().then(() => {
     }
   })
   void setup.init()
-  createWindow()
+  createWindow((await loadSettings(dataDir)).wizardDone ? HOME_CONTENT : WIZARD_CONTENT)
 })
 
 app.on('window-all-closed', () => {

@@ -1,4 +1,4 @@
-/* 바깥 여백은 창 둘레만 두고 내용이 창 폭을 채운다.
+/* 내용은 본문 최대 폭까지 창 폭을 채우고, 그보다 넓은 창에서는 가운데에 둔다.
    창 높이까지 늘려서 버튼 줄(.actions)이 창 크기와 상관없이 맨 아래에 붙게 한다. */
 .wizard {
   display: flex;
@@ -12,6 +12,9 @@
   flex: 1;
   flex-direction: column;
   gap: var(--space-6);
+  width: 100%;
+  max-width: var(--content-max-w);
+  margin: 0 auto;
 }
 
 .step {
