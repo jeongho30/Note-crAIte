@@ -109,7 +109,7 @@ S3는 9/28에 정했다: 로컬 STT는 whisper.cpp, CPU 기본 `large-v3-turbo-q
    - 제안: 권장을 gpt-6-luna로, sonnet-5 대신 sonnet-5-5, solar-pro4·flash-lite는 추천에서 뺌, 느린 모델은 경고, `PRICES`에 claude-sonnet-5-5 추가, 작업의 요약 크레딧을 잔액 차이 대신 토큰 × 단가로 기록, 짧은 한글 교정이 다른 단어 안에서 바뀌지 않게 거르기, 미리보기 수식 표시.
    - 9/29 반영: 추천 순서(`RANKED`) 12개와 추천 5개, [직접 모델 입력], `PRICES`에 claude-sonnet-5-5, 기본 모델 gpt-6-luna(`PRESETS.chatkhu.model`), 12개의 90분 크레딧을 2차 실측값으로(`KNOWN_CREDITS_PER_90MIN`). 작업의 요약 크레딧은 토큰 × 단가(`job.cost.source`, 단가표 밖 모델만 잔액 차이, 평균에는 source 있는 기록만). 9/30: 요약은 스트리밍(524 방지), 시간 초과는 `timeout` 오류와 [요약 모델 바꾸기], 한글 교정은 앞쪽 단어 경계, 요약 뒤 교정 검증(`core/verify.ts`, 기본 luna), 선택 기능 전사문 다듬기(`core/polish.ts`, `polish` 단계, 기본 꺼짐). 둘 다 설정 > 고급 > 요약 세부설정에서 모델을 고른다. 남은 것: `TOKENS_PER_90MIN`(목록 밖 모델의 어림, 측정 전 값).
    - 요약문·채점표는 강의 내용이라 저장소 밖에 있다. 1차는 노트북에, 2차는 데스크톱 데이터 폴더의 `bench/`에 있다.
-   - 2차 입력을 고르다 앱 받아쓰기(turbo, 외장 GPU)가 한 구간을 수 분 길이로 잡고 말을 통째로 빠뜨리는 것을 봤다(63분 강의에서 전사가 기준의 절반). 원인 조사는 따로 한다.
+   - 받아쓰기 누락(9/30 해결): VAD로 이어 붙인 음성에서 whisper가 몇 분씩 건너뛰던 것을, 의심 구간이 있는 조각만 VAD 없이 다시 받아써 바꿔 끼우도록 했다(`docs/decisions.md`의 "받아쓰기 누락 조사").
 
 1. 속도 재기 중 홈 배너. 첫 실행·모델 교체 뒤 1~2분 동안 홈에 표시가 없어 모델을 못 찾은 것처럼 보인다.
 2. 실제 작업의 받아쓰기 시간으로 예상치 보정. TTS가 아닌 사람이 읽은 샘플이어도 쉼이 적어 노트북 예상이 90분에 약 74분으로, S3 실측(약 27분)보다 크게 나온다.
@@ -131,6 +131,7 @@ PC별 메모: 노트북(Ryzen 7 5700U)에는 모델과 `tools/.venv`가 있고 �
 
 - whisper-cli는 `-np`여도 전사 구간을 stdout으로 출력한다. stdout은 `ignore`로 두고 stderr의 `progress = N%`만 읽는다 (파이프가 차면 멈춤, `test/stt.test.ts`가 이를 검사).
 - whisper-cli는 인자를 ANSI 코드 페이지로 받는다. 경로는 cwd 기준 상대 경로로 넘긴다. `-mc 0` + VAD는 긴 강의에서 같은 문장이 반복되며 내용이 사라지는 루프를 막는 설정이다.
+- VAD를 켜면 조각 시작 위치에 따라 whisper가 몇 분씩 건너뛰고(조각 하나가 2초 만에 끝남), 끄면 잡음을 "고춧가루" 같은 말로 받아쓴다. 그래서 VAD는 켜 두고 의심 구간만 VAD 없이 다시 받아쓴다(`stt/base.ts`). VAD를 통째로 끄지 않는다.
 - `app/package.json`에 `"type": "module"`을 넣지 않는다. electron-vite가 메인·preload를 ESM으로 만들게 되는데, sandbox preload는 CommonJS여야 한다. 그래서 Node로 `.ts`를 직접 돌릴 때는 `--disable-warning=MODULE_TYPELESS_PACKAGE_JSON`을 붙인다(npm 스크립트에 들어 있음).
 - Claude 데스크톱 앱(MSIX)에서 실행한 명령·앱이 `%LOCALAPPDATA%`에 새로 쓴 파일은 `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Local\lecture-notes\`로 가상화된다. Claude 안의 프로세스는 두 곳을 합쳐 보지만, 사용자가 자기 터미널에서 띄운 앱은 실제 폴더만 본다(9/29 노트북: Claude 세션에서 받은 모델을 사용자 `npm run dev`가 못 찾음). 사용자 앱이 쓸 모델·데이터는 사용자 터미널에서 받거나 옮기게 하고, Claude 쪽에서는 실제 폴더에 쓸 수 없다. 앱이 켜질 때 로그에 모델 폴더와 파일 크기를 남긴다(`받아쓰기 모델: ...`).
 - 데스크톱의 `py -3.13`은 Microsoft Store판이라 `%LOCALAPPDATA%` 쓰기가 `...\Packages\PythonSoftwareFoundation...\LocalCache\`로 가상화된다. 벤치용 venv를 그 Python으로 만들지 않는다.

@@ -35,6 +35,23 @@ export function backendUsed(log: string[]): string {
   return 'CPU'
 }
 
+const VAD_VALUE_OPTS = new Set(['-vm', '--vad-model', '-vt', '--vad-threshold', '-vspd', '--vad-min-speech-duration-ms', '-vsd', '--vad-min-silence-duration-ms',
+  '-vmsd', '--vad-max-speech-duration-s', '-vp', '--vad-speech-pad-ms', '-vo', '--vad-samples-overlap'])
+
+/** whisper-cli 옵션에서 VAD 관련 옵션(--vad와 값을 받는 VAD 옵션)을 뺀다 */
+export function stripVadArgs(args: string[]): string[] {
+  const out: string[] = []
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--vad') continue
+    if (VAD_VALUE_OPTS.has(args[i])) {
+      i++
+      continue
+    }
+    out.push(args[i])
+  }
+  return out
+}
+
 function argPath(p: string, cwd: string): string {
   // whisper-cli는 인자를 ANSI 코드 페이지로 받는다. cwd 기준 상대 경로로 넘겨 사용자 이름 같은
   // 비ASCII 경로 조각을 피한다. 드라이브가 다르면 relative()가 절대 경로를 돌려준다.
@@ -58,6 +75,14 @@ export class WhisperCpp implements SttEngine {
 
   constructor(opts: WhisperOptions) {
     this.opts = { quiet: true, ...opts }
+  }
+
+  /** VAD 없이 받아쓰는 엔진 (누락 구간 다시 받아쓰기). 고친 옵션이 있으면 VAD 옵션만 뺀다 */
+  withoutVad(): WhisperCpp | null {
+    const o = this.opts
+    const vadInArgs = !!o.args?.some((a) => a === '--vad')
+    if (o.vadModel === null && !vadInArgs) return null
+    return new WhisperCpp({ ...o, vadModel: null, args: o.args ? stripVadArgs(o.args) : null })
   }
 
   command(wav: string, language: string): string[] {
