@@ -64,9 +64,13 @@ npm run dist:win
 powershell -File ../scripts/build_whisper.ps1 -SourceDir <whisper.cpp 체크아웃> [-NoVulkan]
 ```
 
+```bash
+powershell -File ../scripts/fetch_ffmpeg.ps1
+```
+
 `npm ci` 뒤에 `npm run dev`가 `Error: Electron uninstall`로 멈추면 Electron 바이너리가 없는 것이다. npm 11이 설치 스크립트를 막아 `node_modules/electron/dist`·`path.txt`가 안 생기므로 `node node_modules/electron/install.js`로 받는다(`npx electron .`은 스스로 받지만 electron-vite는 `path.txt`를 먼저 찾는다).
 
-`build_whisper.ps1`의 결과는 `.cache/whisper/bin/`에 모이고, 개발 중에는 그곳의 `whisper-cli.exe`와 PATH의 `ffmpeg`를 쓴다. 설치본은 `resources/bin/`(electron-builder의 `extraResources`)에서 찾는다. 설치 파일은 `dist/installer/`에 생긴다. vite는 electron-vite 5가 지원하는 7로 고정돼 있다(8로 올리지 않는다).
+`build_whisper.ps1`의 결과는 `.cache/whisper/bin/`에, `fetch_ffmpeg.ps1`(BtbN LGPL 빌드, 고정 태그·sha256)의 결과는 `.cache/ffmpeg/bin/`에 모인다. 개발 중에는 `.cache/whisper/bin`의 `whisper-cli.exe`와 PATH의 `ffmpeg`를 쓴다. 설치본은 둘 다 `resources/bin/`(electron-builder의 `extraResources`)에서 찾는다. 설치 파일은 `dist/installer/`에 생긴다. CI(`.github/workflows/installer.yml`, 수동 실행 또는 `v*` 태그)는 whisper 빌드(캐시) → ffmpeg → 타입 검사·테스트 → 설치 파일을 만들어 아티팩트 `NotecrAIte-windows`로 올린다(Release에는 올리지 않음). vite는 electron-vite 5가 지원하는 7로 고정돼 있다(8로 올리지 않는다).
 
 벤치의 `fw:`(faster-whisper) 설정만 Python을 쓴다: `py -3.14 -m venv tools/.venv && tools/.venv/Scripts/python -m pip install -r tools/requirements-bench.txt`. 앱에는 Python이 들어가지 않는다.
 
@@ -113,8 +117,8 @@ S3는 9/28에 정했다: 로컬 STT는 whisper.cpp, CPU 기본 `large-v3-turbo-q
 
 1. 속도 재기 중 홈 배너. 첫 실행·모델 교체 뒤 1~2분 동안 홈에 표시가 없어 모델을 못 찾은 것처럼 보인다.
 2. 실제 작업의 받아쓰기 시간으로 예상치 보정. TTS가 아닌 사람이 읽은 샘플이어도 쉼이 적어 노트북 예상이 90분에 약 74분으로, S3 실측(약 27분)보다 크게 나온다.
-3. 설치 파일에 ffmpeg LGPL 빌드 넣기. 지금은 개발 PC의 PATH ffmpeg를 써서 설치본만 있는 PC에서는 처리할 수 없다.
-4. CI 설치 파일(GitHub Actions: whisper.cpp 빌드 → 설치 파일). 그 뒤 GPU 없는 노트북에서 설치 파일로 완주하는 주말 1차 테스트.
+3. (9/30 됨) 설치 파일에 ffmpeg LGPL 빌드, CI 설치 파일. 남은 것: GPU 없는 노트북에서 CI 설치 파일로 완주하는 주말 1차 테스트.
+4. 전사 품질 실험(작성자 요청 9/30): small·turbo × 다듬기 비교, 받아쓰기 전 전처리(ffmpeg 필터), whisper 옵션(`--prompt` 등) 조정.
 5. 계획의 W3: 1차 테스트 수정, ChatKHU STT 선택지, 폴더 감시·트레이 메뉴·자동 실행, OpenAI·Gemini 프리셋. W4: Ollama(설정의 로컬 LLM), Mac 베타.
 
 사용자가 할 것·정할 것:
