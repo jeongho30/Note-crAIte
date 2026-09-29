@@ -89,9 +89,10 @@ export const POLISH_RECOMMENDED = ['gpt-6-luna', 'google/gemma-4-31B-it', 'grok-
 
 /**
  * 90분 강의 1회의 토큰 수: 9/30 gpt-6-luna 실측을 90분으로 환산. 다듬기는 전사 전체를 다시 써서 출력이 길다(추론 포함).
+ * 다듬기는 전사 품질 실험(강의 6번, 90분 환산 21~38크레딧)에 맞춰 luna 약 30크레딧이 되게 잡았다. 말이 빠른 강의일수록 더 든다.
  * 다른 모델은 이 토큰 수 × 단가로 어림한다.
  */
-export const STEP_TOKENS_PER_90MIN = { verify: { input: 1_200, output: 600 }, polish: { input: 26_000, output: 35_000 } }
+export const STEP_TOKENS_PER_90MIN = { verify: { input: 1_200, output: 600 }, polish: { input: 39_000, output: 52_200 } }
 
 /** 교정 검증·전사문 다듬기 한 번의 90분 강의 크레딧(어림). 단가를 모르면 null. */
 export function estimateStepCredits90(step: keyof typeof STEP_TOKENS_PER_90MIN, id: string): number | null {
