@@ -1,6 +1,7 @@
 // 작업 폴더 파일을 원자적으로 쓰고 읽는다 (쓰다 만 파일이 재개 판정을 속이지 않게).
 import { randomBytes } from 'node:crypto'
-import { readFile, rename, unlink, writeFile } from 'node:fs/promises'
+import { readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 
 const RENAME_RETRIES = 5
 
@@ -27,4 +28,21 @@ export async function writeJsonAtomic(path: string, data: unknown): Promise<void
 
 export async function readJson<T = unknown>(path: string): Promise<T> {
   return JSON.parse(await readFile(path, 'utf8')) as T
+}
+
+/** 폴더 안 파일 크기의 합 (하위 폴더 포함). 없으면 0. */
+export async function dirSize(dir: string): Promise<number> {
+  let entries
+  try {
+    entries = await readdir(dir, { withFileTypes: true })
+  } catch {
+    return 0
+  }
+  let total = 0
+  for (const e of entries) {
+    const path = join(dir, e.name)
+    if (e.isDirectory()) total += await dirSize(path)
+    else if (e.isFile()) total += await stat(path).then((s) => s.size, () => 0)
+  }
+  return total
 }

@@ -77,23 +77,3 @@
   overflow: auto;
   padding: var(--space-5) var(--space-6);
 }
-
-.placeholder {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  max-width: var(--content-max-w);
-  margin: 0 auto;
-  color: var(--color-text-3);
-}
-
-.placeholder h1 {
-  margin: 0;
-  color: var(--color-text);
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-bold);
-}
-
-.placeholder p {
-  margin: 0;
-}

@@ -2,6 +2,7 @@
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { readJson, writeJsonAtomic } from './files.ts'
+import { DEFAULT_MODEL } from './job.ts'
 import type { ProviderId } from './providers.ts'
 
 export type Settings = {
@@ -16,12 +17,23 @@ export type Settings = {
   lastSubject: string | null
   /** 과목별 강의 언어 기본값. 없는 과목은 한국어. 바꾸는 곳은 설정 > 과목 */
   subjectLanguage: Record<string, Language>
+  /** 요약 모델. null이면 서비스의 권장 모델 */
+  summaryModel: string | null
+  /** 받아쓰기 모델 (설정 > 고급 > 받아쓰기 세부설정) */
+  sttModel: string
+  /** 고친 whisper-cli 옵션. null이면 앱 기본(이 PC에서 잰 장치·스레드) */
+  sttArgs: string | null
+  /** 화면 색. system이면 Windows 설정을 따른다 */
+  theme: Theme
 }
+
+export type Theme = 'system' | 'light' | 'dark'
 
 export type Language = 'ko' | 'en'
 
 export const DEFAULT_SETTINGS: Settings = {
-  wizardStep: 0, wizardDone: false, outDir: null, provider: null, lastSubject: null, subjectLanguage: {}
+  wizardStep: 0, wizardDone: false, outDir: null, provider: null, lastSubject: null, subjectLanguage: {},
+  summaryModel: null, sttModel: DEFAULT_MODEL, sttArgs: null, theme: 'system'
 }
 
 function settingsPath(dataDir: string): string {

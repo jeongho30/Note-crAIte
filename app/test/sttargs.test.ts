@@ -1,0 +1,66 @@
+import assert from 'node:assert/strict'
+import { join } from 'node:path'
+import { test } from 'node:test'
+import { EngineError } from '../src/core/errors.ts'
+import type { Job } from '../src/core/job.ts'
+import { creditsPer90ByModel, parseModelList } from '../src/core/providers.ts'
+import { checkArgs, WhisperCpp } from '../src/core/stt/whispercpp.ts'
+import { defaultArgs, parseArgs, previewCommand } from '../src/core/sttargs.ts'
+
+test('기본 옵션은 스레드·반복 억제·탐색 폭·장치·VAD', () => {
+  assert.equal(defaultArgs({ threads: 6, beamSize: 1, gpuDevice: 0, vad: true }).join(' '), '-t 6 -mc 0 -bs 1 -dev 0 --vad')
+  assert.equal(defaultArgs({ threads: 2, gpuDevice: null, vad: false }).join(' '), '-t 2 -mc 0 -ng')
+})
+
+test('사용자 옵션은 공백으로 나누고, 앱이 정하는 옵션·경로·따옴표는 거절한다', () => {
+  assert.deepEqual(parseArgs('  -t 4   -mc 0 -bs 5 --vad '), ['-t', '4', '-mc', '0', '-bs', '5', '--vad'])
+  for (const bad of ['-m other.bin', '-l en', '--language=en', '-of out', '-otxt', '-vm x', '--file a.wav']) {
+    assert.throws(() => parseArgs(bad), (e: EngineError) => e.code === 'input', bad)
+  }
+  assert.throws(() => parseArgs('-t 4 C:\\evil'), /경로/)
+  assert.throws(() => parseArgs('-t "4"'), /따옴표/)
+})
+
+test('고친 옵션이 있으면 WhisperCpp는 기본 옵션 대신 쓰고, 파일·모델·언어·출력은 그대로 둔다', () => {
+  const dir = join('C:', 'data')
+  const engine = new WhisperCpp({ cli: ['whisper-cli'], model: join(dir, 'models', 'm.bin'), vadModel: join(dir, 'models', 'v.bin'), threads: 6, gpuDevice: 0 })
+  const wav = join(dir, 'jobs', 'part_000.wav')
+  const base = engine.command(wav, 'ko')
+  assert.ok(base.includes('-dev') && base.includes('--vad') && base.includes('-vm'))
+
+  engine.opts.args = ['-t', '2', '-ng', '-bs', '5']
+  const cmd = engine.command(wav, 'en')
+  assert.deepEqual(cmd.slice(cmd.indexOf('-np') + 1, cmd.indexOf('-vm')), ['-t', '2', '-ng', '-bs', '5'])
+  assert.equal(cmd[cmd.indexOf('-l') + 1], 'en')
+  assert.equal(cmd[cmd.indexOf('-f') + 1], 'part_000.wav')
+  assert.ok(cmd.includes('-oj') && !cmd.includes('-dev') && !cmd.includes('--vad'))
+})
+
+test('checkArgs는 whisper-cli가 모르는 옵션을 이유와 함께 알려 준다', async () => {
+  const cli = [process.execPath, join(import.meta.dirname, 'fixtures', 'fake-whisper-cli.mjs')]
+  assert.equal(await checkArgs(cli, ['-t', '4', '-bs', '1']), null)
+  assert.equal(await checkArgs(cli, ['-t', '4', '--bogus']), 'unknown argument: --bogus')
+})
+
+test('명령 미리보기는 잠긴 부분과 고칠 수 있는 부분으로 나뉜다', () => {
+  const p = previewCommand('ggml-x.bin', 'ggml-v.bin', 'ko', ['-t', '6'])
+  assert.equal(p.locked, 'whisper-cli -m models\\ggml-x.bin -f part_000.wav -l ko -oj -of part_000.wav -pp -np -vm models\\ggml-v.bin')
+  assert.equal(p.editable, '-t 6')
+})
+
+test('모델 목록은 OpenAI 형식과 이름 배열을 모두 읽는다', () => {
+  assert.deepEqual(parseModelList({ data: [{ id: 'a' }, { id: 'b' }, { id: 'a' }] }), ['a', 'b'])
+  assert.deepEqual(parseModelList(['x', 'y']), ['x', 'y'])
+  assert.deepEqual(parseModelList({ models: [{ name: 'z' }] }), ['z'])
+  assert.deepEqual(parseModelList({ nothing: true }), [])
+})
+
+test('모델별 90분 요약 크레딧은 기록을 90분으로 환산한 평균이고, 없으면 알려진 값', () => {
+  const job = (model: string, credits: number | null, durationS: number): Job =>
+    ({ settings: { llm: { endpoint: '', model } }, cost: { summaryCredits: credits }, audio: { durationS } }) as unknown as Job
+  const r = creditsPer90ByModel([job('m1', 6, 2700), job('m1', 10, 5400), job('m2', null, 5400), job('m3', 3, 30)])
+  assert.equal(r['m1'], 11) // (12 + 10) / 2
+  assert.equal(r['m2'], undefined) // 크레딧 기록 없음
+  assert.equal(r['m3'], undefined) // 너무 짧은 녹음은 뺀다
+  assert.equal(r['gemini-3.8-flash'], 12)
+})

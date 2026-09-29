@@ -5,7 +5,7 @@ import { readdirSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { writeJsonAtomic } from '../core/files.ts'
-import { createJob, DEFAULT_BEAM_SIZE, DEFAULT_MODEL, jobsDir, listJobs, loadJob, runJob, STAGES } from '../core/job.ts'
+import { createJob, DEFAULT_BEAM_SIZE, jobsDir, listJobs, loadJob, runJob, STAGES } from '../core/job.ts'
 import type { Job, JobContext, LlmSettings, StageName, StageState } from '../core/job.ts'
 import { MODELS } from '../core/models.ts'
 import { estimateSttSeconds } from '../core/probe.ts'
@@ -55,6 +55,8 @@ type Deps = {
   sttReady: () => boolean
   probe: () => Promise<ProbeResult | null>
   defaultThreads: () => Promise<number>
+  /** 지금 설정의 받아쓰기 모델과 고친 옵션 (없으면 null = 앱 기본) */
+  stt: () => Promise<{ model: string; args: string[] | null }>
   /** 작업을 만들 때의 요약 설정과, 실행할 때의 API 키 */
   llm: () => Promise<LlmSettings | null>
   apiKey: () => Promise<string | null>
@@ -170,10 +172,16 @@ export function createJobRunner(d: Deps) {
         }
         probeCache = await d.probe()
         const jobDir = dirOf(job.id)
-        // 받아쓰기 전이면 지금 잰 장치·스레드로 맞춘다 (모델 없이 넣은 작업은 만들 때 몰랐다)
-        if (job.stages.stt.status === 'pending' && probeCache) {
-          job.settings.gpuDevice = probeCache.gpuDevice
-          job.settings.threads = probeCache.threads
+        // 받아쓰기 전이면 지금 설정의 모델·옵션과 잰 장치·스레드로 맞춘다
+        // (모델 없이 넣은 작업은 만들 때 장치를 몰랐고, 기다리는 동안 설정에서 모델을 바꿨을 수 있다)
+        if (job.stages.stt.status === 'pending') {
+          const stt = await d.stt()
+          job.settings.model = stt.model
+          job.settings.args = stt.args
+          if (probeCache) {
+            job.settings.gpuDevice = probeCache.gpuDevice
+            job.settings.threads = probeCache.threads
+          }
           await writeJsonAtomic(join(jobDir, 'job.json'), job)
         }
         if (stopping) break
@@ -223,14 +231,15 @@ export function createJobRunner(d: Deps) {
 
   async function start(inputs: JobInput[]): Promise<void> {
     const probe = await d.probe()
-    const [llm, outDir] = await Promise.all([d.llm(), d.outDir()])
+    const [llm, outDir, stt] = await Promise.all([d.llm(), d.outDir(), d.stt()])
     for (const input of inputs) {
       await createJob(d.dataDir, input.audio, input.notes, input.subject, {
         language: input.language,
-        model: DEFAULT_MODEL,
+        model: stt.model,
         beamSize: DEFAULT_BEAM_SIZE,
         gpuDevice: probe?.gpuDevice ?? null,
         threads: probe?.threads ?? (await d.defaultThreads()),
+        args: stt.args,
         outDir,
         llm
       })
@@ -293,6 +302,14 @@ export function createJobRunner(d: Deps) {
     await emitNow()
   }
 
+  /** 설정 > 저장 공간: 완료한 작업의 작업 폴더를 모두 지운다. 만든 노트와 원래 녹음은 그대로다. 지운 수를 돌려준다. */
+  async function clearDone(): Promise<number> {
+    const done = (await listJobs(d.dataDir)).filter((j) => j.status === 'done')
+    for (const j of done) await rm(dirOf(j.id), { recursive: true, force: true })
+    await emitNow()
+    return done.length
+  }
+
   async function requeue(jobDir: string): Promise<void> {
     const job = await loadJob(jobDir)
     job.status = 'queued'
@@ -319,11 +336,14 @@ export function createJobRunner(d: Deps) {
     transcriptOnly,
     cancel,
     remove,
+    clearDone,
     notePath,
     shutdown,
     kick: () => void loop(),
     /** 대기 중이거나 도는 작업 수 */
     activeCount: () => last.filter((j) => j.status === 'running' || j.status === 'queued').length,
-    busy: () => running
+    busy: () => running,
+    /** 작업 하나를 처리하는 중 (받아쓰기가 돌 수 있음) */
+    transcribing: () => current !== null
   }
 }

@@ -131,6 +131,42 @@ export async function probeDevices(o: ProbeOptions): Promise<ProbeResult> {
   }
 }
 
+export type SampleTestOptions = {
+  cli: string[]
+  model: string
+  vadModel: string
+  args: string[] // 설정 > 고급에서 고친 옵션
+  language: string
+  sample: string // 16kHz 모노 WAV
+  script: string | null // 샘플의 대본. 있으면 전사와 비교해 정상인지 본다
+  workDir: string
+}
+
+export type SampleTest = { sampleS: number; processS: number; chars: number; ok: boolean; reason?: string }
+
+/** 고친 옵션으로 샘플을 한 번 전사해 걸린 시간과 결과가 정상인지 본다 (설정 > 받아쓰기 세부설정의 [샘플로 시험하기]). */
+export async function testSample(o: SampleTestOptions): Promise<SampleTest> {
+  await mkdir(o.workDir, { recursive: true })
+  const wav = join(o.workDir, 'sample.wav')
+  await copyFile(o.sample, wav)
+  const sampleS = await wavDuration(wav)
+  const engine = new WhisperCpp({ cli: o.cli, model: o.model, vadModel: o.vadModel, threads: 1, gpuDevice: null, args: o.args, quiet: false })
+  let text: string
+  try {
+    text = (await engine.transcribe(wav, { language: o.language })).map((s) => s.text).join(' ')
+  } catch (e) {
+    const tail = (e as Error).message.split('\n').filter(Boolean).at(-1) ?? ''
+    return { sampleS, processS: 0, chars: 0, ok: false, reason: `whisper-cli가 실패했어요: ${tail}` }
+  }
+  const { loadMs, totalMs } = parseTimings(engine.lastLog)
+  const result: SampleTest = { sampleS, processS: ((totalMs ?? 0) - (loadMs ?? 0)) / 1000, chars: normalize(text).length, ok: true }
+  if (!result.chars) Object.assign(result, { ok: false, reason: '전사 결과가 비었어요' })
+  else if (o.script !== null && cer(o.script, text) > MAX_CER_VS_CPU) {
+    Object.assign(result, { ok: false, reason: `전사가 대본과 크게 달라요 (CER ${cer(o.script, text).toFixed(2)})` })
+  }
+  return result
+}
+
 /** 로컬 STT 예상 시간(초): 처리 속도 × 길이 + 약 10분 조각마다 모델 로드. */
 export function estimateSttSeconds(durationS: number, p: Pick<ProbeResult, 'rtf' | 'loadS'>): number {
   return durationS * p.rtf + Math.ceil(durationS / 600) * p.loadS

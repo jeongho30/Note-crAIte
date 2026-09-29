@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { call } from '../api'
 import { useToast } from '../components'
 import { cx } from '../components/cx'
+import { Settings } from '../settings/Settings'
 import type { LlmStatus } from '../wizard/shared'
 import { Home } from './Home'
 import { JobList } from './JobList'
@@ -17,23 +18,32 @@ const NAV: { view: View; label: string }[] = [
 ]
 
 type Props = {
-  /** 설정 화면이 생기기 전까지, 요약 서비스 연결은 마법사의 그 단계를 다시 연다 */
-  onConnect: () => void
+  /** 설정 > 정보의 [첫 실행 마법사 다시 보기] */
+  onRestartWizard: () => void
 }
 
 // 앱 틀: 왼쪽 사이드바(메뉴, 남은 크레딧)와 오른쪽 본문.
-export default function Shell({ onConnect }: Props): React.JSX.Element {
+export default function Shell({ onRestartWizard }: Props): React.JSX.Element {
   const [view, setView] = useState<View>('home')
+  const [openKey, setOpenKey] = useState(0)
   const [llm, setLlm] = useState<LlmStatus | null>(null)
   const jobs = useJobs()
   const toast = useToast()
   const seen = useRef<Map<string, string> | null>(null)
   const doneCount = jobs?.filter((j) => j.status === 'done').length ?? 0
 
-  // 요약이 끝나면 크레딧이 바뀌므로, 끝난 작업 수가 바뀔 때마다 다시 불러온다
-  useEffect(() => {
+  const loadLlm = useCallback(() => {
     call<LlmStatus>('llm.status').then(setLlm, () => setLlm({ provider: null }))
-  }, [doneCount])
+  }, [])
+
+  // 요약이 끝나면 크레딧이 바뀌므로, 끝난 작업 수가 바뀔 때마다 다시 불러온다
+  useEffect(loadLlm, [doneCount, loadLlm])
+
+  // 홈의 [연결하기]·작업 목록의 [키 다시 넣기]: 설정의 요약 서비스에서 키 입력칸을 연다
+  const onConnect = (): void => {
+    setView('settings')
+    setOpenKey((n) => n + 1)
+  }
 
   // 작업이 끝나거나 실패하면 알린다 (처음 불러온 목록은 알리지 않는다)
   useEffect(() => {
@@ -87,10 +97,7 @@ export default function Shell({ onConnect }: Props): React.JSX.Element {
         {view === 'home' && <Home jobs={jobs} llm={llm} onConnect={onConnect} onShowJobs={() => setView('jobs')} />}
         {view === 'jobs' && <JobList jobs={jobs} onConnect={onConnect} onHome={() => setView('home')} />}
         {view === 'settings' && (
-          <div className={styles.placeholder}>
-            <h1>{NAV.find((n) => n.view === view)!.label}</h1>
-            <p>다음 작업에서 만들어요.</p>
-          </div>
+          <Settings llm={llm} doneCount={doneCount} openKey={openKey} onLlmChange={loadLlm} onRestartWizard={onRestartWizard} />
         )}
       </main>
     </div>

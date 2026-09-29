@@ -6,6 +6,8 @@ import { constants, setPriority } from 'node:os'
 import { dirname, relative } from 'node:path'
 import { createInterface } from 'node:readline'
 import { EngineError } from '../errors.ts'
+import { runCapture } from '../proc.ts'
+import { defaultArgs } from '../sttargs.ts'
 import type { Segment, SttEngine, TranscribeOptions } from './base.ts'
 
 const PROGRESS_RE = /progress\s*=\s*(\d+)%/
@@ -47,6 +49,7 @@ export type WhisperOptions = {
   gpuDevice: number | null // null이면 CPU만 쓴다
   quiet?: boolean // false면 -np 없이 돌려 백엔드 선택·처리 시간 로그를 lastLog에 남긴다
   beamSize?: number // 없으면 whisper-cli 기본(beam search). 1이면 greedy라 빠르지만 품질이 떨어질 수 있다
+  args?: string[] | null // 설정 > 고급에서 고친 옵션. 있으면 threads·beamSize·gpuDevice·VAD 켜기 대신 쓴다
 }
 
 export class WhisperCpp implements SttEngine {
@@ -64,15 +67,11 @@ export class WhisperCpp implements SttEngine {
       '-m', argPath(o.model, cwd),
       '-f', argPath(wav, cwd),
       '-l', language,
-      '-t', String(o.threads),
-      // 긴 강의에서 같은 문장을 반복 출력하며 내용을 통째로 날리는 루프를 막는다 (VAD와 함께).
-      '-mc', '0',
       '-oj', '-of', argPath(wav, cwd), // 결과: <wav 이름>.json
       '-pp']
     if (o.quiet) cmd.push('-np')
-    if (o.beamSize !== undefined) cmd.push('-bs', String(o.beamSize))
-    cmd.push(...(o.gpuDevice === null ? ['-ng'] : ['-dev', String(o.gpuDevice)]))
-    if (o.vadModel !== null) cmd.push('--vad', '-vm', argPath(o.vadModel, cwd))
+    cmd.push(...(o.args ?? defaultArgs({ threads: o.threads, beamSize: o.beamSize, gpuDevice: o.gpuDevice, vad: o.vadModel !== null })))
+    if (o.vadModel !== null) cmd.push('-vm', argPath(o.vadModel, cwd))
     return cmd
   }
 
@@ -120,4 +119,16 @@ export class WhisperCpp implements SttEngine {
     if (!existsSync(outJson)) throw new EngineError('stt_failed', `whisper JSON 출력을 찾을 수 없습니다: ${outJson}`)
     return parseWhisperJson(outJson)
   }
+}
+
+/**
+ * 고친 옵션을 whisper-cli가 받아들이는지 빨리 본다. 없는 입력 파일로 실행하면 옵션을 다 읽은 뒤 파일을 찾다가
+ * 바로 끝나므로, 그 오류가 나오면 옵션은 괜찮다. 아니면 whisper-cli가 말한 이유를 돌려준다.
+ */
+export async function checkArgs(cli: string[], args: string[]): Promise<string | null> {
+  const [command, ...pre] = cli
+  const r = await runCapture(command, [...pre, ...args, '-f', 'lecture-notes-missing.wav'], 'stt_failed', true)
+  const lines = `${r.stdout}\n${r.stderr}`.split(/\r?\n/)
+  if (lines.some((l) => l.includes('input file not found'))) return null
+  return lines.find((l) => l.startsWith('error:'))?.replace(/^error:\s*/, '') ?? '옵션을 읽지 못했어요'
 }

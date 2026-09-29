@@ -1,8 +1,19 @@
 // 테스트용 가짜 whisper-cli: stdout으로 대량 출력, stderr로 진행률, -of 경로에 JSON을 쓴다.
-import { writeFileSync } from 'node:fs'
+import { existsSync, writeFileSync } from 'node:fs'
 
 const args = process.argv.slice(2)
 const mode = process.env.FAKE_WHISPER_MODE ?? 'ok'
+
+// 실제 whisper-cli처럼 옵션을 먼저 읽고(모르는 옵션은 오류, 종료 코드 0), 그다음 입력 파일을 찾는다
+const unknown = args.find((a) => a === '--bogus')
+if (unknown) {
+  process.stderr.write(`error: unknown argument: ${unknown}\n`)
+  process.exit(0)
+}
+if (args.includes('-f') && !existsSync(args[args.indexOf('-f') + 1])) {
+  process.stderr.write(`error: input file not found '${args[args.indexOf('-f') + 1]}'\n`)
+  process.exit(2)
+}
 
 if (mode === 'fail') {
   process.stderr.write('error: failed to load model\n')

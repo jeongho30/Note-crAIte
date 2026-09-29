@@ -1,27 +1,32 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell } from 'electron'
-import { mkdir, stat, statfs } from 'node:fs/promises'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, screen, shell } from 'electron'
+import { existsSync } from 'node:fs'
+import { mkdir, readFile, stat, statfs } from 'node:fs/promises'
 import { basename, join, relative } from 'path'
 import { probe as probeAudio } from '../core/audio.ts'
 import { EngineError } from '../core/errors.ts'
-import { readJson } from '../core/files.ts'
+import { dirSize, readJson } from '../core/files.ts'
 import { defaultThreads, detect } from '../core/hardware.ts'
 import { AUDIO_EXTS, NOTE_EXTS, pairInputs } from '../core/inputs.ts'
-import { DEFAULT_MODEL } from '../core/job.ts'
+import { DEFAULT_BEAM_SIZE, DEFAULT_MODEL, jobsDir, listJobs, STT_MODEL_CHOICES, VAD_MODEL } from '../core/job.ts'
 import type { LlmSettings } from '../core/job.ts'
+import { MODELS } from '../core/models.ts'
 import { defaultDataDir, findFfmpeg, findWhisperCli } from '../core/paths.ts'
-import { estimateJobSeconds, estimateSttSeconds } from '../core/probe.ts'
+import { estimateJobSeconds, estimateSttSeconds, testSample } from '../core/probe.ts'
 import type { ProbeResult } from '../core/probe.ts'
-import { CREDITS_PER_90MIN_SUMMARY, PRESETS, PROVIDERS, verifyKey } from '../core/providers.ts'
+import { CREDITS_PER_90MIN_SUMMARY, creditsPer90ByModel, listModels, PRESETS, PROVIDERS, verifyKey } from '../core/providers.ts'
 import type { ProviderId } from '../core/providers.ts'
 import { recentNotes } from '../core/recent.ts'
 import { loadSettings, updateSettings } from '../core/settings.ts'
-import type { Language } from '../core/settings.ts'
+import { checkArgs } from '../core/stt/whispercpp.ts'
+import { defaultArgs, parseArgs, previewCommand } from '../core/sttargs.ts'
+import type { Language, Theme } from '../core/settings.ts'
 import { inspectFolder, useFolder } from '../core/vault.ts'
 import { createJobRunner } from './jobs.ts'
 import type { JobInput, JobView } from './jobs.ts'
 import { fitContent } from './fit.ts'
 import type { Size } from './fit.ts'
-import { keyHint, readKey, saveKey } from './secrets.ts'
+import { createLog } from './log.ts'
+import { keyHint, readKey, removeKey, saveKey } from './secrets.ts'
 import { createSetup } from './setup.ts'
 import { createTray } from './tray.ts'
 
@@ -33,6 +38,8 @@ const whisperDirs = app.isPackaged
 const probeSample = app.isPackaged ? join(process.resourcesPath, 'probe-ko.wav') : join(app.getAppPath(), 'resources', 'probe-ko.wav')
 // LN_DATA_DIR: 개발 중 첫 실행 상태를 따로 시험할 때만 쓴다 (CLI의 --data-dir과 같은 역할)
 const dataDir = process.env['LN_DATA_DIR'] || defaultDataDir()
+const log = createLog(join(dataDir, 'logs'))
+const RELEASES_URL = 'https://github.com/jeongho30/lecture-notes/releases'
 
 // 앱은 하나만 띄운다: 두 번째로 실행하면 이미 떠 있는 창을 앞으로 가져온다 (같은 설정·작업 파일을 두 곳에서 쓰지 않게)
 const primary = app.requestSingleInstanceLock()
@@ -53,8 +60,11 @@ function emit(name: string, data: unknown): void {
 
 const setup = createSetup({
   dataDir,
+  model: DEFAULT_MODEL, // 앱을 켤 때 settings.json의 모델로 바꾼다 (init)
   whisperCli: () => findWhisperCli(whisperDirs),
   sample: probeSample,
+  busy: () => runner.transcribing(),
+  log: log.write,
   emit: (s) => {
     emit('setup', s)
     // 모델을 다 받고 속도 재기도 끝나면 기다리던 작업을 돌린다
@@ -66,7 +76,7 @@ const setup = createSetup({
 async function loadProbe(): Promise<ProbeResult | null> {
   try {
     const p = await readJson<ProbeResult>(join(dataDir, 'probe.json'))
-    return p.model === DEFAULT_MODEL ? p : null
+    return p.model === setup.model() ? p : null
   } catch {
     return null
   }
@@ -89,11 +99,15 @@ const runner = createJobRunner({
   },
   probe: loadProbe,
   defaultThreads: async () => defaultThreads(await detect()),
+  stt: async () => {
+    const { sttArgs } = await loadSettings(dataDir)
+    return { model: setup.model(), args: sttArgs ? parseArgs(sttArgs) : null }
+  },
   llm: async (): Promise<LlmSettings | null> => {
-    const { provider } = await loadSettings(dataDir)
+    const { provider, summaryModel } = await loadSettings(dataDir)
     if (provider !== 'chatkhu' || !(await readKey(dataDir, provider))) return null
     const p = PRESETS['chatkhu']
-    return { endpoint: p.endpoint, model: p.model, creditsUrl: p.credits }
+    return { endpoint: p.endpoint, model: summaryModel ?? p.model, creditsUrl: p.credits }
   },
   apiKey: async () => {
     const { provider } = await loadSettings(dataDir)
@@ -103,6 +117,7 @@ const runner = createJobRunner({
   emit: (jobs) => {
     emit('jobs', jobs)
     onJobs(jobs)
+    if (!runner.transcribing()) setup.resume() // 작업 때문에 미룬 속도 재기
   }
 })
 
@@ -138,7 +153,23 @@ function updateTray(): void {
   )
 }
 
+// 작업 상태가 바뀔 때마다 기록에 남긴다 (앱을 켠 뒤 처음 받은 목록은 남기지 않음)
+let loggedStatus: Map<string, JobView['status']> | null = null
+const STATUS_WORD: Record<JobView['status'], string> = { queued: '대기', running: '시작', done: '완료', failed: '실패', cancelled: '취소' }
+
+function logJobs(jobs: JobView[]): void {
+  const prev = loggedStatus
+  loggedStatus = new Map(jobs.map((j) => [j.id, j.status]))
+  if (!prev) return
+  for (const j of jobs) {
+    if (prev.get(j.id) === j.status) continue
+    const why = j.status === 'failed' && j.error ? ` · ${j.error.stage} · [${j.error.code}] ${j.error.message}` : ''
+    log.write(`작업 ${STATUS_WORD[j.status]}: ${j.name}${why}`)
+  }
+}
+
 function onJobs(jobs: JobView[]): void {
+  logJobs(jobs)
   // 창이 숨어 있는 동안 끝나거나 실패한 작업은 트레이 알림으로 알린다 (창이 보이면 화면이 알린다)
   if (mainWindow && !mainWindow.isVisible()) {
     for (const j of jobs) {
@@ -189,6 +220,19 @@ type Prepared = {
   rejected: { name: string; reason: string }[]
 }
 
+/** 지금 고른 요약 모델의 90분 요약 크레딧. 써 본 적 없는 모델이면 null */
+async function selectedModelCredits90(): Promise<number | null> {
+  const { summaryModel } = await loadSettings(dataDir)
+  const model = summaryModel ?? PRESETS['chatkhu'].model
+  return creditsPer90ByModel(await listJobs(dataDir))[model] ?? null
+}
+
+/** 남은 크레딧으로 90분 강의를 몇 개 더 요약할 수 있는지. 모델의 크레딧을 모르면 기본값으로 어림한다 */
+async function summariesLeft(credits: number | null): Promise<number | null> {
+  if (credits == null) return null
+  return Math.floor(credits / ((await selectedModelCredits90()) ?? CREDITS_PER_90MIN_SUMMARY))
+}
+
 /** 시작 전 확인에 보여 줄 것: 녹음마다 길이·녹음 시각·예상 시간·예상 크레딧, 넣을 수 없는 파일과 이유. */
 async function prepare(paths: string[]): Promise<Prepared> {
   const { recordings, ignored } = pairInputs(paths)
@@ -196,7 +240,7 @@ async function prepare(paths: string[]): Promise<Prepared> {
     name: basename(p),
     reason: NOTE_EXTS.some((e) => p.toLowerCase().endsWith('.' + e)) ? '같은 이름의 녹음이 없는 필기예요' : '녹음 파일이 아니에요'
   }))
-  const [probe, settings] = await Promise.all([loadProbe(), loadSettings(dataDir)])
+  const [probe, settings, per90] = await Promise.all([loadProbe(), loadSettings(dataDir), selectedModelCredits90()])
   const ffmpeg = findFfmpeg(binDir)
   const out: Prepared['recordings'] = []
   for (const r of recordings) {
@@ -214,7 +258,7 @@ async function prepare(paths: string[]): Promise<Prepared> {
         recordedAt,
         sttS: probe && info.durationS ? Math.round(estimateSttSeconds(info.durationS, probe)) : null,
         totalS: probe && info.durationS ? Math.round(estimateJobSeconds(info.durationS, probe, settings.provider !== null)) : null,
-        credits: settings.provider === 'chatkhu' && info.durationS ? Math.max(1, Math.round((info.durationS / 5400) * CREDITS_PER_90MIN_SUMMARY)) : null
+        credits: settings.provider === 'chatkhu' && info.durationS ? Math.max(1, Math.round((info.durationS / 5400) * (per90 ?? CREDITS_PER_90MIN_SUMMARY))) : null
       })
     } catch {
       rejected.push({ name: basename(r.audio), reason: '소리를 읽을 수 없는 파일이에요' })
@@ -248,8 +292,56 @@ async function llmStatus(): Promise<{ provider: ProviderId | null; name?: string
     name: PROVIDERS.find((x) => x.id === provider)?.name,
     keyHint: keyHint(key),
     credits,
-    summariesLeft: credits == null ? null : Math.floor(credits / CREDITS_PER_90MIN_SUMMARY)
+    summariesLeft: await summariesLeft(credits)
   }
+}
+
+const modelFile = (name: string): string => join(dataDir, 'models', MODELS.whisper[name].file)
+const vadFile = (): string => join(dataDir, 'models', MODELS.vad[VAD_MODEL].file)
+
+/** 받아쓰기 모델을 다 받았는지 (.part가 아니라 완성본이 제 크기인지) */
+async function haveModel(name: string): Promise<boolean> {
+  return stat(modelFile(name)).then((s) => s.size === MODELS.whisper[name].size, () => false)
+}
+
+/** 설정 > 고급 > 받아쓰기 세부설정에 보여 줄 것 */
+async function sttOptions() {
+  const settings = await loadSettings(dataDir)
+  const probe = setup.get().probe
+  const defaults = defaultArgs({
+    threads: probe.threads ?? defaultThreads(await detect()),
+    beamSize: DEFAULT_BEAM_SIZE,
+    gpuDevice: probe.gpuDevice ?? null,
+    vad: true
+  }).join(' ')
+  const choices = await Promise.all(
+    STT_MODEL_CHOICES.map(async (id) => ({
+      id,
+      size: MODELS.whisper[id].size,
+      downloaded: await haveModel(id),
+      // 명령 중 앱이 정하는 부분 (강의 언어는 과목마다 달라 한국어로 보인다)
+      locked: previewCommand(MODELS.whisper[id].file, MODELS.vad[VAD_MODEL].file, 'ko', []).locked
+    }))
+  )
+  return { model: setup.model(), choices, defaultArgs: defaults, args: settings.sttArgs ?? defaults, custom: settings.sttArgs !== null }
+}
+
+/** 고른 모델과 옵션을 검사한다. 옵션은 whisper-cli에 한 번 읽혀 봐서 모르는 옵션·빠진 값을 저장 전에 거른다. */
+async function sttInput(p: unknown): Promise<{ model: string; args: string[] }> {
+  const { model, args } = p as { model: unknown; args: unknown }
+  const name = String(model)
+  if (!(STT_MODEL_CHOICES as readonly string[]).includes(name)) throw new EngineError('input', '고를 수 없는 모델이에요.')
+  const parsed = parseArgs(String(args ?? ''))
+  if (!parsed.length) throw new EngineError('input', '옵션이 비었어요. [기본값으로 되돌리기]를 눌러 주세요.')
+  const problem = await checkArgs([findWhisperCli(whisperDirs)], parsed)
+  if (problem) throw new EngineError('input', `whisper-cli가 이 옵션을 받지 않아요: ${problem}`)
+  return { model: name, args: parsed }
+}
+
+async function openFolder(path: string): Promise<void> {
+  await mkdir(path, { recursive: true })
+  const err = await shell.openPath(path)
+  if (err) throw new EngineError('input', '폴더를 열지 못했어요: ' + err)
 }
 
 // 화면이 부를 수 있는 처리 (허용 목록).
@@ -296,7 +388,7 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     const { credits } = await verifyKey(id, apiKey)
     await saveKey(dataDir, id, apiKey)
     await updateSettings(dataDir, { provider: id })
-    return { provider: id, keyHint: keyHint(apiKey), credits, summariesLeft: credits === null ? null : Math.floor(credits / CREDITS_PER_90MIN_SUMMARY) }
+    return { provider: id, keyHint: keyHint(apiKey), credits, summariesLeft: await summariesLeft(credits) }
   },
   'llm.openKeyGuide': (p) => {
     const url = PROVIDERS.find((x) => x.id === p)?.keyGuideUrl
@@ -367,6 +459,108 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     if (!path) throw new EngineError('input', '노트를 찾지 못했어요.')
     shell.showItemInFolder(path)
   },
+
+  // ── 설정 화면 ──
+  // 화면 색: Electron이 prefers-color-scheme와 창 제목 줄을 함께 바꾼다
+  'settings.setTheme': async (p) => {
+    const theme: Theme = p === 'light' || p === 'dark' ? p : 'system'
+    nativeTheme.themeSource = theme
+    await updateSettings(dataDir, { theme })
+    return theme
+  },
+  'settings.setSubjectLanguage': async (p) => {
+    const { subject, language } = p as { subject: unknown; language: unknown }
+    const s = await loadSettings(dataDir)
+    const next: Record<string, Language> = { ...s.subjectLanguage, [String(subject)]: language === 'en' ? 'en' : 'ko' }
+    return (await updateSettings(dataDir, { subjectLanguage: next })).subjectLanguage
+  },
+
+  'llm.disconnect': async () => {
+    const { provider } = await loadSettings(dataDir)
+    if (provider) await removeKey(dataDir, provider)
+    await updateSettings(dataDir, { provider: null })
+    log.write('요약 서비스 연결 끊음')
+  },
+  // 요약 모델 목록과 모델별 90분 요약 크레딧(써 본 모델만). 목록을 못 불러오면 권장 모델과 고른 모델만.
+  'llm.models': async () => {
+    const { provider, summaryModel } = await loadSettings(dataDir)
+    const recommended = PRESETS['chatkhu'].model
+    const selected = summaryModel ?? recommended
+    const key = provider ? await readKey(dataDir, provider) : null
+    let ids: string[] = []
+    let failed = false
+    if (provider && key) ids = await listModels(provider, key).catch(() => ((failed = true), []))
+    const credits = creditsPer90ByModel(await listJobs(dataDir))
+    const all = [...new Set([recommended, selected, ...ids])]
+    return { selected, recommended, failed, models: all.map((id) => ({ id, credits90: credits[id] ?? null })) }
+  },
+  'llm.setModel': async (p) => {
+    const model = String(p ?? '').trim()
+    if (!model) throw new EngineError('input', '모델을 골라 주세요.')
+    await updateSettings(dataDir, { summaryModel: model === PRESETS['chatkhu'].model ? null : model })
+    log.write(`요약 모델: ${model}`)
+  },
+
+  'setup.reprobe': () => {
+    setup.reprobe()
+    return setup.get()
+  },
+
+  'stt.options': () => sttOptions(),
+  // 고친 옵션으로 샘플을 한 번 전사해 본다 (저장하지 않음)
+  'stt.test': async (p) => {
+    const { model, args } = await sttInput(p)
+    if (!(await haveModel(model))) throw new EngineError('input', '이 모델을 받은 뒤 시험할 수 있어요. [저장]하면 받아요.')
+    if (runner.transcribing()) throw new EngineError('input', '받아쓰기 중에는 시험할 수 없어요. 작업이 끝난 뒤 해 주세요.')
+    if (setup.get().probe.state === 'running') throw new EngineError('input', '속도를 재는 중이에요. 끝난 뒤 시험해 주세요.')
+    const scriptPath = probeSample.replace(/\.wav$/, '.txt')
+    // 대본 파일의 첫 빈 줄 뒤가 읽은 글이다
+    const script = existsSync(scriptPath) ? (await readFile(scriptPath, 'utf8')).split(/\r?\n\r?\n/).slice(1).join(' ') || null : null
+    const result = await testSample({
+      cli: [findWhisperCli(whisperDirs)],
+      model: modelFile(model),
+      vadModel: vadFile(),
+      args,
+      language: 'ko',
+      sample: probeSample,
+      script,
+      workDir: join(dataDir, 'probe-test')
+    })
+    log.write(`샘플 시험: ${model} · ${args.join(' ')} · ${result.processS.toFixed(1)}초 · ${result.ok ? '정상' : result.reason}`)
+    return result
+  },
+  // 모델과 옵션을 저장한다. 모델을 바꾸면 받은 뒤 속도를 다시 잰다. 기본 옵션과 같으면 기본으로 둔다(장치가 바뀌면 따라가게).
+  'stt.save': async (p) => {
+    const { model, args } = await sttInput(p)
+    const text = args.join(' ')
+    const { defaultArgs: defaults } = await sttOptions()
+    await updateSettings(dataDir, { sttModel: model, sttArgs: text === defaults ? null : text })
+    await setup.setModel(model)
+    log.write(`받아쓰기 설정: ${model} · ${text === defaults ? '기본 옵션' : text}`)
+    return sttOptions()
+  },
+
+  'storage.info': async () => {
+    const jobs = await listJobs(dataDir)
+    const downloaded = []
+    for (const id of Object.keys(MODELS.whisper)) if (await haveModel(id)) downloaded.push(id)
+    return {
+      modelsBytes: await dirSize(join(dataDir, 'models')),
+      models: downloaded,
+      jobsBytes: await dirSize(jobsDir(dataDir)),
+      done: jobs.filter((j) => j.status === 'done').length,
+      stopped: jobs.filter((j) => j.status === 'failed' || j.status === 'cancelled').length
+    }
+  },
+  'jobs.clearDone': async () => {
+    const n = await runner.clearDone()
+    log.write(`완료한 작업 기록 ${n}개 지움`)
+    return n
+  },
+
+  'app.openData': () => openFolder(dataDir),
+  'app.openLogs': () => openFolder(log.dir),
+  'app.openReleases': () => void shell.openExternal(RELEASES_URL),
 
   'notes.recent': async () => recentNotes(await outDir()),
   'notes.open': (p) => openNote(String(p))
@@ -478,15 +672,20 @@ app.whenReady().then(async () => {
       return await handler(params)
     } catch (e) {
       // IPC는 Error의 추가 필드를 버리므로, 화면이 고를 수 있게 코드를 메시지 앞에 붙인다.
+      log.write(`${method} 실패: ${e instanceof EngineError ? `[${e.code}] ` : ''}${(e as Error).message}`)
       if (e instanceof EngineError) throw new Error(`[${e.code}] ${e.message}`)
       throw e
     }
   })
-  void setup.init()
+  log.prune()
+  log.write(`앱 시작 ${app.getVersion()} · ${process.platform} ${process.arch}${app.isPackaged ? '' : ' · 개발 실행'}`)
+  const settings = await loadSettings(dataDir)
+  nativeTheme.themeSource = settings.theme
+  await setup.init(settings.sttModel)
   runner.kick() // 앱이 꺼져 멈췄던 작업을 이어서 한다
   // 설치본에는 기본 메뉴 줄(File·Edit·View…)을 두지 않는다. 개발 실행에서는 새로 고침·개발자 도구 단축키 때문에 남긴다.
   if (app.isPackaged) Menu.setApplicationMenu(null)
-  createWindow((await loadSettings(dataDir)).wizardDone ? HOME_CONTENT : WIZARD_CONTENT)
+  createWindow(settings.wizardDone ? HOME_CONTENT : WIZARD_CONTENT)
 })
 
 app.on('window-all-closed', () => {

@@ -18,7 +18,7 @@ import styles from './JobList.module.css'
 
 type Props = {
   jobs: JobView[] | null
-  /** 키 오류일 때 [키 다시 넣기] (설정 화면이 생기기 전까지는 마법사의 요약 서비스 단계) */
+  /** 키 오류일 때 [키 다시 넣기]: 설정의 요약 서비스로 간다 */
   onConnect: () => void
   onHome: () => void
 }

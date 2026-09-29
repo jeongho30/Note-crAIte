@@ -23,6 +23,8 @@ import { summarize } from './summarize.ts'
 export const DEFAULT_MODEL = 'large-v3-turbo-q8_0'
 export const DEFAULT_BEAM_SIZE = 1
 export const VAD_MODEL = 'silero-v6.2.0'
+/** 설정 > 고급에서 고를 수 있는 받아쓰기 모델: 기본, 더 정확하게(large-v3), 가볍게(small) */
+export const STT_MODEL_CHOICES = [DEFAULT_MODEL, 'large-v3-q5_0', 'small-q5_1'] as const
 
 export const STAGES = ['audio', 'stt', 'clean', 'summarize', 'note', 'save'] as const
 export type StageName = (typeof STAGES)[number]
@@ -36,6 +38,7 @@ export type JobSettings = {
   beamSize: number
   gpuDevice: number | null // null이면 CPU
   threads: number
+  args?: string[] | null // 설정 > 고급에서 고친 whisper-cli 옵션. 있으면 threads·beamSize·gpuDevice 대신 쓴다
   outDir: string
   llm: LlmSettings | null // null이면 요약 없이 전사만 담은 노트
 }
@@ -166,7 +169,8 @@ const RUNNERS: Record<StageName, Runner> = {
       vadModel: await ctx.modelPath('vad', VAD_MODEL),
       threads: s.threads,
       gpuDevice: s.gpuDevice,
-      beamSize: s.beamSize
+      beamSize: s.beamSize,
+      args: s.args ?? null
     })
     const segments = await transcribeChunks(engine, job.audio!.chunks, join(jobDir, 'chunks'), join(jobDir, 'stt'), {
       language: s.language, signal: ctx.signal, onProgress: (f) => ctx.onProgress?.('stt', f)

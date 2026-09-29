@@ -26,6 +26,14 @@ export async function saveKey(dataDir: string, id: ProviderId, apiKey: string): 
   await writeJsonAtomic(storePath(dataDir), store)
 }
 
+/** 연결 끊기: 이 서비스의 키를 지운다. */
+export async function removeKey(dataDir: string, id: ProviderId): Promise<void> {
+  const store = await load(dataDir)
+  if (!(id in store)) return
+  delete store[id]
+  await writeJsonAtomic(storePath(dataDir), store)
+}
+
 export async function readKey(dataDir: string, id: ProviderId): Promise<string | null> {
   const enc = (await load(dataDir))[id]
   return enc ? safeStorage.decryptString(Buffer.from(enc, 'base64')) : null
