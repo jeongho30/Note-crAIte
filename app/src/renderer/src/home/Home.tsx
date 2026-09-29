@@ -13,12 +13,14 @@ type Props = {
   llm: LlmStatus | null
   onConnect: () => void
   onShowJobs: () => void
+  /** 최근 노트를 누르면 앱 안에서 미리보기 */
+  onPreview: (path: string) => void
 }
 
 // 녹음 파형 모양 (끌어 놓기 칸 장식)
 const WAVE = [10, 18, 26, 14, 22, 8, 16]
 
-export function Home({ jobs, llm, onConnect, onShowJobs }: Props): React.JSX.Element {
+export function Home({ jobs, llm, onConnect, onShowJobs, onPreview }: Props): React.JSX.Element {
   const setup = useSetup()
   const toast = useToast()
   const [over, setOver] = useState(false)
@@ -54,9 +56,9 @@ export function Home({ jobs, llm, onConnect, onShowJobs }: Props): React.JSX.Ele
     if (paths.length) setPending(paths)
   }
 
-  async function open(method: 'notes.open' | 'folder.openOut', path?: string): Promise<void> {
+  async function openFolder(): Promise<void> {
     try {
-      await call(method, path)
+      await call('folder.openOut')
     } catch (e) {
       toast(e instanceof ApiError ? e.message : '열지 못했어요.', 'danger')
     }
@@ -164,7 +166,7 @@ export function Home({ jobs, llm, onConnect, onShowJobs }: Props): React.JSX.Ele
         <div className={styles.sectionHead}>
           <h2>최근 노트</h2>
           {recent && recent.length > 0 && (
-            <Button variant="link" onClick={() => void open('folder.openOut')}>
+            <Button variant="link" onClick={() => void openFolder()}>
               저장 폴더 열기
             </Button>
           )}
@@ -178,7 +180,7 @@ export function Home({ jobs, llm, onConnect, onShowJobs }: Props): React.JSX.Ele
         {recent && recent.length > 0 && (
           <Card className={styles.notes}>
             {recent.map((n) => (
-              <button key={n.path} className={styles.note} onClick={() => void open('notes.open', n.path)}>
+              <button key={n.path} className={styles.note} onClick={() => onPreview(n.path)}>
                 <StatusPill>{n.subject ?? '미분류'}</StatusPill>
                 <span className={styles.noteTitle}>{n.title}</span>
                 <span className={styles.meta}>{n.date}</span>

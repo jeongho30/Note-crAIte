@@ -1,4 +1,4 @@
-// 저장 폴더의 최근 노트: 저장 폴더 바로 아래와 과목 폴더(한 단계 아래)의 .md를 수정 시각 순으로.
+// 저장 폴더의 노트: 저장 폴더 바로 아래와 과목 폴더(한 단계 아래)의 .md를 수정 시각 순으로 (노트 목록 화면과 홈의 최근 노트).
 // 옵시디언 볼트면 이 앱이 만들지 않은 노트도 섞인다(작성자 결정).
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -20,7 +20,8 @@ async function mdFiles(dir: string): Promise<string[]> {
   }
 }
 
-export async function recentNotes(outDir: string, limit = 5): Promise<RecentNote[]> {
+/** 저장 폴더의 노트 전체 (노트 목록 화면). 최근 수정 순. */
+export async function listNotes(outDir: string): Promise<RecentNote[]> {
   let subjects: string[]
   try {
     subjects = (await readdir(outDir, { withFileTypes: true })).filter((e) => e.isDirectory() && !e.name.startsWith('.')).map((e) => e.name)
@@ -41,5 +42,9 @@ export async function recentNotes(outDir: string, limit = 5): Promise<RecentNote
       return { path, subject, modifiedMs, title: m ? m[2] : stem, date: m ? m[1] : localDate(modifiedMs) }
     })
   )
-  return notes.sort((a, b) => b.modifiedMs - a.modifiedMs).slice(0, limit)
+  return notes.sort((a, b) => b.modifiedMs - a.modifiedMs)
+}
+
+export async function recentNotes(outDir: string, limit = 5): Promise<RecentNote[]> {
+  return (await listNotes(outDir)).slice(0, limit)
 }

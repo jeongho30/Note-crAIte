@@ -39,6 +39,7 @@ function drawIcon(): NativeImage {
 
 export function createTray({ open, quit }: { open: () => void; quit: () => void }) {
   let tray: Tray | null = null
+  let onBalloon: (() => void) | null = null // 마지막 알림을 눌렀을 때 (없으면 창만 연다)
 
   function ensure(): Tray {
     if (tray) return tray
@@ -52,7 +53,7 @@ export function createTray({ open, quit }: { open: () => void; quit: () => void 
       ])
     )
     tray.on('click', open)
-    tray.on('balloon-click', open)
+    tray.on('balloon-click', () => (onBalloon ?? open)())
     return tray
   }
 
@@ -65,6 +66,9 @@ export function createTray({ open, quit }: { open: () => void; quit: () => void 
     },
     status: (text: string) => tray?.setToolTip(text),
     // Windows 알림 센터에 뜬다 (앱 알림 등록 없이도 트레이 아이콘으로 보낼 수 있다)
-    notify: (title: string, content: string) => ensure().displayBalloon({ title, content, iconType: 'none' })
+    notify: (title: string, content: string, onClick?: () => void) => {
+      onBalloon = onClick ?? null
+      ensure().displayBalloon({ title, content, iconType: 'none' })
+    }
   }
 }

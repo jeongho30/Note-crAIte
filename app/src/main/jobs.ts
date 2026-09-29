@@ -4,6 +4,7 @@ import { powerSaveBlocker } from 'electron'
 import { readdirSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
+import { EngineError } from '../core/errors.ts'
 import { writeJsonAtomic } from '../core/files.ts'
 import { createJob, DEFAULT_BEAM_SIZE, jobsDir, listJobs, loadJob, runJob, STAGES } from '../core/job.ts'
 import type { Job, JobContext, LlmSettings, StageName, StageState } from '../core/job.ts'
@@ -264,6 +265,21 @@ export function createJobRunner(d: Deps) {
     void loop()
   }
 
+  /** 끝난 작업의 요약을 지금 설정(요약 서비스·모델)으로 다시 만들어 같은 노트 파일에 덮어쓴다. 받아쓰기는 다시 하지 않는다. */
+  async function resummarize(id: string): Promise<void> {
+    const job = await loadJob(dirOf(id))
+    if (job.status !== 'done' || job.stages.clean.status !== 'done') throw new EngineError('input', '이 노트는 요약을 다시 만들 수 없어요.')
+    const llm = await d.llm()
+    if (!llm) throw new EngineError('auth', '요약 서비스를 먼저 연결해 주세요.')
+    job.settings.llm = llm
+    for (const s of ['summarize', 'note', 'save'] as const) job.stages[s] = { status: 'pending' }
+    delete job.cost
+    job.status = 'queued'
+    await save(job)
+    await emitNow()
+    void loop()
+  }
+
   /** 요약을 건너뛰고 전사문만 담은 노트를 저장한다 (크레딧 부족·너무 긴 전사). 받아쓰기가 끝난 작업만. */
   async function transcriptOnly(id: string): Promise<void> {
     autoRetryAt.delete(id)
@@ -334,6 +350,7 @@ export function createJobRunner(d: Deps) {
     start,
     retry,
     transcriptOnly,
+    resummarize,
     cancel,
     remove,
     clearDone,

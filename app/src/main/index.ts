@@ -15,7 +15,7 @@ import { estimateJobSeconds, estimateSttSeconds, testSample } from '../core/prob
 import type { ProbeResult } from '../core/probe.ts'
 import { CREDITS_PER_90MIN_SUMMARY, creditsPer90ByModel, listModels, PRESETS, PROVIDERS, verifyKey } from '../core/providers.ts'
 import type { ProviderId } from '../core/providers.ts'
-import { recentNotes } from '../core/recent.ts'
+import { listNotes, recentNotes } from '../core/recent.ts'
 import { loadSettings, updateSettings } from '../core/settings.ts'
 import { checkArgs } from '../core/stt/whispercpp.ts'
 import { defaultArgs, parseArgs, previewCommand } from '../core/sttargs.ts'
@@ -175,13 +175,21 @@ function onJobs(jobs: JobView[]): void {
     for (const j of jobs) {
       const before = seenStatus.get(j.id)
       if (before !== 'running' && before !== 'queued') continue
-      if (j.status === 'done') tray.notify('노트가 만들어졌어요', `${j.subject ?? '미분류'} · ${j.name}`)
-      if (j.status === 'failed') tray.notify('노트를 만들지 못했어요', `${j.name} · ${j.error?.message.split('\n')[0] ?? ''}`)
+      // 알림을 누르면 완료는 노트 미리보기, 실패는 작업 목록을 연다
+      const note = j.notePath
+      if (j.status === 'done') tray.notify('노트가 만들어졌어요', `${j.subject ?? '미분류'} · ${j.name}`, () => navigate(note ? { view: 'preview', path: note } : { view: 'home' }))
+      if (j.status === 'failed') tray.notify('노트를 만들지 못했어요', `${j.name} · ${j.error?.message.split('\n')[0] ?? ''}`, () => navigate({ view: 'jobs' }))
     }
   }
   seenStatus = new Map(jobs.map((j) => [j.id, j.status]))
   lastJobs = jobs
   updateTray()
+}
+
+/** 창을 보이고 화면을 옮긴다 (트레이 알림을 눌렀을 때) */
+function navigate(to: { view: 'home' | 'jobs' } | { view: 'preview'; path: string }): void {
+  showWindow()
+  emit('navigate', to)
 }
 
 async function quitFromTray(): Promise<void> {
@@ -268,11 +276,43 @@ async function prepare(paths: string[]): Promise<Prepared> {
 }
 
 /** 저장 폴더 안의 .md만 연다 (화면이 임의의 파일을 열지 못하게). */
-async function openNote(path: string): Promise<void> {
+async function checkNotePath(path: string): Promise<string> {
   const rel = relative(await outDir(), path)
   if (!path.toLowerCase().endsWith('.md') || rel.startsWith('..') || rel === path) throw new EngineError('input', '저장 폴더의 노트만 열 수 있어요.')
-  const err = await shell.openPath(path)
+  return path
+}
+
+async function openNote(path: string): Promise<void> {
+  const err = await shell.openPath(await checkNotePath(path))
   if (err) throw new EngineError('input', '노트를 열지 못했어요: ' + err)
+}
+
+const samePath = (a: string, b: string): boolean => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b)
+
+/** 노트 미리보기: .md 내용과, 이 노트를 만든 작업(요약을 다시 만들 수 있는지). 작업 기록을 지웠으면 job은 null. */
+async function readNote(path: string) {
+  const checked = await checkNotePath(path)
+  let markdown: string
+  try {
+    markdown = await readFile(checked, 'utf8')
+  } catch {
+    throw new EngineError('input', '노트 파일을 찾지 못했어요. 옮기거나 지웠을 수 있어요.')
+  }
+  const [folder, jobs, per90] = await Promise.all([inspectFolder(await outDir()), listJobs(dataDir), selectedModelCredits90()])
+  const job = jobs.filter((j) => j.output?.notePath && samePath(j.output.notePath, checked)).at(-1) ?? null
+  const durationS = job?.audio?.durationS ?? null
+  return {
+    path: checked,
+    markdown,
+    vault: folder.vaultRoot !== null,
+    job: job && {
+      id: job.id,
+      durationS,
+      // 받아쓰기·정리까지 끝난 작업이면 요약부터 다시 할 수 있다
+      canSummarize: job.stages.clean.status === 'done',
+      credits: durationS ? Math.max(1, Math.round((durationS / 5400) * (per90 ?? CREDITS_PER_90MIN_SUMMARY))) : null
+    }
+  }
 }
 
 function providerOf(id: unknown): ProviderId {
@@ -447,13 +487,7 @@ const handlers: Record<string, (params: unknown) => unknown> = {
   'jobs.transcriptOnly': (p) => runner.transcriptOnly(String(p)),
   'jobs.cancel': (p) => runner.cancel(String(p)),
   'jobs.remove': (p) => runner.remove(String(p)),
-  // 끝난 작업의 노트 열기·폴더에서 보기 (경로는 화면이 아니라 job.json에서 가져온다)
-  'jobs.openNote': async (p) => {
-    const path = await runner.notePath(String(p))
-    if (!path) throw new EngineError('input', '노트를 찾지 못했어요.')
-    const err = await shell.openPath(path)
-    if (err) throw new EngineError('input', '노트를 열지 못했어요: ' + err)
-  },
+  // 끝난 작업의 노트를 폴더에서 보기 (경로는 화면이 아니라 job.json에서 가져온다)
   'jobs.revealNote': async (p) => {
     const path = await runner.notePath(String(p))
     if (!path) throw new EngineError('input', '노트를 찾지 못했어요.')
@@ -563,7 +597,23 @@ const handlers: Record<string, (params: unknown) => unknown> = {
   'app.openReleases': () => void shell.openExternal(RELEASES_URL),
 
   'notes.recent': async () => recentNotes(await outDir()),
-  'notes.open': (p) => openNote(String(p))
+  'notes.list': async () => listNotes(await outDir()),
+  'notes.open': (p) => openNote(String(p)),
+  'notes.read': (p) => readNote(String(p)),
+  'notes.reveal': async (p) => shell.showItemInFolder(await checkNotePath(String(p))),
+  // 저장 폴더가 옵시디언 볼트일 때만 화면이 부른다
+  'notes.openObsidian': async (p) => {
+    await shell.openExternal(`obsidian://open?path=${encodeURIComponent(await checkNotePath(String(p)))}`)
+  },
+  // 노트 안의 링크는 창 안에서 열지 않고 브라우저로 (http·https만)
+  'notes.openLink': (p) => {
+    const url = String(p)
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
+  },
+  'jobs.resummarize': async (p) => {
+    await runner.resummarize(String(p))
+    log.write(`요약 다시 만들기: ${p}`)
+  }
 }
 
 // 창의 화면 영역(창 틀·메뉴 줄 제외)은 4:3. 마법사는 최소 크기로 열고, 끝나면 홈 크기로 키운다.

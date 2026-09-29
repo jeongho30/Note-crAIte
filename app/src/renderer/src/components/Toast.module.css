@@ -11,6 +11,9 @@
 }
 
 .toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   max-width: 360px;
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--color-border);
@@ -24,6 +27,26 @@
   transition:
     opacity var(--duration-base) var(--ease-standard),
     translate var(--duration-base) var(--ease-standard);
+}
+
+.message {
+  min-width: 0;
+}
+
+.action {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.action:hover {
+  color: var(--color-primary-hover);
 }
 
 @starting-style {
