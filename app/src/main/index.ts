@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, readFile, stat, statfs } from 'node:fs/promises'
 import { basename, join, relative } from 'path'
 import { probe as probeAudio } from '../core/audio.ts'
+import { PRODUCT_NAME } from '../core/brand.ts'
 import { EngineError } from '../core/errors.ts'
 import { dirSize, readJson } from '../core/files.ts'
 import { defaultThreads, detect } from '../core/hardware.ts'
@@ -13,6 +14,8 @@ import { MODELS } from '../core/models.ts'
 import { defaultDataDir, findFfmpeg, findWhisperCli } from '../core/paths.ts'
 import { estimateJobSeconds, estimateSttSeconds, testSample } from '../core/probe.ts'
 import type { ProbeResult } from '../core/probe.ts'
+import { estimateCredits90, FEATURED } from '../core/llmcatalog.ts'
+import type { ModelItem } from '../core/llmcatalog.ts'
 import { CREDITS_PER_90MIN_SUMMARY, creditsPer90ByModel, listModels, PRESETS, PROVIDERS, verifyKey } from '../core/providers.ts'
 import type { ProviderId } from '../core/providers.ts'
 import { listNotes, recentNotes } from '../core/recent.ts'
@@ -147,7 +150,7 @@ function updateTray(): void {
   const run = active.find((j) => j.status === 'running' && j.stage)
   const waiting = active.length - (run ? 1 : 0)
   tray.status(
-    ['lecture-notes', run ? `${run.name} ${run.stage === 'stt' ? `받아쓰기 ${Math.floor(run.frac * 100)}%` : '처리 중'}` : null, waiting ? `대기 ${waiting}개` : null]
+    [PRODUCT_NAME, run ? `${run.name} ${run.stage === 'stt' ? `받아쓰기 ${Math.floor(run.frac * 100)}%` : '처리 중'}` : null, waiting ? `대기 ${waiting}개` : null]
       .filter(Boolean)
       .join(' · ')
   )
@@ -196,7 +199,7 @@ async function quitFromTray(): Promise<void> {
   if (runner.activeCount() > 0) {
     const { response } = await dialog.showMessageBox({
       type: 'question',
-      title: 'lecture-notes',
+      title: PRODUCT_NAME,
       message: '받아쓰기 중이에요',
       detail: '끝내면 지금 작업이 멈추고, 다음에 앱을 켜면 멈춘 곳부터 이어서 해요.',
       buttons: ['계속하기', '끝내기'],
@@ -232,7 +235,7 @@ type Prepared = {
 async function selectedModelCredits90(): Promise<number | null> {
   const { summaryModel } = await loadSettings(dataDir)
   const model = summaryModel ?? PRESETS['chatkhu'].model
-  return creditsPer90ByModel(await listJobs(dataDir))[model] ?? null
+  return creditsPer90ByModel(await listJobs(dataDir))[model] ?? estimateCredits90(model)
 }
 
 /** 남은 크레딧으로 90분 강의를 몇 개 더 요약할 수 있는지. 모델의 크레딧을 모르면 기본값으로 어림한다 */
@@ -515,18 +518,39 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     await updateSettings(dataDir, { provider: null })
     log.write('요약 서비스 연결 끊음')
   },
-  // 요약 모델 목록과 모델별 90분 요약 크레딧(써 본 모델만). 목록을 못 불러오면 권장 모델과 고른 모델만.
+  // 요약 모델(글 모델만)과 모델별 90분 요약 크레딧: 써 본 기록(measured)이 있으면 그것, 없으면 단가표로 어림(estimate).
+  // 추천 목록(FEATURED)을 앞에 둔다. 목록을 못 불러오면 추천 목록과 고른 모델만.
   'llm.models': async () => {
     const { provider, summaryModel } = await loadSettings(dataDir)
     const recommended = PRESETS['chatkhu'].model
     const selected = summaryModel ?? recommended
     const key = provider ? await readKey(dataDir, provider) : null
-    let ids: string[] = []
+    let items: ModelItem[] = []
     let failed = false
-    if (provider && key) ids = await listModels(provider, key).catch(() => ((failed = true), []))
-    const credits = creditsPer90ByModel(await listJobs(dataDir))
-    const all = [...new Set([recommended, selected, ...ids])]
-    return { selected, recommended, failed, models: all.map((id) => ({ id, credits90: credits[id] ?? null })) }
+    if (provider && key) items = await listModels(provider, key).catch(() => ((failed = true), []))
+    const measured = creditsPer90ByModel(await listJobs(dataDir))
+    const owners = new Map(items.map((m) => [m.id, m.owner]))
+    const available = new Set(items.map((m) => m.id))
+    // 목록을 불러왔으면 목록에 없는 추천 모델은 뺀다 (서비스에서 내려간 모델)
+    const featured = FEATURED.filter((f) => failed || !items.length || available.has(f.id))
+    const ids = [...new Set([...featured.map((f) => f.id), selected, ...items.map((m) => m.id)])]
+    return {
+      selected,
+      recommended,
+      failed,
+      models: ids.map((id) => {
+        const f = featured.find((x) => x.id === id)
+        const estimate = estimateCredits90(id)
+        return {
+          id,
+          owner: owners.get(id) ?? null,
+          group: f?.group ?? null,
+          note: f?.note || null,
+          credits90: measured[id] ?? estimate,
+          source: measured[id] != null ? 'measured' : estimate != null ? 'estimate' : null
+        }
+      })
+    }
   },
   'llm.setModel': async (p) => {
     const model = String(p ?? '').trim()

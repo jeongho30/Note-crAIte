@@ -1,5 +1,5 @@
 appId: io.github.jeongho30.lecture-notes
-productName: lecture-notes
+productName: NotecrAIte
 directories:
   output: ../dist/installer
 files:

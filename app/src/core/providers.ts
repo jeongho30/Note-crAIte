@@ -4,6 +4,8 @@ import * as credits from './credits.ts'
 import { EngineError } from './errors.ts'
 import type { Job } from './job.ts'
 import { headers, raiseForStatus, request } from './llm.ts'
+import { parseModelList } from './llmcatalog.ts'
+import type { ModelItem } from './llmcatalog.ts'
 
 export const CHATKHU_BASE = 'https://factchat-cloud.mindlogic.ai/v1/gateway'
 
@@ -20,7 +22,7 @@ export const PROVIDERS: { id: ProviderId; name: string; available: boolean; keyG
 /** 90분 강의 요약 1회의 크레딧. S2 실측(63분, turbo 전사 7.3~9.3크레딧)을 90분으로 환산했다. */
 export const CREDITS_PER_90MIN_SUMMARY = 12
 
-/** 써 보기 전에도 알고 있는 모델별 90분 요약 크레딧 (S2 실측을 90분으로 환산). 나머지는 한 번 써 본 뒤 기록으로 안다. */
+/** 써 보기 전에도 알고 있는 모델별 90분 요약 크레딧 (S2 실측을 90분으로 환산). 나머지는 써 본 기록, 그것도 없으면 단가표로 어림한다(llmcatalog.ts). */
 const KNOWN_CREDITS_PER_90MIN: Record<string, number> = {
   'gemini-3.8-flash': CREDITS_PER_90MIN_SUMMARY,
   'gemini-3.5-flash-lite': 9
@@ -43,18 +45,10 @@ export function creditsPer90ByModel(jobs: Job[]): Record<string, number> {
   return out
 }
 
-/** 모델 목록 응답에서 모델 이름만 뽑는다. OpenAI 형식({ data: [{ id }] })과 이름 배열을 모두 받는다. */
-export function parseModelList(data: unknown): string[] {
-  const items = Array.isArray(data) ? data : ((data as { data?: unknown; models?: unknown })?.data ?? (data as { models?: unknown })?.models)
-  if (!Array.isArray(items)) return []
-  const ids = items.map((m) => (typeof m === 'string' ? m : (m as { id?: unknown; name?: unknown })?.id ?? (m as { name?: unknown })?.name))
-  return [...new Set(ids.filter((id): id is string => typeof id === 'string' && id.length > 0))]
-}
-
-/** 요약 서비스가 제공하는 모델 목록. 목록 주소가 없는 서비스는 권장 모델만. */
-export async function listModels(id: ProviderId, apiKey: string): Promise<string[]> {
+/** 요약 서비스가 제공하는 글 모델 목록. 목록 주소가 없는 서비스는 권장 모델만. */
+export async function listModels(id: ProviderId, apiKey: string): Promise<ModelItem[]> {
   const url = PRESETS[id]?.models
-  if (!url) return PRESETS[id] ? [PRESETS[id].model] : []
+  if (!url) return PRESETS[id] ? [{ id: PRESETS[id].model, owner: null }] : []
   const resp = await request(url, { headers: headers(apiKey) }, 15_000, '모델 목록')
   await raiseForStatus(resp, '모델 목록')
   return parseModelList(await resp.json())

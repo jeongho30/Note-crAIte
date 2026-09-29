@@ -1,6 +1,7 @@
 // 작업 중 트레이: 작업이 있을 때 창을 닫으면 트레이로 숨고, 받아쓰기를 계속한다. 메뉴는 [열기]와 [끝내기]뿐.
 import { Menu, nativeImage, Tray } from 'electron'
 import type { NativeImage } from 'electron'
+import { PRODUCT_NAME } from '../core/brand.ts'
 
 const SIZE = 32 // 트레이는 16 DIP. 2배로 그려 고해상도 화면에서도 선명하게
 const TEAL = [0x34, 0x65, 0x6d] // --color-primary (라이트)
@@ -44,7 +45,7 @@ export function createTray({ open, quit }: { open: () => void; quit: () => void 
   function ensure(): Tray {
     if (tray) return tray
     tray = new Tray(drawIcon())
-    tray.setToolTip('lecture-notes')
+    tray.setToolTip(PRODUCT_NAME)
     tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: '열기', click: open },

@@ -283,3 +283,69 @@
   margin: 0;
   color: var(--color-text-2);
 }
+
+/* ── 요약 모델: 전체 모델 보기 창 ── */
+.modelDialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.modelGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.modelGroup h3 {
+  margin: var(--space-2) 0 var(--space-1);
+  color: var(--color-text-3);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+.modelRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 36px;
+  padding: var(--space-1) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.modelRow:hover {
+  background: var(--color-surface-2);
+}
+
+.modelRowOn,
+.modelRowOn:hover {
+  background: var(--color-primary-soft);
+}
+
+.modelName {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.modelTag {
+  margin-left: var(--space-2);
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-2);
+  color: var(--color-text-2);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+.modelCredits {
+  flex: none;
+  color: var(--color-text-3);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}

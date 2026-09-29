@@ -36,7 +36,13 @@ export async function removeKey(dataDir: string, id: ProviderId): Promise<void> 
 
 export async function readKey(dataDir: string, id: ProviderId): Promise<string | null> {
   const enc = (await load(dataDir))[id]
-  return enc ? safeStorage.decryptString(Buffer.from(enc, 'base64')) : null
+  if (!enc) return null
+  try {
+    return safeStorage.decryptString(Buffer.from(enc, 'base64'))
+  } catch {
+    // 암호화 키가 바뀌면(Windows 계정 이전, 앱 데이터 초기화 등) 풀 수 없다. 연결 안 된 것으로 보고 키를 다시 받는다
+    return null
+  }
 }
 
 export function keyHint(apiKey: string): string {

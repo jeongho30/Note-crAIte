@@ -1,4 +1,4 @@
-// 개발용 명령줄: 노트 만들기(run/resume), 모델 다운로드, S3 벤치. 앱과 같은 src/core 코드를 Node로 바로 실행한다 (빌드 없음).
+// 개발용 명령줄: 노트 만들기(run/resume), 모델 다운로드, S3 벤치, 요약 모델 비교. 앱과 같은 src/core 코드를 Node로 바로 실행한다 (빌드 없음).
 //   node app/src/cli/cli.ts run <녹음> --out <저장 폴더> [--subject 과목]
 //   node app/src/cli/cli.ts models download small-q5_1 silero-v6.2.0
 //   node app/src/cli/cli.ts bench --audio <녹음> --ref <기준 JSON> --config wcpp:small-q5_1:cpu
@@ -20,6 +20,7 @@ import { estimateSttSeconds, probeDevices } from '../core/probe.ts'
 import type { ProbeResult } from '../core/probe.ts'
 import { PRESETS } from '../core/providers.ts'
 import { run as bench } from './bench.ts'
+import * as llm from './llmbench.ts'
 
 const REPO = resolve(import.meta.dirname, '..', '..', '..')
 
@@ -35,7 +36,13 @@ const USAGE = `사용법:
   cli.ts [--data-dir D] [--bin-dir B] models download <이름...>
   cli.ts [--data-dir D] [--bin-dir B] bench --audio A [--ref R] --config 엔진:모델:장치 [--config ...]
          [--start 초] [--duration 초] [--threads N] [--lang ko] [--chunk-s 600] [--python P]
-         엔진: wcpp(whisper.cpp) | fw(faster-whisper, tools/.venv 필요). 장치: cpu | gpu0 | gpu1 ...`
+         엔진: wcpp(whisper.cpp) | fw(faster-whisper, tools/.venv 필요). 장치: cpu | gpu0 | gpu1 ...
+  cli.ts [--data-dir D] llm models
+         ChatKHU 모델 목록 (환경변수 LN_API_KEY). 응답 전체는 <데이터 폴더>/bench/chatkhu-models.json
+  cli.ts [--data-dir D] llm bench --models a,b,c [--job 작업 ID | --text 전사.txt --minutes 90] [--notes 필기] [--subject 과목]
+         전사로 모델마다 요약을 한 번씩 만들어 크레딧·시간·토큰을 잰다(모델마다 크레딧이 든다).
+         --text(사람이 고친 전사 등)가 없으면 작업의 정리된 전사, 작업도 없으면 받아쓰기가 끝난 가장 최근 작업.
+         결과는 <데이터 폴더>/bench/summary-<시각>/`
 
 function progressPrinter(label: string): (done: number, total: number) => void {
   let last = -1
@@ -69,7 +76,11 @@ async function main(argv: string[]): Promise<void> {
       notes: { type: 'string' },
       model: { type: 'string', default: DEFAULT_MODEL },
       device: { type: 'string', default: 'auto', description: 'auto | cpu | gpu0 | gpu1 ...' },
-      sample: { type: 'string', default: join(REPO, 'app', 'resources', 'probe-ko.wav') }
+      sample: { type: 'string', default: join(REPO, 'app', 'resources', 'probe-ko.wav') },
+      models: { type: 'string' },
+      job: { type: 'string' },
+      text: { type: 'string' },
+      minutes: { type: 'string' }
     }
   })
   const dataDir = v['data-dir'] ?? defaultDataDir()
@@ -142,6 +153,12 @@ async function main(argv: string[]): Promise<void> {
       const path = await ensureModel(kind, name, join(dataDir, 'models'), progressPrinter(name))
       console.log(`\n${name}: ${path}`)
     }
+  } else if (cmd === 'llm' && sub === 'models') {
+    await llm.models(dataDir)
+  } else if (cmd === 'llm' && sub === 'bench' && v.models) {
+    await llm.bench(dataDir, v.models.split(',').map((m) => m.trim()).filter(Boolean), {
+      job: v.job, text: v.text, notes: v.notes, subject: v.subject, minutes: v.minutes ? Number(v.minutes) : undefined
+    })
   } else if (cmd === 'bench' && v.audio && v.config?.length) {
     await bench({
       audio: v.audio,

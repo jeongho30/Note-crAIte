@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, call } from '../api'
 import { Button, Dialog, SegmentedControl, StatusPill, useToast } from '../components'
+import { PRODUCT_NAME, PRODUCT_NAME_KO, TAGLINE } from '../../../core/brand'
 import type { FolderInfo } from '../../../core/vault'
 import type { Language, Settings as AppSettings, Theme } from '../../../core/settings'
 import { gpuLabel, percent, useSetup, type LlmStatus } from '../wizard/shared'
@@ -294,7 +295,8 @@ export function Settings({ llm, doneCount, openKey, onLlmChange, onRestartWizard
       <Section ref={refFor('정보')} title="정보">
         <SettingsCard>
           <Row
-            title={`lecture-notes ${version}`}
+            title={`${PRODUCT_NAME} ${version}`}
+            sub={`${PRODUCT_NAME_KO} · ${TAGLINE}`}
             ctrl={
               <Button variant="link" onClick={() => void call('app.openReleases')}>
                 새 버전 보기 (GitHub)
@@ -365,7 +367,7 @@ export function Settings({ llm, doneCount, openKey, onLlmChange, onRestartWizard
             </li>
           ))}
         </ul>
-        <p className={styles.dialogText}>lecture-notes는 MIT 라이선스예요.</p>
+        <p className={styles.dialogText}>{PRODUCT_NAME}는 MIT 라이선스예요.</p>
       </Dialog>
     </div>
   )

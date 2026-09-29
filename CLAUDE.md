@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-lecture-notes: 강의 녹음(+선택적 필기 .md/.txt)을 요약·주요 키워드·전사문이 담긴 마크다운 노트로 만드는 PC 설치형 앱 (ChatKHU 공모전, 마감 2026-10-24). Electron + TypeScript 하나로 만든다(`app/`). 무거운 일은 외부 실행 파일(whisper-cli, ffmpeg)이 하고, 메인 프로세스의 `src/core/`가 그것들을 부르고 HTTP·텍스트 처리를 한다. 결정과 실험 결과는 `docs/decisions.md`에 적는다.
+lecture-notes(앱 이름 **NotecrAIte**, 읽는 법 "노트크리에이트", 부제 "강의 녹음을 노트로". 화면에 보이는 이름은 `src/core/brand.ts`와 `electron-builder.yml`의 `productName`, 데이터 폴더·저장소·npm 이름은 lecture-notes 그대로): 강의 녹음(+선택적 필기 .md/.txt)을 요약·주요 키워드·전사문이 담긴 마크다운 노트로 만드는 PC 설치형 앱 (ChatKHU 공모전, 마감 2026-10-24). Electron + TypeScript 하나로 만든다(`app/`). 무거운 일은 외부 실행 파일(whisper-cli, ffmpeg)이 하고, 메인 프로세스의 `src/core/`가 그것들을 부르고 HTTP·텍스트 처리를 한다. 결정과 실험 결과는 `docs/decisions.md`에 적는다.
 
 처리 코드의 상당 부분은 작성자의 개인용 Python 파이프라인 `C:\ljh\Coding\STT_AutoLectureNote\pipeline\`에서 옮겨 왔다. 그 폴더는 따로 계속 쓰이므로 여기서 수정하지 않는다.
 
@@ -49,6 +49,10 @@ npm run cli -- bench --audio <녹음> --ref <기준 whisper JSON> --start 600 --
 ```
 
 ```bash
+npm run cli -- llm bench --text <고친 전사.txt> --minutes 82 --subject <과목> --models gemini-3.8-flash,gpt-6-luna
+```
+
+```bash
 npm run dev
 ```
 
@@ -78,6 +82,7 @@ powershell -File ../scripts/build_whisper.ps1 -SourceDir <whisper.cpp 체크아�
 - `sttargs.ts`: 설정 > 고급에서 고칠 수 있는 whisper-cli 옵션(기본값, 잠긴 옵션 거절, 명령 미리보기). 옵션이 있으면 `WhisperCpp`는 threads·beamSize·장치 대신 그것을 쓰고, 저장 전에 `checkArgs`로 whisper-cli에 한 번 읽혀 본다(없는 입력 파일로 실행하면 옵션을 읽은 뒤 바로 끝남). `probe.ts`의 `testSample`은 [샘플로 시험하기]. `providers.ts`의 `creditsPer90ByModel`은 작업 기록으로 모델별 90분 요약 크레딧을 잰다.
 - `note.ts`: 노트 마크다운(frontmatter 값은 JSON 문자열, 접는 부분은 `> [!quote]-` callout)과 저장(`<저장 폴더>/<과목|미분류>/<날짜> <제목>.md`, 겹치면 ` (2)`). `inputs.ts`: 녹음 옆 같은 이름 필기 찾기, UTF-8이 아니면 CP949로 읽기.
 - 화면(`src/renderer/src/`): 색·크기는 `styles/tokens.css`의 CSS 변수만 쓰고(라이트 B2, 다크 D4, OS 설정을 따름), 부품은 `components/`(CSS Modules)에 있다. 화면은 이 부품을 조합하고 색·치수를 직접 쓰지 않는다. 본문 글꼴은 내장한 Pretendard 가변 글꼴(`assets/fonts/`, 서브셋 아님). 첫 실행 마법사는 `wizard/`(안내 → 이 PC 확인 → 요약 서비스 → 저장 폴더 → 준비 완료), 그 뒤는 `home/`(사이드바 `Shell`, `Home`: 상황 배너·끌어 놓기·진행 중·최근 노트, `ConfirmDialog`: 시작 전 확인, `JobList`: 작업 목록), `notes/`(노트 목록: 저장 폴더의 노트 전체, 검색·과목·정렬), `preview/`(노트 미리보기: `markdown.ts`가 머리말·callout·키워드를 나누고 나머지는 markdown-it(HTML 끔, cjk-friendly로 조사가 붙은 굵게도 인식)으로 그림. 미리보기는 앞 화면을 숨겨 둔 채 열어 돌아가면 상태가 그대로. [요약 다시 만들기]는 `runner.resummarize`로 요약부터 다시 해 같은 파일에 덮어씀), `settings/`(설정 시안대로: 요약 서비스·받아쓰기·과목 언어·저장 폴더·자동 처리(곧 지원)·저장 공간·고급(받아쓰기 세부설정, 로컬 LLM은 곧 지원)·정보)이다. 홈의 [연결하기]와 작업 목록의 [키 다시 넣기]는 설정의 요약 서비스로 가서 키 입력칸에 초점을 둔다. 작업은 메인의 `main/jobs.ts`(실행기)가 한 번에 하나씩 돌리고 `jobs` 이벤트로 진행을 알린다. 작업이 있으면 `main/tray.ts`의 트레이가 생기고 창을 닫으면 트레이로 숨으며, 앱을 끝낼 때는 받아쓰기를 멈추고 작업을 대기로 되돌린다(`runner.shutdown`). 모델이 없으면 `setup.whenReady()`로 받고 속도를 잰 뒤 시작한다. 끌어 놓은 파일 경로는 preload의 `pathForFile`(`webUtils`)로 얻는다. 최근 노트는 저장 폴더의 .md(`core/recent.ts`), 녹음·필기 짝짓기는 `core/inputs.ts`의 `pairInputs`. 창의 화면 영역은 4:3(마법사 800×600, 홈 1000×750, 모니터에 맞춰 줄임, `main/fit.ts`)이고 크기 조절도 `will-resize`에서 4:3을 지킨다. 배치는 창 크기에 맞게 흐르고 본문은 `--content-max-w`(720px)까지만 넓어진다. 모든 화면은 최소 크기 800×600에서 스크롤 없이 들어가게 만든다.
+- `llmcatalog.ts`: 요약 모델 목록(글 모델만), 단가표(`PRICES`), 90분 요약 크레딧 어림(`estimateCredits90`), 추천 목록(`FEATURED`). 설정의 `settings/ModelPicker.tsx`가 추천을 묶어 보이고 [전체 모델 보기] 창에서 나머지를 고르게 한다. `src/cli/llmbench.ts`(`llm models`, `llm bench`)는 요약 모델 비교용이고 키는 환경변수 `LN_API_KEY`로만 받는다(결과는 강의 내용이라 데이터 폴더의 `bench/`에만). `secrets.ts`는 키를 풀지 못하면(암호화 키가 바뀜) 연결 안 된 것으로 본다.
 - `src/cli/bench.ts`: S3용. RTF와, 기준 전사(기존 파이프라인의 large-v3 결과) 대비 CER을 잰다.
 
 ## 지금 상태와 다음 할 일 (9/29 노트북 세션 끝)
@@ -97,6 +102,8 @@ S3는 9/28에 정했다: 로컬 STT는 whisper.cpp, CPU 기본 `large-v3-turbo-q
 
 **다음 할 일** (최소 제출선 10/11 = W2 끝, 마감 10/24)
 
+0. **요약 모델 비교 결과 반영(데스크톱에서 이어서).** 9/29 노트북에서 7개 모델을 쟀다(`docs/decisions.md`의 "요약 모델 비교"). 작성자 결정 전인 제안: 예상 크레딧을 공급자별 토큰 수로 계산하고 잰 7개는 실측값으로, 추천 목록에서 gemini-3.5-flash-lite를 빼고 claude-sonnet-5에 "크레딧 많이 씀" 설명, 권장을 gpt-6-luna로 바꿀지는 원래 받아쓰기로 교정 품질을 더 재고 정함, 미리보기 수식 표시. 지금 코드의 `FEATURED`·`TOKENS_PER_90MIN`은 측정 전 값이다. 모델별 요약문·고친 전사는 강의 내용이라 노트북에만 있다.
+
 1. 속도 재기 중 홈 배너. 첫 실행·모델 교체 뒤 1~2분 동안 홈에 표시가 없어 모델을 못 찾은 것처럼 보인다.
 2. 실제 작업의 받아쓰기 시간으로 예상치 보정. TTS가 아닌 사람이 읽은 샘플이어도 쉼이 적어 노트북 예상이 90분에 약 74분으로, S3 실측(약 27분)보다 크게 나온다.
 3. 설치 파일에 ffmpeg LGPL 빌드 넣기. 지금은 개발 PC의 PATH ffmpeg를 써서 설치본만 있는 PC에서는 처리할 수 없다.
@@ -107,8 +114,7 @@ S3는 9/28에 정했다: 로컬 STT는 whisper.cpp, CPU 기본 `large-v3-turbo-q
 
 1. **노트북 CPU로 90분 강의를 앱으로 처리**(남은 M1). 예상치 보정의 실측값이 된다.
 2. **S1 새 Windows 계정 설치와 SmartScreen 문구**(내려받은 설치 파일이어야 뜸, CI 설치 파일 뒤).
-3. **앱 이름.** W4 전(그때까지 lecture-notes, `productName` 한 곳만 바꾸면 되게 둔다).
-4. **옵시디언에서 굵게.** `**파싱(Parsing)**을`처럼 닫는 `**` 앞이 문장부호이고 뒤에 조사가 붙으면 표준 규칙상 굵게가 안 된다. 앱 미리보기는 cjk-friendly로 고쳤고, 노트 파일(옵시디언)은 그대로다. 옵시디언에서 안 보이는 것을 확인하면 노트를 쓸 때 그 부분만 `<strong>`으로 바꾸는 안이 있다(프롬프트는 고치지 않기로 함).
+3. **옵시디언에서 굵게.** `**파싱(Parsing)**을`처럼 닫는 `**` 앞이 문장부호이고 뒤에 조사가 붙으면 표준 규칙상 굵게가 안 된다. 앱 미리보기는 cjk-friendly로 고쳤고, 노트 파일(옵시디언)은 그대로다. 옵시디언에서 안 보이는 것을 확인하면 노트를 쓸 때 그 부분만 `<strong>`으로 바꾸는 안이 있다(프롬프트는 고치지 않기로 함).
 
 PC별 메모: 노트북(Ryzen 7 5700U)에는 모델과 `tools/.venv`가 있고 설치본을 이 계정에 깔아 두었다. 모델은 9/29에 Claude 가상화 폴더에서 실제 `%LOCALAPPDATA%\lecture-notes\models`로 옮겼다(Gotchas의 MSIX 참고). 벤치용 녹음·기준 전사는 저장소 밖 `C:\ljh\2026-2\s3-data\`에 있다. faster-whisper 벤치가 필요하면 `tools/.venv`를 새로 만든다.
 

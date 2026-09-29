@@ -3,7 +3,8 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { EngineError } from '../src/core/errors.ts'
 import type { Job } from '../src/core/job.ts'
-import { creditsPer90ByModel, parseModelList } from '../src/core/providers.ts'
+import { estimateCredits90, parseModelList } from '../src/core/llmcatalog.ts'
+import { creditsPer90ByModel } from '../src/core/providers.ts'
 import { checkArgs, WhisperCpp } from '../src/core/stt/whispercpp.ts'
 import { defaultArgs, parseArgs, previewCommand } from '../src/core/sttargs.ts'
 
@@ -49,9 +50,18 @@ test('명령 미리보기는 잠긴 부분과 고칠 수 있는 부분으로 나
 })
 
 test('모델 목록은 OpenAI 형식과 이름 배열을 모두 읽는다', () => {
-  assert.deepEqual(parseModelList({ data: [{ id: 'a' }, { id: 'b' }, { id: 'a' }] }), ['a', 'b'])
-  assert.deepEqual(parseModelList(['x', 'y']), ['x', 'y'])
-  assert.deepEqual(parseModelList({ models: [{ name: 'z' }] }), ['z'])
+  const data = {
+    data: [
+      { id: 'a', owned_by: 'openai', type: 'llm' },
+      { id: 'img', owned_by: 'openai', type: 'image' },
+      { id: 'b', type: 'llm' },
+      { id: 'a', type: 'llm' },
+      { id: 'tts', type: 'audio' }
+    ]
+  }
+  assert.deepEqual(parseModelList(data), [{ id: 'a', owner: 'openai' }, { id: 'b', owner: null }]) // 이미지·음성 모델은 뺀다
+  assert.deepEqual(parseModelList(['x', 'y']), [{ id: 'x', owner: null }, { id: 'y', owner: null }])
+  assert.deepEqual(parseModelList({ models: [{ name: 'z' }] }), [{ id: 'z', owner: null }])
   assert.deepEqual(parseModelList({ nothing: true }), [])
 })
 
@@ -63,4 +73,11 @@ test('모델별 90분 요약 크레딧은 기록을 90분으로 환산한 평균
   assert.equal(r['m2'], undefined) // 크레딧 기록 없음
   assert.equal(r['m3'], undefined) // 너무 짧은 녹음은 뺀다
   assert.equal(r['gemini-3.8-flash'], 12)
+})
+
+test('단가표로 90분 요약 크레딧을 어림하고, 단가를 모르면 null', () => {
+  assert.equal(estimateCredits90('gemini-3.8-flash'), 12) // 임시 토큰 수를 S2 실측에 맞춤
+  assert.ok(estimateCredits90('gpt-6-luna')! < estimateCredits90('gemini-3.8-flash')!)
+  assert.ok(estimateCredits90('gpt-6-sol')! > estimateCredits90('gemini-3.8-flash')!)
+  assert.equal(estimateCredits90('모르는-모델'), null)
 })

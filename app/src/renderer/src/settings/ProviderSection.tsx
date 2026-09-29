@@ -1,12 +1,13 @@
 import { forwardRef, useEffect, useRef, useState, type FormEvent } from 'react'
 import { ApiError, call } from '../api'
-import { Button, Dialog, RadioCardGroup, Select, TextField, useToast } from '../components'
+import { Button, Dialog, RadioCardGroup, TextField, useToast } from '../components'
 import type { LlmStatus } from '../wizard/shared'
+import { ModelPicker, type ModelOption } from './ModelPicker'
 import { Block, Row, Section, SettingsCard } from './parts'
 import styles from './Settings.module.css'
 
 type Provider = { id: string; name: string; available: boolean }
-type Models = { selected: string; recommended: string; failed: boolean; models: { id: string; credits90: number | null }[] }
+type Models = { selected: string; recommended: string; failed: boolean; models: ModelOption[] }
 
 const DESCRIPTIONS: Record<string, string> = { chatkhu: '경희대 ChatKHU 크레딧으로 요약해요.' }
 
@@ -110,11 +111,6 @@ export const ProviderSection = forwardRef<HTMLElement, Props>(function ProviderS
     }
   }
 
-  const modelLabel = (m: Models['models'][number]): string =>
-    [m.id, m.id === models?.recommended ? '권장' : null, m.credits90 != null ? `요약 1회 약 ${Math.round(m.credits90)}크레딧` : null]
-      .filter(Boolean)
-      .join(' · ')
-
   return (
     <Section ref={ref} title="요약 서비스">
       <SettingsCard>
@@ -201,26 +197,13 @@ export const ProviderSection = forwardRef<HTMLElement, Props>(function ProviderS
         )}
 
         <Block>
-          <Select
-            label="요약 모델"
-            disabled={!connected || !models}
-            value={models?.selected ?? ''}
-            onChange={(e) => void pickModel(e.target.value)}
-            hint={
-              !connected
-                ? '요약 서비스를 연결하면 고를 수 있어요.'
-                : models?.failed
-                  ? '모델 목록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.'
-                  : '모델마다 크레딧과 요약 품질이 달라요. 처음 쓰는 모델의 크레딧은 한 번 써 본 뒤 알려 드려요.'
-            }
-          >
-            {!models && <option value="">{connected ? '불러오는 중…' : '연결된 서비스 없음'}</option>}
-            {models?.models.map((m) => (
-              <option key={m.id} value={m.id}>
-                {modelLabel(m)}
-              </option>
-            ))}
-          </Select>
+          <ModelPicker
+            models={connected ? (models?.models ?? null) : null}
+            selected={models?.selected ?? null}
+            disabled={!connected}
+            failed={!!models?.failed}
+            onPick={(id) => void pickModel(id)}
+          />
         </Block>
       </SettingsCard>
 
