@@ -72,7 +72,7 @@ test('모델별 90분 요약 크레딧은 기록을 90분으로 환산한 평균
   assert.equal(r['m1'], 11) // (12 + 10) / 2
   assert.equal(r['m2'], undefined) // 크레딧 기록 없음
   assert.equal(r['m3'], undefined) // 너무 짧은 녹음은 뺀다
-  assert.equal(r['gemini-3.8-flash'], 12)
+  assert.equal(r['gpt-6-luna'], 2.9) // 요약 모델 비교 2차 실측
 })
 
 test('단가표로 90분 요약 크레딧을 어림하고, 단가를 모르면 null', () => {

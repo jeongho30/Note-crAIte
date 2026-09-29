@@ -64,6 +64,8 @@ npm run dist:win
 powershell -File ../scripts/build_whisper.ps1 -SourceDir <whisper.cpp 체크아웃> [-NoVulkan]
 ```
 
+`npm ci` 뒤에 `npm run dev`가 `Error: Electron uninstall`로 멈추면 Electron 바이너리가 없는 것이다. npm 11이 설치 스크립트를 막아 `node_modules/electron/dist`·`path.txt`가 안 생기므로 `node node_modules/electron/install.js`로 받는다(`npx electron .`은 스스로 받지만 electron-vite는 `path.txt`를 먼저 찾는다).
+
 `build_whisper.ps1`의 결과는 `.cache/whisper/bin/`에 모이고, 개발 중에는 그곳의 `whisper-cli.exe`와 PATH의 `ffmpeg`를 쓴다. 설치본은 `resources/bin/`(electron-builder의 `extraResources`)에서 찾는다. 설치 파일은 `dist/installer/`에 생긴다. vite는 electron-vite 5가 지원하는 7로 고정돼 있다(8로 올리지 않는다).
 
 벤치의 `fw:`(faster-whisper) 설정만 Python을 쓴다: `py -3.14 -m venv tools/.venv && tools/.venv/Scripts/python -m pip install -r tools/requirements-bench.txt`. 앱에는 Python이 들어가지 않는다.
@@ -82,7 +84,7 @@ powershell -File ../scripts/build_whisper.ps1 -SourceDir <whisper.cpp 체크아�
 - `sttargs.ts`: 설정 > 고급에서 고칠 수 있는 whisper-cli 옵션(기본값, 잠긴 옵션 거절, 명령 미리보기). 옵션이 있으면 `WhisperCpp`는 threads·beamSize·장치 대신 그것을 쓰고, 저장 전에 `checkArgs`로 whisper-cli에 한 번 읽혀 본다(없는 입력 파일로 실행하면 옵션을 읽은 뒤 바로 끝남). `probe.ts`의 `testSample`은 [샘플로 시험하기]. `providers.ts`의 `creditsPer90ByModel`은 작업 기록으로 모델별 90분 요약 크레딧을 잰다.
 - `note.ts`: 노트 마크다운(frontmatter 값은 JSON 문자열, 접는 부분은 `> [!quote]-` callout)과 저장(`<저장 폴더>/<과목|미분류>/<날짜> <제목>.md`, 겹치면 ` (2)`). `inputs.ts`: 녹음 옆 같은 이름 필기 찾기, UTF-8이 아니면 CP949로 읽기.
 - 화면(`src/renderer/src/`): 색·크기는 `styles/tokens.css`의 CSS 변수만 쓰고(라이트 B2, 다크 D4, OS 설정을 따름), 부품은 `components/`(CSS Modules)에 있다. 화면은 이 부품을 조합하고 색·치수를 직접 쓰지 않는다. 본문 글꼴은 내장한 Pretendard 가변 글꼴(`assets/fonts/`, 서브셋 아님). 첫 실행 마법사는 `wizard/`(안내 → 이 PC 확인 → 요약 서비스 → 저장 폴더 → 준비 완료), 그 뒤는 `home/`(사이드바 `Shell`, `Home`: 상황 배너·끌어 놓기·진행 중·최근 노트, `ConfirmDialog`: 시작 전 확인, `JobList`: 작업 목록), `notes/`(노트 목록: 저장 폴더의 노트 전체, 검색·과목·정렬), `preview/`(노트 미리보기: `markdown.ts`가 머리말·callout·키워드를 나누고 나머지는 markdown-it(HTML 끔, cjk-friendly로 조사가 붙은 굵게도 인식)으로 그림. 미리보기는 앞 화면을 숨겨 둔 채 열어 돌아가면 상태가 그대로. [요약 다시 만들기]는 `runner.resummarize`로 요약부터 다시 해 같은 파일에 덮어씀), `settings/`(설정 시안대로: 요약 서비스·받아쓰기·과목 언어·저장 폴더·자동 처리(곧 지원)·저장 공간·고급(받아쓰기 세부설정, 로컬 LLM은 곧 지원)·정보)이다. 홈의 [연결하기]와 작업 목록의 [키 다시 넣기]는 설정의 요약 서비스로 가서 키 입력칸에 초점을 둔다. 작업은 메인의 `main/jobs.ts`(실행기)가 한 번에 하나씩 돌리고 `jobs` 이벤트로 진행을 알린다. 작업이 있으면 `main/tray.ts`의 트레이가 생기고 창을 닫으면 트레이로 숨으며, 앱을 끝낼 때는 받아쓰기를 멈추고 작업을 대기로 되돌린다(`runner.shutdown`). 모델이 없으면 `setup.whenReady()`로 받고 속도를 잰 뒤 시작한다. 끌어 놓은 파일 경로는 preload의 `pathForFile`(`webUtils`)로 얻는다. 최근 노트는 저장 폴더의 .md(`core/recent.ts`), 녹음·필기 짝짓기는 `core/inputs.ts`의 `pairInputs`. 창의 화면 영역은 4:3(마법사 800×600, 홈 1000×750, 모니터에 맞춰 줄임, `main/fit.ts`)이고 크기 조절도 `will-resize`에서 4:3을 지킨다. 배치는 창 크기에 맞게 흐르고 본문은 `--content-max-w`(720px)까지만 넓어진다. 모든 화면은 최소 크기 800×600에서 스크롤 없이 들어가게 만든다.
-- `llmcatalog.ts`: 요약 모델 목록(글 모델만), 단가표(`PRICES`), 90분 요약 크레딧 어림(`estimateCredits90`), 추천 목록(`FEATURED`). 설정의 `settings/ModelPicker.tsx`가 추천을 묶어 보이고 [전체 모델 보기] 창에서 나머지를 고르게 한다. `src/cli/llmbench.ts`(`llm models`, `llm bench`)는 요약 모델 비교용이고 키는 환경변수 `LN_API_KEY`로만 받는다(결과는 강의 내용이라 데이터 폴더의 `bench/`에만). `secrets.ts`는 키를 풀지 못하면(암호화 키가 바뀜) 연결 안 된 것으로 본다.
+- `llmcatalog.ts`: 요약 모델 목록(글 모델만), 단가표(`PRICES`), 90분 요약 크레딧 어림(`estimateCredits90`), 추천 순서(`RANKED`, 2차 비교 기준 12개, 앞 `RECOMMENDED_COUNT`=5개가 추천). 설정의 `settings/ModelPicker.tsx`는 선택 칸에 "추천 모델 목록" 5개를 보이고, [전체 모델 보기] 창에 12개를 추천 순서대로, [직접 모델 입력]으로 그 밖의 이름을 받는다(목록을 불러왔으면 서비스의 글 모델 이름인지 확인). `src/cli/llmbench.ts`(`llm models`, `llm bench`)는 요약 모델 비교용이고 키는 환경변수 `LN_API_KEY`로만 받는다(결과는 강의 내용이라 데이터 폴더의 `bench/`에만). `secrets.ts`는 키를 풀지 못하면(암호화 키가 바뀜) 연결 안 된 것으로 본다.
 - `src/cli/bench.ts`: S3용. RTF와, 기준 전사(기존 파이프라인의 large-v3 결과) 대비 CER을 잰다.
 
 ## 지금 상태와 다음 할 일 (9/29 노트북 세션 끝)
@@ -105,7 +107,7 @@ S3는 9/28에 정했다: 로컬 STT는 whisper.cpp, CPU 기본 `large-v3-turbo-q
 0. **요약 모델 비교 결과 반영(작성자 결정 대기).** 9/29에 두 번 쟀다(`docs/decisions.md`의 "요약 모델 비교"와 "2차"). 2차(데스크톱): 앱 받아쓰기 그대로의 강의 4개, 16개 모델, 호출 64회, 요약은 모델을 가린 체크리스트 채점, 교정 814개 판정.
    - 결과: gpt-6-luna가 90분 약 3크레딧으로 요약 점수가 최상위권이다. gemini-3.8-flash는 교정이 가장 많고 정확하다. 느린 모델(glm-5.3-flash, qwen3.8-max, qwen3.7-plus)은 524로 실패하면서도 크레딧이 빠졌다.
    - 제안: 권장을 gpt-6-luna로, sonnet-5 대신 sonnet-5-5, solar-pro4·flash-lite는 추천에서 뺌, 느린 모델은 경고, `PRICES`에 claude-sonnet-5-5 추가, 작업의 요약 크레딧을 잔액 차이 대신 토큰 × 단가로 기록, 짧은 한글 교정이 다른 단어 안에서 바뀌지 않게 거르기, 미리보기 수식 표시.
-   - 지금 코드의 `FEATURED`·`TOKENS_PER_90MIN`은 측정 전 값이다.
+   - 9/29 반영: 추천 순서(`RANKED`) 12개와 추천 5개, [직접 모델 입력], `PRICES`에 claude-sonnet-5-5, 기본 모델 gpt-6-luna(`PRESETS.chatkhu.model`), 12개의 90분 크레딧을 2차 실측값으로(`KNOWN_CREDITS_PER_90MIN`). 남은 것: `TOKENS_PER_90MIN`(목록 밖 모델의 어림, 측정 전 값), 작업 크레딧을 토큰 × 단가로, 교정 거르기.
    - 요약문·채점표는 강의 내용이라 저장소 밖에 있다. 1차는 노트북에, 2차는 데스크톱 데이터 폴더의 `bench/`에 있다.
    - 2차 입력을 고르다 앱 받아쓰기(turbo, 외장 GPU)가 한 구간을 수 분 길이로 잡고 말을 통째로 빠뜨리는 것을 봤다(63분 강의에서 전사가 기준의 절반). 원인 조사는 따로 한다.
 

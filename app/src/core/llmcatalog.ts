@@ -35,6 +35,7 @@ export const PRICES: Record<string, { input: number; output: number }> = {
   'claude-opus-5-5': { input: 4, output: 20 },
   'claude-opus-5': { input: 5, output: 25 },
   'claude-opus-4-8': { input: 5, output: 25 },
+  'claude-sonnet-5-5': { input: 2, output: 10 },
   'claude-sonnet-5': { input: 2, output: 10 },
   'claude-haiku-4-5-20251001': { input: 1, output: 5 },
   'gemini-3.1-pro-preview': { input: 2, output: 12 },
@@ -77,15 +78,23 @@ export function estimateCredits90(id: string): number | null {
   return Math.round(((TOKENS_PER_90MIN.input * p.input + TOKENS_PER_90MIN.output * p.output) / 1000) * 10) / 10
 }
 
-export type FeaturedGroup = '권장' | '더 싸게' | '더 좋게'
-
-/** 설정에 먼저 보이는 추천 목록 (9/29). 나머지는 [전체 모델 보기]에서 고른다. */
-export const FEATURED: { id: string; group: FeaturedGroup; note: string }[] = [
-  { id: 'gemini-3.8-flash', group: '권장', note: '교정이 보수적이고 정확해요 (S2 실측)' },
-  { id: 'gpt-6-luna', group: '더 싸게', note: '가장 싼 편이에요' },
-  { id: 'solar-pro4', group: '더 싸게', note: '국내 모델 (Upstage)' },
-  { id: 'gemini-3.5-flash-lite', group: '더 싸게', note: '교정에서 잘못 바꾸는 경우가 있어요 (S2 실측)' },
-  { id: 'gpt-6-sol', group: '더 좋게', note: '' },
-  { id: 'claude-sonnet-5', group: '더 좋게', note: '' },
-  { id: 'gemini-3.1-pro-preview', group: '더 좋게', note: '' }
+/**
+ * 요약 모델 추천 순서 (9/29 2차 비교, docs/decisions.md). 앞의 RECOMMENDED_COUNT개가 설정의 "추천 모델 목록",
+ * 전체가 [전체 모델 보기]. 여기 없는 모델(시간 초과가 잦은 모델 등)은 [직접 모델 입력]으로만 고른다.
+ */
+export const RANKED: { id: string; note: string }[] = [
+  { id: 'gpt-6-luna', note: '요약이 자세하고 크레딧이 적게 들어요' },
+  { id: 'gemini-3.8-flash', note: '받아쓰기 오류를 많이 고쳐요' },
+  { id: 'gpt-6-sol', note: '요약·교정이 정확하지만 크레딧이 많이 들어요' },
+  { id: 'claude-sonnet-5-5', note: '요약이 자세하지만 크레딧이 많이 들어요' },
+  { id: 'grok-4-1-fast', note: '빠르고 크레딧이 적게 들어요' },
+  { id: 'solar-pro4', note: '' },
+  { id: 'deepseek-v4-flash', note: '' },
+  { id: 'claude-haiku-4-5-20251001', note: '' },
+  { id: 'gemini-3.1-pro-preview', note: '' },
+  { id: 'seed-2-0-lite-260428', note: '' },
+  { id: 'google/gemma-4-31B-it', note: '' },
+  { id: 'gemini-3.5-flash-lite', note: '' }
 ]
+
+export const RECOMMENDED_COUNT = 5

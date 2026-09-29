@@ -7,7 +7,7 @@ import { Block, Row, Section, SettingsCard } from './parts'
 import styles from './Settings.module.css'
 
 type Provider = { id: string; name: string; available: boolean }
-type Models = { selected: string; recommended: string; failed: boolean; models: ModelOption[] }
+type Models = { selected: string; recommended: string; failed: boolean; available: string[]; models: ModelOption[] }
 
 const DESCRIPTIONS: Record<string, string> = { chatkhu: '경희대 ChatKHU 크레딧으로 요약해요.' }
 
@@ -104,7 +104,9 @@ export const ProviderSection = forwardRef<HTMLElement, Props>(function ProviderS
   async function pickModel(id: string): Promise<void> {
     try {
       await call('llm.setModel', id)
-      setModels((m) => (m ? { ...m, selected: id } : m))
+      // 직접 입력한 모델은 목록에 없으니 크레딧과 함께 다시 받아 온다
+      if (models && !models.models.some((m) => m.id === id)) call<Models>('llm.models').then(setModels, () => undefined)
+      else setModels((m) => (m ? { ...m, selected: id } : m))
       onChange() // 남은 요약 횟수가 모델마다 다르다
     } catch (err) {
       toast((err as Error).message, 'danger')
@@ -200,6 +202,7 @@ export const ProviderSection = forwardRef<HTMLElement, Props>(function ProviderS
           <ModelPicker
             models={connected ? (models?.models ?? null) : null}
             selected={models?.selected ?? null}
+            available={models?.available ?? []}
             disabled={!connected}
             failed={!!models?.failed}
             onPick={(id) => void pickModel(id)}

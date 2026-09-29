@@ -22,10 +22,23 @@ export const PROVIDERS: { id: ProviderId; name: string; available: boolean; keyG
 /** 90분 강의 요약 1회의 크레딧. S2 실측(63분, turbo 전사 7.3~9.3크레딧)을 90분으로 환산했다. */
 export const CREDITS_PER_90MIN_SUMMARY = 12
 
-/** 써 보기 전에도 알고 있는 모델별 90분 요약 크레딧 (S2 실측을 90분으로 환산). 나머지는 써 본 기록, 그것도 없으면 단가표로 어림한다(llmcatalog.ts). */
+/**
+ * 써 보기 전에도 알고 있는 모델별 90분 요약 크레딧: 요약 모델 비교 2차(9/29, 강의 2~4개의 토큰 × 단가를 90분으로 환산한 평균).
+ * 나머지는 써 본 기록, 그것도 없으면 단가표로 어림한다(llmcatalog.ts).
+ */
 const KNOWN_CREDITS_PER_90MIN: Record<string, number> = {
-  'gemini-3.8-flash': CREDITS_PER_90MIN_SUMMARY,
-  'gemini-3.5-flash-lite': 9
+  'gpt-6-luna': 2.9,
+  'gemini-3.8-flash': 15.5,
+  'gpt-6-sol': 49,
+  'claude-sonnet-5-5': 88,
+  'grok-4-1-fast': 3.5,
+  'solar-pro4': 5.9,
+  'deepseek-v4-flash': 5.4,
+  'claude-haiku-4-5-20251001': 38,
+  'gemini-3.1-pro-preview': 44,
+  'seed-2-0-lite-260428': 10.7,
+  'google/gemma-4-31B-it': 2.4,
+  'gemini-3.5-flash-lite': 7.5
 }
 
 /** 모델별 90분 요약 크레딧: 끝난 작업의 기록(잔액 차이)을 90분으로 환산한 평균, 기록이 없으면 알려진 값. */
@@ -67,6 +80,6 @@ export const PRESETS: Record<string, Preset> = {
     endpoint: `${CHATKHU_BASE}/chat/completions/`,
     credits: `${CHATKHU_BASE}/credits/`,
     models: `${CHATKHU_BASE}/models/`,
-    model: 'gemini-3.8-flash'
+    model: 'gpt-6-luna'
   }
 }

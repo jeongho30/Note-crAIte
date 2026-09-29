@@ -291,17 +291,19 @@
   gap: var(--space-3);
 }
 
-.modelGroup {
+.modelList {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.modelGroup h3 {
-  margin: var(--space-2) 0 var(--space-1);
+.modelRank {
+  flex: none;
+  width: 1.5em;
   color: var(--color-text-3);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .modelRow {
@@ -341,6 +343,12 @@
   color: var(--color-text-2);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
+}
+
+.modelNote {
+  display: block;
+  color: var(--color-text-3);
+  font-size: var(--font-size-xs);
 }
 
 .modelCredits {

@@ -14,7 +14,7 @@ import { MODELS } from '../core/models.ts'
 import { defaultDataDir, findFfmpeg, findWhisperCli } from '../core/paths.ts'
 import { estimateJobSeconds, estimateSttSeconds, testSample } from '../core/probe.ts'
 import type { ProbeResult } from '../core/probe.ts'
-import { estimateCredits90, FEATURED } from '../core/llmcatalog.ts'
+import { estimateCredits90, RANKED, RECOMMENDED_COUNT } from '../core/llmcatalog.ts'
 import type { ModelItem } from '../core/llmcatalog.ts'
 import { CREDITS_PER_90MIN_SUMMARY, creditsPer90ByModel, listModels, PRESETS, PROVIDERS, verifyKey } from '../core/providers.ts'
 import type { ProviderId } from '../core/providers.ts'
@@ -518,8 +518,8 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     await updateSettings(dataDir, { provider: null })
     log.write('요약 서비스 연결 끊음')
   },
-  // 요약 모델(글 모델만)과 모델별 90분 요약 크레딧: 써 본 기록(measured)이 있으면 그것, 없으면 단가표로 어림(estimate).
-  // 추천 목록(FEATURED)을 앞에 둔다. 목록을 못 불러오면 추천 목록과 고른 모델만.
+  // 요약 모델과 모델별 90분 요약 크레딧: 써 본 기록(measured)이 있으면 그것, 없으면 단가표로 어림(estimate).
+  // 보이는 것은 추천 순서(RANKED)의 모델과 고른 모델뿐이다. available은 [직접 모델 입력]의 확인용(서비스의 글 모델 전체).
   'llm.models': async () => {
     const { provider, summaryModel } = await loadSettings(dataDir)
     const recommended = PRESETS['chatkhu'].model
@@ -531,21 +531,23 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     const measured = creditsPer90ByModel(await listJobs(dataDir))
     const owners = new Map(items.map((m) => [m.id, m.owner]))
     const available = new Set(items.map((m) => m.id))
-    // 목록을 불러왔으면 목록에 없는 추천 모델은 뺀다 (서비스에서 내려간 모델)
-    const featured = FEATURED.filter((f) => failed || !items.length || available.has(f.id))
-    const ids = [...new Set([...featured.map((f) => f.id), selected, ...items.map((m) => m.id)])]
+    // 목록을 불러왔으면 목록에 없는 모델은 뺀다 (서비스에서 내려간 모델)
+    const ranked = RANKED.filter((r) => failed || !items.length || available.has(r.id))
+    const ids = [...new Set([...ranked.map((r) => r.id), selected])]
     return {
       selected,
       recommended,
       failed,
+      available: [...available],
       models: ids.map((id) => {
-        const f = featured.find((x) => x.id === id)
+        const rank = RANKED.findIndex((x) => x.id === id)
         const estimate = estimateCredits90(id)
         return {
           id,
           owner: owners.get(id) ?? null,
-          group: f?.group ?? null,
-          note: f?.note || null,
+          rank: rank >= 0 ? rank + 1 : null,
+          recommended: rank >= 0 && rank < RECOMMENDED_COUNT,
+          note: RANKED[rank]?.note || null,
           credits90: measured[id] ?? estimate,
           source: measured[id] != null ? 'measured' : estimate != null ? 'estimate' : null
         }
