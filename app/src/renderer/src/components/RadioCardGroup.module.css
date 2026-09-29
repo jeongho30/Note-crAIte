@@ -5,6 +5,8 @@
 }
 
 .card {
+  /* 숨긴 라디오(.input)의 기준. 없으면 input이 문서 기준으로 놓여, 스크롤되는 본문 안에서 누를 때 창 전체가 밀린다 */
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
