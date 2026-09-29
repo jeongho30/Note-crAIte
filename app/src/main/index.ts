@@ -14,7 +14,7 @@ import { MODELS } from '../core/models.ts'
 import { defaultDataDir, findFfmpeg, findWhisperCli } from '../core/paths.ts'
 import { estimateJobSeconds, estimateSttSeconds, testSample } from '../core/probe.ts'
 import type { ProbeResult } from '../core/probe.ts'
-import { estimateCredits90, RANKED, RECOMMENDED_COUNT } from '../core/llmcatalog.ts'
+import { DEFAULT_STEP_MODEL, estimateCredits90, estimateStepCredits90, RANKED, RECOMMENDED_COUNT } from '../core/llmcatalog.ts'
 import type { ModelItem } from '../core/llmcatalog.ts'
 import { CREDITS_PER_90MIN_SUMMARY, creditsPer90ByModel, listModels, PRESETS, PROVIDERS, verifyKey } from '../core/providers.ts'
 import type { ProviderId } from '../core/providers.ts'
@@ -22,7 +22,7 @@ import { listNotes, recentNotes } from '../core/recent.ts'
 import { loadSettings, updateSettings } from '../core/settings.ts'
 import { checkArgs } from '../core/stt/whispercpp.ts'
 import { defaultArgs, parseArgs, previewCommand } from '../core/sttargs.ts'
-import type { Language, Theme } from '../core/settings.ts'
+import type { Language, Settings, Theme } from '../core/settings.ts'
 import { inspectFolder, useFolder } from '../core/vault.ts'
 import { createJobRunner } from './jobs.ts'
 import type { JobInput, JobView } from './jobs.ts'
@@ -111,6 +111,10 @@ const runner = createJobRunner({
     if (provider !== 'chatkhu' || !(await readKey(dataDir, provider))) return null
     const p = PRESETS['chatkhu']
     return { endpoint: p.endpoint, model: summaryModel ?? p.model, creditsUrl: p.credits }
+  },
+  steps: async () => {
+    const { verifyModel, polishModel } = await loadSettings(dataDir)
+    return { verifyModel, polishModel }
   },
   apiKey: async () => {
     const { provider } = await loadSettings(dataDir)
@@ -238,10 +242,23 @@ async function selectedModelCredits90(): Promise<number | null> {
   return creditsPer90ByModel(await listJobs(dataDir))[model] ?? estimateCredits90(model)
 }
 
-/** 남은 크레딧으로 90분 강의를 몇 개 더 요약할 수 있는지. 모델의 크레딧을 모르면 기본값으로 어림한다 */
+/**
+ * 90분 강의 한 개의 크레딧: 요약 + 교정 검증(다듬기를 끈 경우) + 전사문 다듬기(켠 경우).
+ * polish: false면 다듬기를 빼고 센다 ([요약 다시 만들기]는 다시 다듬지 않는다)
+ */
+async function jobCredits90({ polish = true } = {}): Promise<number> {
+  const { verifyModel, polishModel } = await loadSettings(dataDir)
+  const summary = (await selectedModelCredits90()) ?? CREDITS_PER_90MIN_SUMMARY
+  const polished = polish && !!polishModel
+  const verify = polished ? 0 : (estimateStepCredits90('verify', verifyModel) ?? 0)
+  const polishCredits = polished ? (estimateStepCredits90('polish', polishModel!) ?? 0) : 0
+  return summary + verify + polishCredits
+}
+
+/** 남은 크레딧으로 90분 강의를 몇 개 더 요약할 수 있는지 */
 async function summariesLeft(credits: number | null): Promise<number | null> {
   if (credits == null) return null
-  return Math.floor(credits / ((await selectedModelCredits90()) ?? CREDITS_PER_90MIN_SUMMARY))
+  return Math.floor(credits / (await jobCredits90()))
 }
 
 /** 시작 전 확인에 보여 줄 것: 녹음마다 길이·녹음 시각·예상 시간·예상 크레딧, 넣을 수 없는 파일과 이유. */
@@ -251,7 +268,7 @@ async function prepare(paths: string[]): Promise<Prepared> {
     name: basename(p),
     reason: NOTE_EXTS.some((e) => p.toLowerCase().endsWith('.' + e)) ? '같은 이름의 녹음이 없는 필기예요' : '녹음 파일이 아니에요'
   }))
-  const [probe, settings, per90] = await Promise.all([loadProbe(), loadSettings(dataDir), selectedModelCredits90()])
+  const [probe, settings, per90] = await Promise.all([loadProbe(), loadSettings(dataDir), jobCredits90()])
   const ffmpeg = findFfmpeg(binDir)
   const out: Prepared['recordings'] = []
   for (const r of recordings) {
@@ -269,7 +286,7 @@ async function prepare(paths: string[]): Promise<Prepared> {
         recordedAt,
         sttS: probe && info.durationS ? Math.round(estimateSttSeconds(info.durationS, probe)) : null,
         totalS: probe && info.durationS ? Math.round(estimateJobSeconds(info.durationS, probe, settings.provider !== null)) : null,
-        credits: settings.provider === 'chatkhu' && info.durationS ? Math.max(1, Math.round((info.durationS / 5400) * (per90 ?? CREDITS_PER_90MIN_SUMMARY))) : null
+        credits: settings.provider === 'chatkhu' && info.durationS ? Math.max(1, Math.round((info.durationS / 5400) * per90)) : null
       })
     } catch {
       rejected.push({ name: basename(r.audio), reason: '소리를 읽을 수 없는 파일이에요' })
@@ -301,7 +318,7 @@ async function readNote(path: string) {
   } catch {
     throw new EngineError('input', '노트 파일을 찾지 못했어요. 옮기거나 지웠을 수 있어요.')
   }
-  const [folder, jobs, per90] = await Promise.all([inspectFolder(await outDir()), listJobs(dataDir), selectedModelCredits90()])
+  const [folder, jobs, per90] = await Promise.all([inspectFolder(await outDir()), listJobs(dataDir), jobCredits90({ polish: false })])
   const job = jobs.filter((j) => j.output?.notePath && samePath(j.output.notePath, checked)).at(-1) ?? null
   const durationS = job?.audio?.durationS ?? null
   return {
@@ -313,7 +330,7 @@ async function readNote(path: string) {
       durationS,
       // 받아쓰기·정리까지 끝난 작업이면 요약부터 다시 할 수 있다
       canSummarize: job.stages.clean.status === 'done',
-      credits: durationS ? Math.max(1, Math.round((durationS / 5400) * (per90 ?? CREDITS_PER_90MIN_SUMMARY))) : null
+      credits: durationS ? Math.max(1, Math.round((durationS / 5400) * per90)) : null
     }
   }
 }
@@ -559,6 +576,31 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     if (!model) throw new EngineError('input', '모델을 골라 주세요.')
     await updateSettings(dataDir, { summaryModel: model === PRESETS['chatkhu'].model ? null : model })
     log.write(`요약 모델: ${model}`)
+  },
+  // 설정 > 고급 > 요약 세부설정: 교정 검증·전사문 다듬기 모델. 고를 수 있는 모델은 추천 순서의 모델(90분 크레딧 어림과 함께)
+  'llm.steps': async () => {
+    const { verifyModel, polishModel } = await loadSettings(dataDir)
+    const ids = [...new Set([...RANKED.map((r) => r.id), verifyModel, ...(polishModel ? [polishModel] : [])])]
+    return {
+      verifyModel,
+      polishModel,
+      defaultModel: DEFAULT_STEP_MODEL,
+      models: ids.map((id) => ({ id, verify90: estimateStepCredits90('verify', id), polish90: estimateStepCredits90('polish', id) }))
+    }
+  },
+  'llm.setSteps': async (p) => {
+    const { verifyModel, polishModel } = (p ?? {}) as { verifyModel?: unknown; polishModel?: unknown }
+    const patch: Partial<Settings> = {}
+    if (verifyModel !== undefined) {
+      if (typeof verifyModel !== 'string' || !verifyModel.trim()) throw new EngineError('input', '교정 검증 모델을 골라 주세요.')
+      patch.verifyModel = verifyModel.trim()
+    }
+    if (polishModel !== undefined) {
+      if (polishModel !== null && (typeof polishModel !== 'string' || !polishModel.trim())) throw new EngineError('input', '다듬기 모델을 골라 주세요.')
+      patch.polishModel = polishModel === null ? null : polishModel.trim()
+    }
+    await updateSettings(dataDir, patch)
+    log.write(`요약 세부설정: ${JSON.stringify(patch)}`)
   },
 
   'setup.reprobe': () => {

@@ -290,7 +290,7 @@ export function Settings({ llm, doneCount, openKey, onLlmChange, onRestartWizard
         </SettingsCard>
       </Section>
 
-      <AdvancedSection ref={refFor('고급')} setup={setup} onSaved={() => void loadStorage()} />
+      <AdvancedSection ref={refFor('고급')} setup={setup} connected={!!llm?.provider} onSaved={() => void loadStorage()} onStepsSaved={onLlmChange} />
 
       <Section ref={refFor('정보')} title="정보">
         <SettingsCard>

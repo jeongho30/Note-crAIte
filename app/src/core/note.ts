@@ -15,7 +15,9 @@ export type NoteInput = {
   llm: string | null // 요약 모델. null이면 요약 없이 전사만 담은 노트
   summary: string | null
   keywords: string[]
-  transcript: string[] // 교정 목록을 적용한 문단
+  transcript: string[] // 교정 목록을 적용한 문단, 또는 다듬은 문단
+  /** 전사문을 다듬은 모델. null이면 교정 목록만 적용했다 */
+  polishedBy?: string | null
   original: Paragraph[] // 코드로 정리만 한 문단 (시각 포함)
   applied: AppliedCorrection[]
 }
@@ -48,6 +50,7 @@ export function renderNote(n: NoteInput): string {
     `source: ${JSON.stringify(n.source)}`,
     `stt: ${JSON.stringify(n.stt)}`,
     ...(n.llm ? [`llm: ${JSON.stringify(n.llm)}`] : []),
+    ...(n.polishedBy ? [`polish: ${JSON.stringify(n.polishedBy)}`] : []),
     `tags: ${JSON.stringify(tags)}`,
     '---'
   ].join('\n')
@@ -58,7 +61,9 @@ export function renderNote(n: NoteInput): string {
     parts.push(`## 주요 키워드\n\n${n.keywords.length ? n.keywords.map((k) => `- ${k}`).join('\n') : '(없음)'}`)
   }
   // 전사문도 원문 정리본·교정 내역처럼 접어 둔다 (길어서 요약을 읽는 데 방해되지 않게)
-  parts.push(callout('전사문', n.transcript.flatMap((p, i) => [...(i ? [''] : []), p])))
+  // 다듬은 전사문은 모델이 말하지 않은 내용을 넣거나 뺄 수 있어, 원문 정리본과 대조하라고 제목에 적는다
+  const transcriptTitle = n.polishedBy ? `전사문 (${n.polishedBy}가 다듬음 · 원문은 아래 원문 정리본)` : '전사문'
+  parts.push(callout(transcriptTitle, n.transcript.flatMap((p, i) => [...(i ? [''] : []), p])))
   parts.push(callout('원문 정리본 (타임스탬프)',
                      n.original.flatMap((p, i) => [...(i ? [''] : []), `**[${timestamp(p.startMs)}]** ${p.text}`])))
   if (n.applied.length) {

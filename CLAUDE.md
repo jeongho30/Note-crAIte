@@ -79,7 +79,7 @@ powershell -File ../scripts/build_whisper.ps1 -SourceDir <whisper.cpp 체크아�
 - `stt/base.ts`의 `transcribeChunks`: 조각별 결과를 `part_NNN.json`으로 저장해 끝난 조각은 다시 돌리지 않고, 조각 시작 시각만큼 밀어 하나로 합친다. 엔진 구현(`stt/whispercpp.ts`)은 `SttEngine`만 따르면 된다.
 - `downloads.ts` + `models.ts`: 모델 URL·크기·sha256 목록과 `.part` 이어받기.
 - `clean.ts`(반복·환각 정리), `corrections.ts`(교정 목록 적용), `llm.ts`·`summarize.ts`·`prompts.ts`(요약 호출 1회), `credits.ts`, `providers.ts`.
-- `job.ts`: 작업 하나를 `audio→stt→clean→summarize→note→save` 단계로 돌리고 `<데이터 폴더>/jobs/<id>/job.json`에 단계 상태를 남긴다. 끝난 단계(`done`/`skipped`)는 건너뛰므로 실패·취소 뒤 `runJob`을 다시 부르면 이어서 한다. 필기는 작업 폴더에 복사해 두고, API 키는 `job.json`에 넣지 않고 실행할 때 `JobContext`로 받는다. 요약 설정(`settings.llm`)이 없으면 요약 단계는 `skipped`이고 전사만 담은 노트가 된다.
+- `job.ts`: 작업 하나를 `audio→stt→clean→polish→summarize→note→save` 단계로(polish는 전사문 다듬기를 켠 작업만, 9/30 전 작업에는 없음) 돌리고 `<데이터 폴더>/jobs/<id>/job.json`에 단계 상태를 남긴다. 끝난 단계(`done`/`skipped`)는 건너뛰므로 실패·취소 뒤 `runJob`을 다시 부르면 이어서 한다. 필기는 작업 폴더에 복사해 두고, API 키는 `job.json`에 넣지 않고 실행할 때 `JobContext`로 받는다. 요약 설정(`settings.llm`)이 없으면 요약 단계는 `skipped`이고 전사만 담은 노트가 된다.
 - `probe.ts`: 샘플을 CPU와 Vulkan 장치마다 돌려(로그의 장치 목록·`uma`·처리 시간) 쓸 장치와 RTF를 정한다. GPU 전사가 CPU 전사와 CER 0.3 넘게 다르면 깨진 것으로 보고, 1.2배 이상 빠를 때만 GPU를 고른다. 결과는 `<데이터 폴더>/probe.json`, `run --device auto`(기본)가 장치·예상 시간에 쓴다. `compare.ts`: CER(벤치와 공용).
 - `sttargs.ts`: 설정 > 고급에서 고칠 수 있는 whisper-cli 옵션(기본값, 잠긴 옵션 거절, 명령 미리보기). 옵션이 있으면 `WhisperCpp`는 threads·beamSize·장치 대신 그것을 쓰고, 저장 전에 `checkArgs`로 whisper-cli에 한 번 읽혀 본다(없는 입력 파일로 실행하면 옵션을 읽은 뒤 바로 끝남). `probe.ts`의 `testSample`은 [샘플로 시험하기]. `providers.ts`의 `creditsPer90ByModel`은 작업 기록으로 모델별 90분 요약 크레딧을 잰다.
 - `note.ts`: 노트 마크다운(frontmatter 값은 JSON 문자열, 접는 부분은 `> [!quote]-` callout)과 저장(`<저장 폴더>/<과목|미분류>/<날짜> <제목>.md`, 겹치면 ` (2)`). `inputs.ts`: 녹음 옆 같은 이름 필기 찾기, UTF-8이 아니면 CP949로 읽기.
@@ -107,7 +107,7 @@ S3는 9/28에 정했다: 로컬 STT는 whisper.cpp, CPU 기본 `large-v3-turbo-q
 0. **요약 모델 비교 결과 반영(작성자 결정 대기).** 9/29에 두 번 쟀다(`docs/decisions.md`의 "요약 모델 비교"와 "2차"). 2차(데스크톱): 앱 받아쓰기 그대로의 강의 4개, 16개 모델, 호출 64회, 요약은 모델을 가린 체크리스트 채점, 교정 814개 판정.
    - 결과: gpt-6-luna가 90분 약 3크레딧으로 요약 점수가 최상위권이다. gemini-3.8-flash는 교정이 가장 많고 정확하다. 느린 모델(glm-5.3-flash, qwen3.8-max, qwen3.7-plus)은 524로 실패하면서도 크레딧이 빠졌다.
    - 제안: 권장을 gpt-6-luna로, sonnet-5 대신 sonnet-5-5, solar-pro4·flash-lite는 추천에서 뺌, 느린 모델은 경고, `PRICES`에 claude-sonnet-5-5 추가, 작업의 요약 크레딧을 잔액 차이 대신 토큰 × 단가로 기록, 짧은 한글 교정이 다른 단어 안에서 바뀌지 않게 거르기, 미리보기 수식 표시.
-   - 9/29 반영: 추천 순서(`RANKED`) 12개와 추천 5개, [직접 모델 입력], `PRICES`에 claude-sonnet-5-5, 기본 모델 gpt-6-luna(`PRESETS.chatkhu.model`), 12개의 90분 크레딧을 2차 실측값으로(`KNOWN_CREDITS_PER_90MIN`). 작업의 요약 크레딧은 토큰 × 단가(`job.cost.source`, 단가표 밖 모델만 잔액 차이, 평균에는 source 있는 기록만). 9/30: 요약은 스트리밍(524 방지), 시간 초과는 `timeout` 오류와 [요약 모델 바꾸기], 한글 교정은 앞쪽 단어 경계. 남은 것: `TOKENS_PER_90MIN`(목록 밖 모델의 어림, 측정 전 값).
+   - 9/29 반영: 추천 순서(`RANKED`) 12개와 추천 5개, [직접 모델 입력], `PRICES`에 claude-sonnet-5-5, 기본 모델 gpt-6-luna(`PRESETS.chatkhu.model`), 12개의 90분 크레딧을 2차 실측값으로(`KNOWN_CREDITS_PER_90MIN`). 작업의 요약 크레딧은 토큰 × 단가(`job.cost.source`, 단가표 밖 모델만 잔액 차이, 평균에는 source 있는 기록만). 9/30: 요약은 스트리밍(524 방지), 시간 초과는 `timeout` 오류와 [요약 모델 바꾸기], 한글 교정은 앞쪽 단어 경계, 요약 뒤 교정 검증(`core/verify.ts`, 기본 luna), 선택 기능 전사문 다듬기(`core/polish.ts`, `polish` 단계, 기본 꺼짐). 둘 다 설정 > 고급 > 요약 세부설정에서 모델을 고른다. 남은 것: `TOKENS_PER_90MIN`(목록 밖 모델의 어림, 측정 전 값).
    - 요약문·채점표는 강의 내용이라 저장소 밖에 있다. 1차는 노트북에, 2차는 데스크톱 데이터 폴더의 `bench/`에 있다.
    - 2차 입력을 고르다 앱 받아쓰기(turbo, 외장 GPU)가 한 구간을 수 분 길이로 잡고 말을 통째로 빠뜨리는 것을 봤다(63분 강의에서 전사가 기준의 절반). 원인 조사는 따로 한다.
 

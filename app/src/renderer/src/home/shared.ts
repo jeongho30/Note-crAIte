@@ -24,6 +24,7 @@ export const STAGE_LABEL: Record<StageName, string> = {
   audio: '오디오 준비',
   stt: '받아쓰기',
   clean: '정리',
+  polish: '전사문 다듬기',
   summarize: '요약',
   note: '노트 만들기',
   save: '노트 저장'

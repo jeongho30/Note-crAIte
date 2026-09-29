@@ -11,6 +11,7 @@ import { ensureModel } from '../core/downloads.ts'
 import { EngineError } from '../core/errors.ts'
 import { defaultThreads, detect } from '../core/hardware.ts'
 import { findNotes } from '../core/inputs.ts'
+import { DEFAULT_STEP_MODEL } from '../core/llmcatalog.ts'
 import { createJob, DEFAULT_BEAM_SIZE, DEFAULT_MODEL, jobsDir, listJobs, runJob, VAD_MODEL } from '../core/job.ts'
 import type { JobContext, LlmSettings, StageName } from '../core/job.ts'
 import { MODELS } from '../core/models.ts'
@@ -27,6 +28,7 @@ const REPO = resolve(import.meta.dirname, '..', '..', '..')
 const USAGE = `사용법:
   cli.ts [--data-dir D] [--bin-dir B] run <녹음> --out <저장 폴더> [--subject 과목] [--notes 필기]
          [--lang ko] [--model large-v3-turbo-q8_0] [--device auto|cpu|gpu0] [--threads N]
+         [--verify-model gpt-6-luna|none] [--polish 다듬기 모델]
          auto는 probe 결과(장치, 예상 시간)를 쓴다. probe를 안 했으면 CPU.
          필기를 주지 않으면 녹음 옆의 같은 이름 .md/.txt를 쓴다. 환경변수 LN_API_KEY(ChatKHU 키)가 없으면 요약 없이 전사만 담는다.
   cli.ts [--data-dir D] [--bin-dir B] resume <작업 ID>
@@ -80,7 +82,9 @@ async function main(argv: string[]): Promise<void> {
       models: { type: 'string' },
       job: { type: 'string' },
       text: { type: 'string' },
-      minutes: { type: 'string' }
+      minutes: { type: 'string' },
+      'verify-model': { type: 'string', default: DEFAULT_STEP_MODEL, description: '요약 뒤 교정 검증 모델. none이면 검증하지 않음' },
+      polish: { type: 'string', description: '전사문 다듬기 모델 (없으면 다듬지 않음)' }
     }
   })
   const dataDir = v['data-dir'] ?? defaultDataDir()
@@ -114,7 +118,9 @@ async function main(argv: string[]): Promise<void> {
       gpuDevice,
       threads,
       outDir: resolve(v.out),
-      llm
+      llm,
+      verifyModel: v['verify-model'] === 'none' ? null : v['verify-model']!,
+      polishModel: v.polish ?? null
     })
     console.log(`작업 ${jobDir}${notes ? ` · 필기 ${notes}` : ''}`)
     await runAndReport(jobDir, jobContext(dataDir, binDir, whisperDirs, apiKey))
@@ -208,7 +214,12 @@ function jobContext(dataDir: string, binDir: string | undefined, whisperDirs: st
 async function runAndReport(jobDir: string, ctx: JobContext): Promise<void> {
   const started = Date.now()
   const job = await runJob(jobDir, ctx)
-  const credits = job.cost?.summaryCredits != null ? ` · 요약 ${job.cost.summaryCredits}크레딧` : ''
+  const c = job.cost
+  const credits = [
+    c?.summaryCredits != null ? ` · 요약 ${c.summaryCredits}크레딧` : '',
+    c?.verifyCredits != null ? ` · 교정 검증 ${c.verifyCredits}크레딧` : '',
+    c?.polishCredits != null ? ` · 전사문 다듬기 ${c.polishCredits}크레딧` : ''
+  ].join('')
   console.log(`\n완료 (${Math.round((Date.now() - started) / 1000)}초${credits}): ${job.output!.notePath}`)
 }
 

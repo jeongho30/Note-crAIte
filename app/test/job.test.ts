@@ -95,6 +95,51 @@ test('요약이 실패한 뒤 재개하면 STT를 다시 돌리지 않고 요약
   assert.match(md, /교정 내역 \(1건\)\n> - 안녕하세요 → 안녕하십니까 \(1회\)/)
 })
 
+test('교정 검증: 검증에서 버린 교정은 적용하지 않고, 검증 크레딧을 따로 적는다', { skip }, async () => {
+  const dir = await tempDir()
+  const jobDir = await createJob(join(dir, 'data'), await recording(dir), null, null, { ...settings(join(dir, 'out'), true), verifyModel: 'gpt-6-luna' })
+  mock.method(globalThis, 'fetch', async (_url: string, init: RequestInit) => {
+    const system = JSON.parse(String(init.body)).messages[0].content as string
+    const content = system.includes('교정 목록을 검토')
+      ? JSON.stringify({ results: [{ id: 0, keep: false }] })
+      : JSON.stringify({ title: '인사', summary: '인사를 했다.', keywords: [], corrections: [{ wrong: '안녕하세요', right: '안녕하십니까' }] })
+    return new Response(JSON.stringify({ choices: [{ message: { content } }], usage: { prompt_tokens: 1000, completion_tokens: 100 } }), { status: 200 })
+  })
+  const job = await runJob(jobDir, context(dir, 'key'))
+  assert.equal(job.stages.polish.status, 'skipped')
+  assert.equal(job.cost?.verifyCredits, 0.15) // 1,000 × 0.1 + 100 × 0.5 (1K 토큰당)
+  const md = await readFile(job.output!.notePath, 'utf8')
+  assert.match(md, /> \[!quote\]- 전사문\n> 안녕하세요 강의를 시작합니다\n/)
+  assert.doesNotMatch(md, /교정 내역/)
+})
+
+test('전사문 다듬기: 다듬은 전사를 요약하고 노트의 전사문으로 쓰며, 원문 정리본은 그대로 둔다', { skip }, async () => {
+  const dir = await tempDir()
+  const jobDir = await createJob(join(dir, 'data'), await recording(dir), null, null,
+                                 { ...settings(join(dir, 'out'), true), verifyModel: 'gpt-6-luna', polishModel: 'gpt-6-luna' })
+  const systems: string[] = []
+  const users: string[] = []
+  mock.method(globalThis, 'fetch', async (_url: string, init: RequestInit) => {
+    const { messages } = JSON.parse(String(init.body))
+    systems.push(messages[0].content)
+    users.push(messages[1].content)
+    const content = messages[0].content.startsWith('당신은 한국어 강의 음성인식(STT) 결과를 교정')
+      ? '안녕하십니까 강의를 시작합니다'
+      : JSON.stringify({ title: '인사', summary: '인사를 했다.', keywords: [], corrections: [{ wrong: '안녕하십니까', right: 'x' }] })
+    return new Response(JSON.stringify({ choices: [{ message: { content } }], usage: { prompt_tokens: 1000, completion_tokens: 1000 } }), { status: 200 })
+  })
+  const job = await runJob(jobDir, context(dir, 'key'))
+  assert.equal(job.stages.polish.status, 'done')
+  assert.equal(systems.length, 2, '다듬기 1번, 요약 1번 (교정 목록을 쓰지 않으니 검증은 하지 않는다)')
+  assert.match(users[1], /안녕하십니까 강의를 시작합니다/, '다듬은 전사를 요약한다')
+  assert.equal(job.cost?.polishCredits, 0.6)
+  const md = await readFile(job.output!.notePath, 'utf8')
+  assert.match(md, /polish: "gpt-6-luna"/)
+  assert.match(md, /> \[!quote\]- 전사문 \(gpt-6-luna가 다듬음 · 원문은 아래 원문 정리본\)\n> 안녕하십니까 강의를 시작합니다\n/)
+  assert.match(md, /\*\*\[00:00\]\*\* 안녕하세요 강의를 시작합니다/)
+  assert.doesNotMatch(md, /교정 내역/)
+})
+
 test('취소하면 cancelled로 남고, 재개하면 그 단계부터 다시 한다', { skip }, async () => {
   const dir = await tempDir()
   const jobDir = await createJob(join(dir, 'data'), await recording(dir), null, null, settings(join(dir, 'out'), false))

@@ -81,6 +81,23 @@ export function creditsFromTokens(id: string, inputTokens: unknown, outputTokens
   return Math.round(((inputTokens * p.input + outputTokens * p.output) / 1000) * 100) / 100
 }
 
+/** 요약 뒤 교정 검증과 전사문 다듬기의 기본 모델 (9/30 실험: 싸고, 교정 판정이 정확했다) */
+export const DEFAULT_STEP_MODEL = 'gpt-6-luna'
+
+/**
+ * 90분 강의 1회의 토큰 수: 9/30 gpt-6-luna 실측을 90분으로 환산. 다듬기는 전사 전체를 다시 써서 출력이 길다(추론 포함).
+ * 다른 모델은 이 토큰 수 × 단가로 어림한다.
+ */
+export const STEP_TOKENS_PER_90MIN = { verify: { input: 1_200, output: 600 }, polish: { input: 26_000, output: 35_000 } }
+
+/** 교정 검증·전사문 다듬기 한 번의 90분 강의 크레딧(어림). 단가를 모르면 null. */
+export function estimateStepCredits90(step: keyof typeof STEP_TOKENS_PER_90MIN, id: string): number | null {
+  const p = PRICES[id]
+  const t = STEP_TOKENS_PER_90MIN[step]
+  if (!p) return null
+  return Math.round(((t.input * p.input + t.output * p.output) / 1000) * 10) / 10
+}
+
 /** 단가표로 어림한 90분 강의 요약 1회의 크레딧. 단가를 모르면 null. */
 export function estimateCredits90(id: string): number | null {
   const p = PRICES[id]

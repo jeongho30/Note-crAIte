@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useState } from 'react'
 import { ApiError, call } from '../api'
-import { Button, RadioCardGroup, TextField, useToast } from '../components'
+import { Button, RadioCardGroup, Select, TextField, useToast } from '../components'
 import { cx } from '../components/cx'
 import type { SetupState } from '../../../main/setup'
 import { Block, Section, sizeLabel } from './parts'
@@ -21,14 +21,46 @@ const MODEL_TEXT: Record<string, { title: string; description: (gpu: boolean) =>
 
 type Props = {
   setup: SetupState | null
+  /** 요약 서비스가 연결돼 있어야 요약 세부설정을 바꿀 수 있다 */
+  connected: boolean
   /** 받아쓰기 모델을 바꾸면 저장 공간 크기가 바뀐다 */
   onSaved: () => void
+  /** 요약 세부설정을 바꾸면 남은 요약 횟수가 바뀐다 */
+  onStepsSaved: () => void
 }
 
-// 고급(기본은 접힘): 받아쓰기 세부설정(모델, 실제 명령, 고칠 수 있는 옵션, 샘플로 시험)과 로컬 LLM(곧 지원).
-export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedSection({ setup, onSaved }, ref) {
+type StepModel = { id: string; verify90: number | null; polish90: number | null }
+type Steps = { verifyModel: string; polishModel: string | null; defaultModel: string; models: StepModel[] }
+
+/** "약 0.4크레딧", 모르면 "크레딧 모름" */
+function creditsLabel(v: number | null): string {
+  return v == null ? '크레딧 모름' : `약 ${v < 10 ? Math.round(v * 10) / 10 : Math.round(v)}크레딧`
+}
+
+// 고급(기본은 접힘): 받아쓰기 세부설정(모델, 실제 명령, 고칠 수 있는 옵션, 샘플로 시험), 요약 세부설정(교정 검증·전사문 다듬기 모델), 로컬 LLM(곧 지원).
+export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedSection({ setup, connected, onSaved, onStepsSaved }, ref) {
   const toast = useToast()
   const [open, setOpen] = useState(false)
+  const [steps, setSteps] = useState<Steps | null>(null)
+  // 다듬기를 켤 때 고를 모델 (끈 동안에도 마지막으로 고른 모델을 기억)
+  const [polishPick, setPolishPick] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (open) call<Steps>('llm.steps').then(setSteps)
+  }, [open])
+
+  async function saveSteps(patch: { verifyModel?: string; polishModel?: string | null }): Promise<void> {
+    try {
+      await call('llm.setSteps', patch)
+      setSteps(await call<Steps>('llm.steps'))
+      onStepsSaved()
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : '저장하지 못했어요.', 'danger')
+    }
+  }
+
+  const polishModel = steps?.polishModel ?? polishPick ?? steps?.defaultModel ?? ''
+  const polish90 = steps?.models.find((m) => m.id === polishModel)?.polish90 ?? null
   const [opts, setOpts] = useState<Options | null>(null)
   const [model, setModel] = useState('')
   const [args, setArgs] = useState('')
@@ -84,7 +116,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
         <button className={styles.advHead} aria-expanded={open} onClick={() => setOpen(!open)}>
           <span className={styles.chev} aria-hidden="true" />
           <b>고급</b>
-          <span>받아쓰기 세부설정 · 로컬 LLM</span>
+          <span>받아쓰기 세부설정 · 요약 세부설정 · 로컬 LLM</span>
         </button>
         {open && (
           <div className={styles.advBody}>
@@ -174,6 +206,69 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                       저장
                     </Button>
                   </div>
+                </>
+              )}
+            </Block>
+
+            <Block title="요약 세부설정">
+              {!steps ? (
+                <p className={styles.hint}>불러오는 중…</p>
+              ) : (
+                <>
+                  <Select
+                    label="교정 검증 모델"
+                    value={steps.verifyModel}
+                    disabled={!connected}
+                    onChange={(e) => void saveSteps({ verifyModel: e.target.value })}
+                    hint="요약이 찾은 받아쓰기 교정을 이 모델이 전사의 앞뒤 문맥과 함께 한 번 더 확인해, 틀리거나 표기만 바꾸는 교정을 걸러요. 크레딧은 90분 강의 기준(어림)이에요."
+                  >
+                    {steps.models.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.id}
+                        {m.id === steps.defaultModel ? ' (기본)' : ''} · {creditsLabel(m.verify90)}
+                      </option>
+                    ))}
+                  </Select>
+
+                  <RadioCardGroup
+                    label="전사문 다듬기"
+                    value={steps.polishModel ? 'api' : 'off'}
+                    onChange={(v) => void saveSteps({ polishModel: v === 'api' ? polishModel : null })}
+                    options={[
+                      { value: 'off', title: '사용 안 함', description: '받아쓴 전사에 요약이 찾은 교정만 적용해요.', disabled: !connected },
+                      {
+                        value: 'api',
+                        title: '요약 서비스로 다듬기',
+                        description: '요약 서비스가 전사 전체를 읽고 잘못 받아쓴 말을 고쳐 다시 써요.',
+                        meta: creditsLabel(polish90),
+                        disabled: !connected
+                      },
+                      { value: 'local', title: '로컬 LLM으로 다듬기', description: 'Ollama가 이 PC에서 다듬어요. 크레딧이 들지 않아요.', meta: '곧 지원', disabled: true }
+                    ]}
+                  />
+                  {steps.polishModel && (
+                    <Select
+                      label="다듬기 모델"
+                      value={steps.polishModel}
+                      disabled={!connected}
+                      onChange={(e) => {
+                        setPolishPick(e.target.value)
+                        void saveSteps({ polishModel: e.target.value })
+                      }}
+                    >
+                      {steps.models.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.id}
+                          {m.id === steps.defaultModel ? ' (기본)' : ''} · {creditsLabel(m.polish90)}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                  <p className={styles.hint}>
+                    다듬기를 켜면 90분 강의에 위 크레딧이 더 들고 1~2분 더 걸려요. 모델이 하지 않은 말을 넣거나 빼는 경우가 있어, 원래 받아쓰기는 노트의 원문 정리본에 그대로
+                    남겨요. 다듬은 전사에는 교정 검증을 하지 않아요.
+                    {!connected && ' 요약 서비스를 연결하면 바꿀 수 있어요.'}
+                  </p>
                 </>
               )}
             </Block>

@@ -60,6 +60,8 @@ type Deps = {
   stt: () => Promise<{ model: string; args: string[] | null }>
   /** 작업을 만들 때의 요약 설정과, 실행할 때의 API 키 */
   llm: () => Promise<LlmSettings | null>
+  /** 지금 설정의 교정 검증·전사문 다듬기 모델 (다듬기가 꺼져 있으면 null) */
+  steps: () => Promise<{ verifyModel: string | null; polishModel: string | null }>
   apiKey: () => Promise<string | null>
   outDir: () => Promise<string>
   emit: (jobs: JobView[]) => void
@@ -93,11 +95,20 @@ export function createJobRunner(d: Deps) {
   }
 
   function stageViews(job: Job): StageView[] {
-    return STAGES.map((name) => {
+    // 전사문 다듬기는 켠 작업만 보인다 (꺼져 있으면 모든 작업에 "건너뜀"이 붙어 번거롭다)
+    const shown = STAGES.filter((name) => name !== 'polish' || (job.stages.polish && job.stages.polish.status !== 'skipped' && job.settings.polishModel))
+    return shown.map((name) => {
       const s = job.stages[name]
       const ms = s.startedAt && s.endedAt ? new Date(s.endedAt).getTime() - new Date(s.startedAt).getTime() : null
       return { name, status: current?.id === job.id && current.stage === name ? 'running' : s.status, ms }
     })
+  }
+
+  /** 요약·교정 검증·전사문 다듬기 크레딧의 합. 요약 크레딧을 모르면 null */
+  function totalCredits(job: Job): number | null {
+    const c = job.cost
+    if (c?.summaryCredits == null) return null
+    return Math.round((c.summaryCredits + (c.verifyCredits ?? 0) + (c.polishCredits ?? 0)) * 100) / 100
   }
 
   function view(job: Job, firstQueued: boolean): JobView {
@@ -129,7 +140,7 @@ export function createJobRunner(d: Deps) {
       audioPath: job.input.audio,
       hasNotes: job.input.notes !== null,
       stages: stageViews(job),
-      credits: job.cost?.summaryCredits ?? null,
+      credits: totalCredits(job),
       sttChunks: job.status === 'done' ? null : sttChunks(job),
       autoRetryAt: autoRetryAt.get(job.id) ?? null
     }
@@ -232,7 +243,7 @@ export function createJobRunner(d: Deps) {
 
   async function start(inputs: JobInput[]): Promise<void> {
     const probe = await d.probe()
-    const [llm, outDir, stt] = await Promise.all([d.llm(), d.outDir(), d.stt()])
+    const [llm, outDir, stt, steps] = await Promise.all([d.llm(), d.outDir(), d.stt(), d.steps()])
     for (const input of inputs) {
       await createJob(d.dataDir, input.audio, input.notes, input.subject, {
         language: input.language,
@@ -242,7 +253,8 @@ export function createJobRunner(d: Deps) {
         threads: probe?.threads ?? (await d.defaultThreads()),
         args: stt.args,
         outDir,
-        llm
+        llm,
+        ...steps
       })
     }
     await emitNow()
@@ -261,7 +273,13 @@ export function createJobRunner(d: Deps) {
     autoRetryAt.delete(id)
     const job = await loadJob(dirOf(id))
     if (job.status !== 'failed' && job.status !== 'cancelled') return
-    if (job.error?.stage === 'summarize' && job.settings.llm) job.settings.llm = (await d.llm()) ?? job.settings.llm
+    const stage = job.error?.stage
+    if ((stage === 'polish' || stage === 'summarize') && job.settings.llm) {
+      job.settings.llm = (await d.llm()) ?? job.settings.llm
+      const steps = await d.steps()
+      job.settings.verifyModel = steps.verifyModel
+      if (stage === 'polish') job.settings.polishModel = steps.polishModel // 다듬기에서 멈췄으면 지금 설정대로(끄면 건너뜀)
+    }
     job.status = 'queued'
     delete job.error
     await save(job)
@@ -276,8 +294,10 @@ export function createJobRunner(d: Deps) {
     const llm = await d.llm()
     if (!llm) throw new EngineError('auth', '요약 서비스를 먼저 연결해 주세요.')
     job.settings.llm = llm
+    job.settings.verifyModel = (await d.steps()).verifyModel
     for (const s of ['summarize', 'note', 'save'] as const) job.stages[s] = { status: 'pending' }
-    delete job.cost
+    // 다듬은 전사문은 그대로 두고(다시 다듬지 않음) 요약만 다시 한다
+    job.cost = job.cost?.polishCredits != null ? { summaryCredits: null, polishCredits: job.cost.polishCredits } : undefined
     job.status = 'queued'
     await save(job)
     await emitNow()
@@ -290,6 +310,7 @@ export function createJobRunner(d: Deps) {
     const job = await loadJob(dirOf(id))
     if ((job.status !== 'failed' && job.status !== 'cancelled') || job.stages.stt.status !== 'done') return
     job.settings.llm = null
+    if (job.stages.polish?.status !== 'done') job.stages.polish = { status: 'skipped' }
     job.stages.summarize = { status: 'skipped' }
     job.status = 'queued'
     delete job.error

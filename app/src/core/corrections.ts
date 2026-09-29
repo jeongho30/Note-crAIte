@@ -46,6 +46,11 @@ function pattern(wrong: string): string {
   return p
 }
 
+/** wrong을 바꿀 곳(apply와 같은 경계 규칙)의 위치들 */
+export function occurrences(text: string, wrong: string): number[] {
+  return [...text.matchAll(new RegExp(pattern(wrong), 'g'))].map((m) => m.index)
+}
+
 /** 긴 것부터 정규식 하나로 한 번에 치환한다 (치환 결과가 다시 치환되지 않게). 항목별 적용 횟수를 돌려준다. */
 export function apply(texts: string[], corrections: Correction[]): [string[], AppliedCorrection[]] {
   if (corrections.length === 0) return [texts, []]
