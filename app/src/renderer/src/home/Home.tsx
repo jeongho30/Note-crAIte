@@ -77,7 +77,7 @@ export function Home({ jobs, llm, onConnect, onShowJobs, onPreview }: Props): Re
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
-      {/* 상황 배너: 한 번에 하나. 모델 → 멈춘 작업 → 요약 서비스 순 */}
+      {/* 상황 배너: 한 번에 하나. 모델 → 속도 재기 → 멈춘 작업 → 요약 서비스 순 */}
       {model && (model.state === 'missing' || model.state === 'error') ? (
         <Banner
           tone="warning"
@@ -96,6 +96,10 @@ export function Home({ jobs, llm, onConnect, onShowJobs, onPreview }: Props): Re
           <div className={styles.bannerBar}>
             <ProgressBar value={model.done / model.total} label="받아쓰기 모델 받기" />
           </div>
+        </Banner>
+      ) : model?.state === 'ready' && setup?.probe.state === 'running' ? (
+        <Banner tone="info" title="이 PC의 받아쓰기 속도를 재는 중">
+          1~2분 걸려요. 녹음을 먼저 넣어도 돼요. 다 재면 시작해요.
         </Banner>
       ) : stopped > 0 ? (
         <Banner
