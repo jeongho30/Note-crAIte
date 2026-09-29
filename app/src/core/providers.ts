@@ -41,12 +41,15 @@ const KNOWN_CREDITS_PER_90MIN: Record<string, number> = {
   'gemini-3.5-flash-lite': 7.5
 }
 
-/** 모델별 90분 요약 크레딧: 끝난 작업의 기록(잔액 차이)을 90분으로 환산한 평균, 기록이 없으면 알려진 값. */
+/**
+ * 모델별 90분 요약 크레딧: 끝난 작업의 기록을 90분으로 환산한 평균, 기록이 없으면 알려진 값.
+ * 9/29 전 기록(source 없음, 잔액 차이)은 늦은 차감이 섞여 틀어진 것이 있어 쓰지 않는다.
+ */
 export function creditsPer90ByModel(jobs: Job[]): Record<string, number> {
   const sums: Record<string, { total: number; n: number }> = {}
   for (const j of jobs) {
     const model = j.settings.llm?.model
-    const used = j.cost?.summaryCredits
+    const used = j.cost?.source ? j.cost.summaryCredits : null
     const durationS = j.audio?.durationS
     if (!model || used == null || !durationS || durationS < 60) continue
     const s = (sums[model] ??= { total: 0, n: 0 })

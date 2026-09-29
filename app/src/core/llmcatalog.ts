@@ -71,6 +71,16 @@ export const PRICES: Record<string, { input: number; output: number }> = {
  */
 export const TOKENS_PER_90MIN = { input: 10_000, output: 1_200 }
 
+/**
+ * 응답의 토큰 수 × 단가로 계산한 크레딧. 요약 모델 비교 1차에서 7개 모델 모두 실제 차감과 소수 둘째 자리까지 맞았다.
+ * 단가나 토큰 수를 모르면 null.
+ */
+export function creditsFromTokens(id: string, inputTokens: unknown, outputTokens: unknown): number | null {
+  const p = PRICES[id]
+  if (!p || typeof inputTokens !== 'number' || typeof outputTokens !== 'number') return null
+  return Math.round(((inputTokens * p.input + outputTokens * p.output) / 1000) * 100) / 100
+}
+
 /** 단가표로 어림한 90분 강의 요약 1회의 크레딧. 단가를 모르면 null. */
 export function estimateCredits90(id: string): number | null {
   const p = PRICES[id]

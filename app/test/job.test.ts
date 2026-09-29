@@ -26,7 +26,7 @@ afterEach(() => mock.restoreAll())
 function settings(outDir: string, withLlm: boolean): JobSettings {
   return {
     language: 'ko', model: 'large-v3-turbo-q8_0', beamSize: 1, gpuDevice: null, threads: 2, outDir,
-    llm: withLlm ? { endpoint: 'https://llm.test/chat/completions/', model: 'gemini-3.8-flash' } : null
+    llm: withLlm ? { endpoint: 'https://llm.test/chat/completions/', model: 'gemini-3.8-flash', creditsUrl: 'https://llm.test/credits/' } : null
   }
 }
 
@@ -78,12 +78,14 @@ test('요약이 실패한 뒤 재개하면 STT를 다시 돌리지 않고 요약
       title: '인사와 강의 시작', summary: '인사를 했다.', keywords: ['인사'],
       corrections: [{ wrong: '안녕하세요', right: '안녕하십니까' }, { wrong: '없는 말', right: 'x' }]
     })
-    return new Response(JSON.stringify({ choices: [{ message: { content } }] }), { status: 200 })
+    return new Response(JSON.stringify({ choices: [{ message: { content } }], usage: { prompt_tokens: 12_000, completion_tokens: 800 } }), { status: 200 })
   })
   // STT를 다시 돌리면 없는 실행 파일이라 실패한다
   const job = await runJob(jobDir, context(dir, 'good-key', [join(dir, 'no-such-whisper.exe')]))
 
   assert.equal(job.status, 'done')
+  assert.equal(bodies.length, 1, '단가를 아는 모델은 잔액을 조회하지 않는다')
+  assert.deepEqual(job.cost, { summaryCredits: 12, source: 'tokens' }) // 12,000 × 0.75 + 800 × 3.75 (1K 토큰당)
   assert.match(bodies[0], /용어: 안녕하십니까/, '작업 폴더에 복사해 둔 필기를 요약에 넘긴다')
   assert.ok(job.output!.notePath.startsWith(join(dir, 'out', '컴파일러')))
   assert.ok(job.output!.notePath.endsWith(' 인사와 강의 시작.md'))

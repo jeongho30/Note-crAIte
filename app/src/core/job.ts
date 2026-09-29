@@ -13,6 +13,7 @@ import * as credits from './credits.ts'
 import { EngineError } from './errors.ts'
 import { readJson, writeJsonAtomic } from './files.ts'
 import { readNotes } from './inputs.ts'
+import { creditsFromTokens, PRICES } from './llmcatalog.ts'
 import { renderNote, saveNote } from './note.ts'
 import { transcribeChunks } from './stt/base.ts'
 import type { Segment } from './stt/base.ts'
@@ -51,7 +52,11 @@ export type Job = {
   stages: Record<StageName, StageState>
   status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled'
   audio?: { durationS: number | null; recordedAt: string; chunks: Chunk[] }
-  cost?: { summaryCredits: number | null }
+  /**
+   * source: tokens는 응답의 토큰 수 × 단가, balance는 요약 전후 잔액 차이(단가표에 없는 모델만).
+   * source가 없는 것은 9/29 전 기록(잔액 차이)이다. 잔액 차이는 실패한 호출의 늦은 차감이나 다른 사용이 섞일 수 있다.
+   */
+  cost?: { summaryCredits: number | null; source?: 'tokens' | 'balance' }
   output?: { notePath: string }
   error?: { code: string; message: string; stage: StageName }
 }
@@ -192,12 +197,18 @@ const RUNNERS: Record<StageName, Runner> = {
     const cleaned = await readJson<Cleaned>(join(jobDir, 'cleaned.json'))
     const text = transcriptText(cleaned)
     const notes = job.input.notes ? await readNotes(join(jobDir, job.input.notes)) : ''
-    const before = llm.creditsUrl ? await creditsRemaining(llm.creditsUrl, ctx.apiKey) : null
+    // 단가를 아는 모델은 응답의 토큰 수로 크레딧을 계산하고, 모르는 모델만 요약 전후 잔액 차이로 잰다
+    const priced = llm.model in PRICES
+    const before = !priced && llm.creditsUrl ? await creditsRemaining(llm.creditsUrl, ctx.apiKey) : null
     const result = await summarize(text, notes, job.input.subject, {
       endpoint: llm.endpoint, apiKey: ctx.apiKey, model: llm.model, fallbackTitle: stem(job.input.audio)
     })
-    const after = before !== null ? await creditsRemaining(llm.creditsUrl!, ctx.apiKey) : null
-    job.cost = { summaryCredits: before !== null && after !== null ? Math.round((before - after) * 100) / 100 : null }
+    if (priced) {
+      job.cost = { summaryCredits: creditsFromTokens(llm.model, result.usage?.prompt_tokens, result.usage?.completion_tokens), source: 'tokens' }
+    } else {
+      const after = before !== null ? await creditsRemaining(llm.creditsUrl!, ctx.apiKey) : null
+      job.cost = { summaryCredits: before !== null && after !== null ? Math.round((before - after) * 100) / 100 : null, source: 'balance' }
+    }
     const file: SummaryFile = {
       title: result.title,
       summary: result.summary,
