@@ -70,6 +70,15 @@ test('apply는 영문 단어 경계를 지키고 한글 조사는 허용한다',
   assert.deepEqual(applied, [{ wrong: 'IDE', right: 'id', count: 1 }])
 })
 
+test('apply는 한글 교정을 다른 단어 안에서 바꾸지 않고, 뒤에 붙은 조사는 허용한다', () => {
+  const [fixed, applied] = apply(['터미널을 넌터미널로 바꾸고 펌츄에이션과 에이 등급'], [
+    { wrong: '터미널', right: 'terminal' },
+    { wrong: '에이', right: 'A' }
+  ])
+  assert.deepEqual(fixed, ['terminal을 넌터미널로 바꾸고 펌츄에이션과 A 등급'])
+  assert.deepEqual(new Set(applied.map((c) => `${c.wrong}:${c.count}`)), new Set(['터미널:1', '에이:1']))
+})
+
 test('select는 개수를 제한한다', () => {
   const text = Array.from({ length: 100 }, (_, i) => `단어${i}`).join(' ')
   assert.equal(select(Array.from({ length: 100 }, (_, i) => ({ wrong: `단어${i}`, right: `word${i}` })), text).length, MAX_ITEMS)

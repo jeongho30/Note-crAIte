@@ -5,6 +5,7 @@ export const MAX_ITEMS = 40
 
 const LETTER_RE = /[A-Za-z가-힣]/
 const ASCII_WORD_RE = /[A-Za-z0-9]/
+const HANGUL_RE = /[가-힣]/
 
 export type Correction = { wrong: string; right: string }
 export type AppliedCorrection = Correction & { count: number }
@@ -36,9 +37,11 @@ function escapeRegExp(s: string): string {
 
 function pattern(wrong: string): string {
   // 영문·숫자로 시작하거나 끝나면 단어 경계를 지킨다 ("IDE"가 "IDEA" 안에서 바뀌지 않게).
-  // 한글은 조사가 바로 붙으므로 경계를 두지 않는다.
+  // 한글로 시작하면 앞쪽 경계만 지킨다 ("터미널"이 "넌터미널" 안에서, "에이"가 "펌츄에이션" 안에서 바뀌지 않게).
+  // 뒤쪽은 조사가 바로 붙으므로 두지 않는다. 요약 모델 비교 2차의 교정 판정에서 잘못 바꾼 곳 10곳을 막고 고친 곳은 3곳만 잃었다.
   let p = escapeRegExp(wrong)
   if (ASCII_WORD_RE.test(wrong[0])) p = '(?<![A-Za-z0-9])' + p
+  else if (HANGUL_RE.test(wrong[0])) p = '(?<![가-힣])' + p
   if (ASCII_WORD_RE.test(wrong.at(-1)!)) p += '(?![A-Za-z0-9])'
   return p
 }
