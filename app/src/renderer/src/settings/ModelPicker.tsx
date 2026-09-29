@@ -27,7 +27,26 @@ function credits(m: ModelOption): string {
   return `약 ${v}크레딧${m.source === 'estimate' ? '(어림)' : ''}`
 }
 
+const TEXT = {
+  summary: {
+    label: '요약 모델',
+    credits: '크레딧은 90분 강의 요약 1회 기준이에요. (어림)은 단가표로 계산한 값이라 실제와 다를 수 있어요.',
+    title: '요약 모델 고르기',
+    intro: '강의 녹음으로 요약 품질·크레딧·받아쓰기 교정을 비교한 추천 순서예요. 크레딧은 90분 강의 요약 1회 기준이고, (어림)은 단가표로 계산한 값이에요.',
+    custom: '추천 목록 밖의 모델은 요약이 오래 걸려 실패할 수 있고, 실패해도 크레딧이 빠질 수 있어요.'
+  },
+  polish: {
+    label: '다듬기 모델',
+    credits: '크레딧은 90분 강의 다듬기 1회 기준으로 단가표로 계산한 값이라 실제와 다를 수 있어요.',
+    title: '다듬기 모델 고르기',
+    intro: '추천은 다듬기 크레딧이 적은 모델이고, 나머지는 요약 추천 순서예요. 다듬기 품질을 재 본 모델은 gpt-6-luna뿐이에요. 크레딧은 90분 강의 다듬기 1회 기준(어림)이에요.',
+    custom: '추천 목록 밖의 모델은 다듬기가 오래 걸려 실패할 수 있고, 실패해도 크레딧이 빠질 수 있어요.'
+  }
+}
+
 type Props = {
+  /** 요약 모델(설정 > 요약 서비스) 또는 전사문 다듬기 모델(설정 > 고급). 기본은 요약 */
+  kind?: keyof typeof TEXT
   models: ModelOption[] | null
   selected: string | null
   /** 서비스가 주는 글 모델 이름 전체. 비어 있으면(목록을 못 불러옴) 직접 입력한 이름을 확인하지 않는다 */
@@ -38,8 +57,9 @@ type Props = {
   onPick: (id: string) => void
 }
 
-// 요약 모델: 추천 모델 목록을 먼저 보이고, [전체 모델 보기] 창에서 추천 순서대로 고르거나, [직접 모델 입력]으로 이름을 넣는다.
-export function ModelPicker({ models, selected, available, disabled, failed, onPick }: Props): React.JSX.Element {
+// 요약·다듬기 모델: 추천 모델 목록을 먼저 보이고, [전체 모델 보기] 창에서 추천 순서대로 고르거나, [직접 모델 입력]으로 이름을 넣는다.
+export function ModelPicker({ kind = 'summary', models, selected, available, disabled, failed, onPick }: Props): React.JSX.Element {
+  const text = TEXT[kind]
   const [open, setOpen] = useState<'all' | 'custom' | null>(null)
   const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -51,7 +71,7 @@ export function ModelPicker({ models, selected, available, disabled, failed, onP
     ? '요약 서비스를 연결하면 고를 수 있어요.'
     : failed
       ? '모델 목록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.'
-      : [current?.note, '크레딧은 90분 강의 요약 1회 기준이에요. (어림)은 단가표로 계산한 값이라 실제와 다를 수 있어요.'].filter(Boolean).join(' · ')
+      : [current?.note, text.credits].filter(Boolean).join(' · ')
 
   function openCustom(): void {
     setName('')
@@ -74,7 +94,7 @@ export function ModelPicker({ models, selected, available, disabled, failed, onP
   return (
     <>
       <Select
-        label="요약 모델"
+        label={text.label}
         disabled={disabled || !models}
         value={selected ?? ''}
         onChange={(e) => {
@@ -110,7 +130,7 @@ export function ModelPicker({ models, selected, available, disabled, failed, onP
         size="lg"
         // [직접 모델 입력]으로 넘어갈 때 이 창이 닫히는 이벤트가 새 창을 닫지 않게
         onClose={() => setOpen((o) => (o === 'all' ? null : o))}
-        title="요약 모델 고르기"
+        title={text.title}
         actions={
           <>
             <Button variant="ghost" onClick={openCustom}>
@@ -121,9 +141,7 @@ export function ModelPicker({ models, selected, available, disabled, failed, onP
         }
       >
         <div className={styles.modelDialog}>
-          <p className={styles.hint}>
-            강의 녹음으로 요약 품질·크레딧·받아쓰기 교정을 비교한 추천 순서예요. 크레딧은 90분 강의 요약 1회 기준이고, (어림)은 단가표로 계산한 값이에요.
-          </p>
+          <p className={styles.hint}>{text.intro}</p>
           <div className={styles.modelList}>
             {ranked.map((m) => (
               <button
@@ -173,9 +191,7 @@ export function ModelPicker({ models, selected, available, disabled, failed, onP
               setError(null)
             }}
           />
-          <p className={styles.hint}>
-            ChatKHU가 제공하는 글 모델 이름을 그대로 넣어 주세요. 추천 목록 밖의 모델은 요약이 오래 걸려 실패할 수 있고, 실패해도 크레딧이 빠질 수 있어요.
-          </p>
+          <p className={styles.hint}>ChatKHU가 제공하는 글 모델 이름을 그대로 넣어 주세요. {text.custom}</p>
         </form>
       </Dialog>
     </>

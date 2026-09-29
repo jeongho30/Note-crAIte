@@ -14,7 +14,7 @@ import { MODELS } from '../core/models.ts'
 import { defaultDataDir, findFfmpeg, findWhisperCli } from '../core/paths.ts'
 import { estimateJobSeconds, estimateSttSeconds, testSample } from '../core/probe.ts'
 import type { ProbeResult } from '../core/probe.ts'
-import { DEFAULT_STEP_MODEL, estimateCredits90, estimateStepCredits90, RANKED, RECOMMENDED_COUNT } from '../core/llmcatalog.ts'
+import { DEFAULT_STEP_MODEL, estimateCredits90, estimateStepCredits90, POLISH_RECOMMENDED, RANKED, RECOMMENDED_COUNT } from '../core/llmcatalog.ts'
 import type { ModelItem } from '../core/llmcatalog.ts'
 import { CREDITS_PER_90MIN_SUMMARY, creditsPer90ByModel, listModels, PRESETS, PROVIDERS, verifyKey } from '../core/providers.ts'
 import type { ProviderId } from '../core/providers.ts'
@@ -576,14 +576,35 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     await updateSettings(dataDir, { summaryModel: model === PRESETS['chatkhu'].model ? null : model })
     log.write(`요약 모델: ${model}`)
   },
-  // 설정 > 고급 > 요약 세부설정: 전사문 다듬기 모델. 고를 수 있는 모델은 추천 순서의 모델(90분 크레딧 어림과 함께)
+  // 설정 > 고급 > 요약 세부설정: 전사문 다듬기 모델. llm.models와 같은 형식으로, 다듬기 추천 모델을 앞에 두고 나머지는 요약 추천 순서
   'llm.steps': async () => {
-    const { polishModel } = await loadSettings(dataDir)
-    const ids = [...new Set([...RANKED.map((r) => r.id), ...(polishModel ? [polishModel] : [])])]
+    const { provider, polishModel } = await loadSettings(dataDir)
+    const key = provider ? await readKey(dataDir, provider) : null
+    let items: ModelItem[] = []
+    let failed = false
+    if (provider && key) items = await listModels(provider, key).catch(() => ((failed = true), []))
+    const owners = new Map(items.map((m) => [m.id, m.owner]))
+    const available = new Set(items.map((m) => m.id))
+    const order = [...new Set([...POLISH_RECOMMENDED, ...RANKED.map((r) => r.id)])].filter((id) => failed || !items.length || available.has(id))
+    const ids = [...new Set([...order, ...(polishModel ? [polishModel] : [])])]
     return {
       polishModel,
       defaultModel: DEFAULT_STEP_MODEL,
-      models: ids.map((id) => ({ id, polish90: estimateStepCredits90('polish', id) }))
+      failed,
+      available: [...available],
+      models: ids.map((id) => {
+        const rank = order.indexOf(id)
+        const credits90 = estimateStepCredits90('polish', id)
+        return {
+          id,
+          owner: owners.get(id) ?? null,
+          rank: rank >= 0 ? rank + 1 : null,
+          recommended: POLISH_RECOMMENDED.includes(id),
+          note: null,
+          credits90,
+          source: credits90 != null ? 'estimate' : null
+        }
+      })
     }
   },
   'llm.setSteps': async (p) => {

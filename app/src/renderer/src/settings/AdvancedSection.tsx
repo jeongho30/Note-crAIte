@@ -1,7 +1,8 @@
 import { forwardRef, useEffect, useState } from 'react'
 import { ApiError, call } from '../api'
-import { Button, RadioCardGroup, Select, TextField, useToast } from '../components'
+import { Button, RadioCardGroup, TextField, useToast } from '../components'
 import { cx } from '../components/cx'
+import { ModelPicker, type ModelOption } from './ModelPicker'
 import type { SetupState } from '../../../main/setup'
 import { Block, Section, sizeLabel } from './parts'
 import styles from './Settings.module.css'
@@ -29,8 +30,7 @@ type Props = {
   onStepsSaved: () => void
 }
 
-type StepModel = { id: string; polish90: number | null }
-type Steps = { polishModel: string | null; defaultModel: string; models: StepModel[] }
+type Steps = { polishModel: string | null; defaultModel: string; failed: boolean; available: string[]; models: ModelOption[] }
 
 /** "약 0.4크레딧", 모르면 "크레딧 모름" */
 function creditsLabel(v: number | null): string {
@@ -60,7 +60,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
   }
 
   const polishModel = steps?.polishModel ?? polishPick ?? steps?.defaultModel ?? ''
-  const polish90 = steps?.models.find((m) => m.id === polishModel)?.polish90 ?? null
+  const polish90 = steps?.models.find((m) => m.id === polishModel)?.credits90 ?? null
   const [opts, setOpts] = useState<Options | null>(null)
   const [model, setModel] = useState('')
   const [args, setArgs] = useState('')
@@ -232,22 +232,18 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                     ]}
                   />
                   {steps.polishModel && (
-                    <Select
-                      label="다듬기 모델"
-                      value={steps.polishModel}
+                    <ModelPicker
+                      kind="polish"
+                      models={steps.models}
+                      selected={steps.polishModel}
+                      available={steps.available}
                       disabled={!connected}
-                      onChange={(e) => {
-                        setPolishPick(e.target.value)
-                        void saveSteps({ polishModel: e.target.value })
+                      failed={steps.failed}
+                      onPick={(id) => {
+                        setPolishPick(id)
+                        void saveSteps({ polishModel: id })
                       }}
-                    >
-                      {steps.models.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.id}
-                          {m.id === steps.defaultModel ? ' (기본)' : ''} · {creditsLabel(m.polish90)}
-                        </option>
-                      ))}
-                    </Select>
+                    />
                   )}
                   <p className={styles.hint}>
                     다듬기를 켜면 90분 강의에 위 크레딧이 더 들고 1~2분 더 걸려요. 모델이 하지 않은 말을 넣거나 빼는 경우가 있어, 원래 받아쓰기는 노트의 원문 정리본에 그대로

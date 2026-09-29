@@ -84,6 +84,9 @@ export function creditsFromTokens(id: string, inputTokens: unknown, outputTokens
 /** 요약 뒤 교정 검증과 전사문 다듬기의 기본 모델 (9/30 실험: 싸고, 교정 판정이 정확했다) */
 export const DEFAULT_STEP_MODEL = 'gpt-6-luna'
 
+/** 전사문 다듬기 추천 모델: 90분 약 20크레딧 안팎인 모델 (다듬기 품질을 재 본 것은 gpt-6-luna뿐, 9/30 작성자 결정) */
+export const POLISH_RECOMMENDED = ['gpt-6-luna', 'google/gemma-4-31B-it', 'grok-4-1-fast', 'deepseek-v4-flash']
+
 /**
  * 90분 강의 1회의 토큰 수: 9/30 gpt-6-luna 실측을 90분으로 환산. 다듬기는 전사 전체를 다시 써서 출력이 길다(추론 포함).
  * 다른 모델은 이 토큰 수 × 단가로 어림한다.
