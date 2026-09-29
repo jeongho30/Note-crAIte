@@ -253,11 +253,15 @@ export function createJobRunner(d: Deps) {
     await writeJsonAtomic(join(dirOf(job.id), 'job.json'), job)
   }
 
-  /** 실패·취소한 작업을 끝난 단계 다음부터 다시 한다 (받아쓰기를 다시 하지 않는다). */
+  /**
+   * 실패·취소한 작업을 끝난 단계 다음부터 다시 한다 (받아쓰기를 다시 하지 않는다).
+   * 요약에서 멈춘 작업은 지금 설정의 요약 모델로 다시 한다 (시간 초과 뒤 설정에서 모델을 바꾸고 다시 시도하게).
+   */
   async function retry(id: string): Promise<void> {
     autoRetryAt.delete(id)
     const job = await loadJob(dirOf(id))
     if (job.status !== 'failed' && job.status !== 'cancelled') return
+    if (job.error?.stage === 'summarize' && job.settings.llm) job.settings.llm = (await d.llm()) ?? job.settings.llm
     job.status = 'queued'
     delete job.error
     await save(job)

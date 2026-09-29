@@ -56,7 +56,47 @@ test('summarize는 json_schema를 보내고 usage를 돌려준다', async () => 
   assert.equal(result.usage?.completion_tokens, 5)
 })
 
-for (const [status, code] of [[401, 'auth'], [402, 'credits'], [413, 'too_large'], [429, 'rate_limit'], [503, 'network'], [400, 'llm']] as const) {
+/** 스트리밍 응답: 조각이 바이트 경계에서 잘려 와도 이어 붙인다 */
+function mockStream(lines: string[], splitAt = 7): { calls: { url: string; init: RequestInit }[] } {
+  const calls: { url: string; init: RequestInit }[] = []
+  const bytes = new TextEncoder().encode(lines.map((l) => `data: ${l}\n\n`).join(''))
+  mock.method(globalThis, 'fetch', async (url: string, init: RequestInit) => {
+    calls.push({ url, init })
+    const stream = new ReadableStream({
+      start(c) {
+        for (let i = 0; i < bytes.length; i += splitAt) c.enqueue(bytes.slice(i, i + splitAt))
+        c.close()
+      }
+    })
+    return new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream; charset=utf-8' } })
+  })
+  return { calls }
+}
+
+test('chat은 스트리밍으로 요청하고, 조각을 이어 붙여 본문과 usage를 돌려준다', async () => {
+  const text = JSON.stringify(GOOD)
+  const { calls } = mockStream([
+    JSON.stringify({ choices: [{ delta: { reasoning_content: '생각 중' } }] }),
+    JSON.stringify({ choices: [{ delta: { content: text.slice(0, 20) } }] }),
+    JSON.stringify({ choices: [{ delta: { content: text.slice(20) } }] }),
+    JSON.stringify({ choices: [], usage: { prompt_tokens: 100, completion_tokens: 40 } }),
+    '[DONE]'
+  ])
+  const [content, usage] = await chat('https://x/', null, 'm', [])
+  const body = JSON.parse(calls[0].init.body as string)
+  assert.equal(body.stream, true)
+  assert.deepEqual(body.stream_options, { include_usage: true })
+  assert.equal(content, text)
+  assert.deepEqual(usage, { prompt_tokens: 100, completion_tokens: 40 })
+})
+
+test('스트리밍 중 오류 조각은 llm 오류', async () => {
+  mockStream([JSON.stringify({ error: { message: '모델 오류' } })])
+  await assert.rejects(chat('https://x/', null, 'm', []), (e: EngineError) => e.code === 'llm' && e.message.includes('모델 오류'))
+})
+
+for (const [status, code] of [[401, 'auth'], [402, 'credits'], [413, 'too_large'], [429, 'rate_limit'], [524, 'timeout'], [504, 'timeout'],
+                               [503, 'network'], [400, 'llm']] as const) {
   test(`HTTP ${status}는 ${code} 오류이고 키를 메시지에 넣지 않는다`, async () => {
     mockFetch(status, 'bad')
     await assert.rejects(chat('https://x/', 'secret-key', 'm', []), (e: EngineError) => {

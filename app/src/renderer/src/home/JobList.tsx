@@ -20,6 +20,8 @@ type Props = {
   jobs: JobView[] | null
   /** 키 오류일 때 [키 다시 넣기]: 설정의 요약 서비스로 간다 */
   onConnect: () => void
+  /** 요약 시간 초과일 때 [요약 모델 바꾸기]: 설정으로 간다 */
+  onSettings: () => void
   onHome: () => void
   /** 끝난 작업의 [노트 보기]: 앱 안에서 미리보기 */
   onPreview: (path: string) => void
@@ -39,7 +41,7 @@ function useTick(on: boolean): number {
 }
 
 // 작업 목록: 진행 중(처리 순서) · 멈춘 작업 · 완료(최근 것부터). 줄을 누르면 단계별 진행과 녹음 정보가 펼쳐진다.
-export function JobList({ jobs, onConnect, onHome, onPreview }: Props): React.JSX.Element | null {
+export function JobList({ jobs, onConnect, onSettings, onHome, onPreview }: Props): React.JSX.Element | null {
   const [open, setOpen] = useState<string | null>(null)
   const [doneShown, setDoneShown] = useState(DONE_PAGE)
   const toast = useToast()
@@ -58,7 +60,7 @@ export function JobList({ jobs, onConnect, onHome, onPreview }: Props): React.JS
   const stopped = jobs.filter((j) => j.status === 'failed' || j.status === 'cancelled')
   const done = jobs.filter((j) => j.status === 'done')
   const row = (j: JobView): React.JSX.Element => (
-    <JobRow key={j.id} job={j} now={now} open={open === j.id} onToggle={() => setOpen(open === j.id ? null : j.id)} act={act} onConnect={onConnect} onPreview={onPreview} />
+    <JobRow key={j.id} job={j} now={now} open={open === j.id} onToggle={() => setOpen(open === j.id ? null : j.id)} act={act} onConnect={onConnect} onSettings={onSettings} onPreview={onPreview} />
   )
 
   return (
@@ -122,12 +124,13 @@ type RowProps = {
   onToggle: () => void
   act: (method: string, id: string) => Promise<void>
   onConnect: () => void
+  onSettings: () => void
   onPreview: (path: string) => void
 }
 
 const stop = (e: MouseEvent): void => e.stopPropagation()
 
-function JobRow({ job: j, now, open, onToggle, act, onConnect, onPreview }: RowProps): React.JSX.Element {
+function JobRow({ job: j, now, open, onToggle, act, onConnect, onSettings, onPreview }: RowProps): React.JSX.Element {
   const failed = j.status === 'failed'
   const sttDone = j.stages.find((s) => s.name === 'stt')?.status === 'done'
   const stageLabel = (s: StageName): string => STAGE_LABEL[s]
@@ -164,6 +167,8 @@ function JobRow({ job: j, now, open, onToggle, act, onConnect, onPreview }: RowP
     meta = (j.error?.message.split('\n')[0] ?? '') + (afterStt ? ' 받아쓰기는 끝나 있어서 다시 하지 않아요.' : '')
     const code = j.error?.code
     if (code === 'auth') actions.push(button('키 다시 넣기', onConnect))
+    // 다시 시도하면 지금 설정의 요약 모델로 한다(main/jobs.ts retry)
+    if (code === 'timeout') actions.push(button('요약 모델 바꾸기', onSettings))
     if ((code === 'credits' || code === 'too_large') && sttDone) actions.push(button('전사만 저장', () => void act('jobs.transcriptOnly', j.id)))
     if (code !== 'too_large') actions.push(button('이어서 다시 시도', () => void act('jobs.retry', j.id)))
   } else if (j.status === 'cancelled') {
