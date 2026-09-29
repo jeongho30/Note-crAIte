@@ -132,6 +132,8 @@ export async function bench(dataDir: string, modelList: string[], input: BenchIn
       const md = [`# ${r.title}`, '', `모델: ${model} · ${row.seconds}초 · ${used ?? '?'}크레딧`, '', '## 요약', '', r.summary, '', '## 키워드', '', r.keywords.map((k) => `- ${k}`).join('\n'),
         '', '## 교정 목록 (고른 것)', '', corrections.select(r.corrections, text).map((c) => `- ${c.wrong} → ${c.right}`).join('\n')].join('\n')
       await writeFile(join(outDir, `${model.replace(/[^\w.-]+/g, '_')}.md`), md, 'utf8')
+      // 교정 평가용: 고르기 전 교정 목록까지 담은 응답 전체
+      await writeJsonAtomic(join(outDir, `${model.replace(/[^\w.-]+/g, '_')}.json`), r)
     } catch (e) {
       row = { model, ok: false, error: (e as Error).message.split('\n')[0], seconds: Math.round((Date.now() - started) / 100) / 10, credits: null, credits90: null }
     }
