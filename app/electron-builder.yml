@@ -20,6 +20,9 @@ extraResources:
   # 글꼴 파일은 renderer 번들(asar)에 들어가고, OFL은 라이선스를 함께 배포하게 한다.
   - from: src/renderer/src/assets/fonts/LICENSE-Pretendard.txt
     to: LICENSE-Pretendard.txt
+  # 오픈소스 고지 (scripts/notices.mjs가 만든다). 설정 > 정보에서 연다
+  - from: build/THIRD_PARTY_NOTICES.txt
+    to: THIRD_PARTY_NOTICES.txt
 npmRebuild: false
 win:
   target: nsis

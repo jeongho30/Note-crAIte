@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"test/**/*.test.ts\"",
     "cli": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/cli/cli.ts",
-    "dist:win": "electron-vite build && electron-builder --win"
+    "dist:win": "electron-vite build && node scripts/notices.mjs && electron-builder --win"
   },
   "devDependencies": {
     "@types/markdown-it": "^14.2.0",

@@ -358,7 +358,14 @@ export function Settings({ llm, doneCount, openKey, onLlmChange, onRestartWizard
         open={licenses}
         onClose={() => setLicenses(false)}
         title="오픈소스 라이선스"
-        actions={<Button onClick={() => setLicenses(false)}>닫기</Button>}
+        actions={
+          <>
+            <Button variant="ghost" onClick={() => void call('app.openNotices').catch(fail)}>
+              전체 고지 보기
+            </Button>
+            <Button onClick={() => setLicenses(false)}>닫기</Button>
+          </>
+        }
       >
         <ul className={styles.licenses}>
           {LICENSES.map(([name, license]) => (

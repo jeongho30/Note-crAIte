@@ -403,6 +403,14 @@ async function openFolder(path: string): Promise<void> {
   if (err) throw new EngineError('input', '폴더를 열지 못했어요: ' + err)
 }
 
+/** 오픈소스 고지. 개발 중에는 scripts/notices.mjs로 만든 build/의 파일을 연다 */
+async function openNotices(): Promise<void> {
+  const path = app.isPackaged ? join(process.resourcesPath, 'THIRD_PARTY_NOTICES.txt') : join(app.getAppPath(), 'build', 'THIRD_PARTY_NOTICES.txt')
+  if (!existsSync(path)) throw new EngineError('input', '오픈소스 고지 파일이 없어요.')
+  const err = await shell.openPath(path)
+  if (err) throw new EngineError('input', '파일을 열지 못했어요: ' + err)
+}
+
 // 화면이 부를 수 있는 처리 (허용 목록).
 const handlers: Record<string, (params: unknown) => unknown> = {
   ping: () => ({
@@ -677,6 +685,7 @@ const handlers: Record<string, (params: unknown) => unknown> = {
 
   'app.openData': () => openFolder(dataDir),
   'app.openLogs': () => openFolder(log.dir),
+  'app.openNotices': () => openNotices(),
   'app.openReleases': () => void shell.openExternal(RELEASES_URL),
 
   'notes.recent': async () => recentNotes(await outDir()),

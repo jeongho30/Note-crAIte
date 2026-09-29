@@ -17,9 +17,9 @@ jobs:
     env:
       VULKAN_VERSION: 1.4.357.0
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -28,7 +28,7 @@ jobs:
       # whisper.cpp 빌드는 20분쯤 걸려, 빌드 스크립트(고정 커밋·옵션)가 같으면 전 결과를 쓴다
       - name: whisper.cpp 캐시
         id: whisper-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .cache/whisper/bin
           key: whisper-${{ hashFiles('scripts/build_whisper.ps1') }}-vk${{ env.VULKAN_VERSION }}
@@ -67,9 +67,9 @@ jobs:
 
       - name: 설치 파일 만들기
         working-directory: app
-        run: npx electron-vite build && npx electron-builder --win --publish never
+        run: npm run dist:win -- --publish never
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: NotecrAIte-windows
           path: dist/installer/*.exe

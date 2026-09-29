@@ -364,5 +364,5 @@ S1 뒤에 구조를 다시 봤다. 설치본 Python 엔진의 의존성은 reque
 - MSVC 런타임: `build_whisper.ps1`이 `VCToolsRedistDir`의 `Microsoft.VC*.CRT`·`OpenMP`에서만 복사한다. 재배포가 허용된 폴더이고 디버그 DLL은 아니다.
 - `vulkan-1.dll`은 넣지 않고 GPU 드라이버 것을 쓴다.
 - Python·PyInstaller는 엔진을 TypeScript로 옮기면서 설치본에서 빠졌다. faster-whisper는 벤치 전용(`tools/`)이라 설치본에 없다. 앱에 넣게 되면 PyAV 휠에 든 FFmpeg의 라이선스를 다시 본다.
-- 할 일: 설치본에 `THIRD_PARTY_NOTICES`(whisper.cpp, 앱 번들에 들어간 npm 패키지(React 등), ffmpeg와 소스 주소, 모델 가중치)를 넣고 앱 정보 화면에서 열게 한다(W2). 지금은 `LICENSE-whisper.cpp.txt`와 `LICENSE-Pretendard.txt`(글꼴, OFL 1.1)만 복사된다. Pretendard는 배포본을 고치지 않고 그대로 넣는다(직접 서브셋을 만들면 OFL의 수정본이 되어 "Pretendard" 이름을 쓸 수 없음). Chromium 고지는 electron-builder가 넣는다.
+- (9/30 됨) 설치본의 `THIRD_PARTY_NOTICES.txt`: `app/scripts/notices.mjs`가 `dist:win`에서 만든다. whisper.cpp(MIT 전문), FFmpeg(LGPL, 버전·빌드·소스 안내, 전문은 `bin/LICENSE-ffmpeg.txt`), MSVC 런타임, Pretendard(OFL 전문), 내려받는 모델(Whisper·ggml 변환본·Silero VAD), 화면 번들의 npm 패키지 11개(react·markdown-it과 그 의존성, 전문). 설정 > 정보 > 오픈소스 라이선스 창의 [전체 고지 보기]로 연다. Pretendard는 배포본을 고치지 않고 그대로 넣는다(직접 서브셋을 만들면 OFL의 수정본이 되어 "Pretendard" 이름을 쓸 수 없음). Chromium 고지는 electron-builder가 넣는다.
 - 라이선스 밖: 강의는 교수의 저작물이라 녹음·노트 공유는 사용자 책임으로 첫 실행 안내에 둔다. ChatKHU API 결과물의 이용 조건과 공모전 제출 규정(소스 공개, 라이선스)은 아직 확인하지 않았다.
