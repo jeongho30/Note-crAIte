@@ -80,26 +80,37 @@ powershell -File ../scripts/build_whisper.ps1 -SourceDir <whisper.cpp 체크아�
 - 화면(`src/renderer/src/`): 색·크기는 `styles/tokens.css`의 CSS 변수만 쓰고(라이트 B2, 다크 D4, OS 설정을 따름), 부품은 `components/`(CSS Modules)에 있다. 화면은 이 부품을 조합하고 색·치수를 직접 쓰지 않는다. 본문 글꼴은 내장한 Pretendard 가변 글꼴(`assets/fonts/`, 서브셋 아님). 첫 실행 마법사는 `wizard/`(안내 → 이 PC 확인 → 요약 서비스 → 저장 폴더 → 준비 완료), 그 뒤는 `home/`(사이드바 `Shell`, `Home`: 상황 배너·끌어 놓기·진행 중·최근 노트, `ConfirmDialog`: 시작 전 확인, `JobList`: 작업 목록), `notes/`(노트 목록: 저장 폴더의 노트 전체, 검색·과목·정렬), `preview/`(노트 미리보기: `markdown.ts`가 머리말·callout·키워드를 나누고 나머지는 markdown-it(HTML 끔, cjk-friendly로 조사가 붙은 굵게도 인식)으로 그림. 미리보기는 앞 화면을 숨겨 둔 채 열어 돌아가면 상태가 그대로. [요약 다시 만들기]는 `runner.resummarize`로 요약부터 다시 해 같은 파일에 덮어씀), `settings/`(설정 시안대로: 요약 서비스·받아쓰기·과목 언어·저장 폴더·자동 처리(곧 지원)·저장 공간·고급(받아쓰기 세부설정, 로컬 LLM은 곧 지원)·정보)이다. 홈의 [연결하기]와 작업 목록의 [키 다시 넣기]는 설정의 요약 서비스로 가서 키 입력칸에 초점을 둔다. 작업은 메인의 `main/jobs.ts`(실행기)가 한 번에 하나씩 돌리고 `jobs` 이벤트로 진행을 알린다. 작업이 있으면 `main/tray.ts`의 트레이가 생기고 창을 닫으면 트레이로 숨으며, 앱을 끝낼 때는 받아쓰기를 멈추고 작업을 대기로 되돌린다(`runner.shutdown`). 모델이 없으면 `setup.whenReady()`로 받고 속도를 잰 뒤 시작한다. 끌어 놓은 파일 경로는 preload의 `pathForFile`(`webUtils`)로 얻는다. 최근 노트는 저장 폴더의 .md(`core/recent.ts`), 녹음·필기 짝짓기는 `core/inputs.ts`의 `pairInputs`. 창의 화면 영역은 4:3(마법사 800×600, 홈 1000×750, 모니터에 맞춰 줄임, `main/fit.ts`)이고 크기 조절도 `will-resize`에서 4:3을 지킨다. 배치는 창 크기에 맞게 흐르고 본문은 `--content-max-w`(720px)까지만 넓어진다. 모든 화면은 최소 크기 800×600에서 스크롤 없이 들어가게 만든다.
 - `src/cli/bench.ts`: S3용. RTF와, 기준 전사(기존 파이프라인의 large-v3 결과) 대비 CER을 잰다.
 
-## 지금 상태와 다음 할 일 (9/28 노트북 세션 끝)
+## 지금 상태와 다음 할 일 (9/29 노트북 세션 끝)
 
 계획·화면 설계·색은 claude.ai artifact 하나(**lecture-notes 설계 모음**)에 탭으로 모여 있다: https://claude.ai/artifact/P82LYdRRnFqYerPEo7YDxX (9/29에 따로 있던 9개를 합치고 원본은 지웠다).
 
-- 탭: 구현 계획(`#plan`: 일정, 완료 기준, 결정 기록, 접힌 "구조 전환 검토"), 화면 흐름(`#flow`: 설치부터 미리보기까지 와이어프레임, 오류 문구, 질문 표), 홈 시안(`#home`), 작업 목록 시안(`#jobs`), 설정 시안(`#settings`, 구현됨), 최종 색(`#colors`, 안에 "색 고른 과정" 견본 `#c1`~`#c4`)
+- 탭: 구현 계획(`#plan`: 진행 상황, 일정, 완료 기준, 결정 기록, 접힌 "구조 전환 검토"), 화면 흐름(`#flow`: 설치부터 미리보기까지 와이어프레임, 오류 문구, 질문 표), 홈 시안(`#home`), 작업 목록 시안(`#jobs`), 설정 시안(`#settings`), 최종 색(`#colors`, 안에 "색 고른 과정" 견본 `#c1`~`#c4`)
 - 고치는 법: `Artifact` 도구 `action: "read"`로 받은 HTML의 `const DATA = {...}`(문서별 HTML이 `DATA.docs.<탭 id>`에 JSON 문자열로 들어 있음)에서 해당 탭만 바꿔 같은 `url`로 다시 올린다. 두 시안에 같은 Pretendard 글꼴은 한 번만(`DATA.font`, 문서 안에서는 `__FONT__` 자리표시) 들어 있다.
 
 S3는 9/28에 정했다: 로컬 STT는 whisper.cpp, CPU 기본 `large-v3-turbo-q8_0` + greedy(`-bs 1`, 노트북 90분 강의 약 27분). 앱의 기본 모델·옵션은 이것으로 둔다(`WhisperCpp`의 `beamSize: 1`).
 
-사용자가 정해야 하는 것:
+**된 것**
 
-1. **앱 이름.** W4 전에 정한다(그때까지 lecture-notes, `productName` 한 곳만 바꾸면 되게 둔다). 화면 흐름의 나머지 질문 8개는 9/28에 정했다(`docs/decisions.md`, 화면 흐름 artifact의 "질문 정리").
+- M1(10/4): 작업 저장·재개(`job.ts`), 노트 작성·저장(`note.ts`), CLI `run`/`resume`/`jobs`, 강의 언어(`--lang` → `-l`), 하드웨어 감지·예상 시간(`probe`). 데스크톱 63분 강의: 외장 GPU로 30초에 전사만 담은 노트, 잘못된 키로 요약에서 멈춘 뒤 `resume`하면 STT 없이 6초에 요약(10.17크레딧)까지. 감지는 외장 GPU를 고르고 내장 GPU(CPU보다 느림)는 뺌, 63분 예상 약 1분에 실제 29초. 감지용 샘플은 작성자가 대본(`app/resources/probe-ko.txt`)을 읽은 39초 녹음 `app/resources/probe-ko.wav`(설치본에는 `resources/`에 둘 다). GPU 전사가 CPU와 크게 다르면 깨진 것으로 보고 뺀다(노트북 내장 GPU).
+- W2 화면(9/28~29): 첫 실행 마법사, 홈(끌어 놓기, 시작 전 확인, 진행 중, 최근 노트), 작업 목록(재시도·전사만 저장·취소), 작업 중 트레이와 한 번만 실행, 설정(시안대로, 로컬 LLM만 곧 지원, 색 모드 추가), 노트 미리보기([요약 다시 만들기] 포함), 노트 목록. 잠자기 방지(`powerSaveBlocker`)와 앱 기록(`logs/`)도 됐다. 9/29까지 `main`에 올렸다(`cd78fdf`).
+- ChatKHU 키로 요약 모델 목록과 [요약 다시 만들기]를 작성자가 확인했다(9/29).
 
-M1(10/4) 진행: 작업 저장·재개(`job.ts`), 노트 작성·저장(`note.ts`), CLI `run`/`resume`/`jobs`, 강의 언어(`--lang` → `-l`)는 됐다데스크톱에서 63분 강의로 확인: 외장 GPU로 30초에 전사만 담은 노트, 잘못된 키로 요약 단계에서 멈춘 뒤 `resume`하면 STT 없이 6초에 요약(10.17크레딧)까지 끝나 노트 다섯 요소가 모두 나옴. 하드웨어 감지·예상 시간(`probe`)도 됐다. 데스크톱: 외장 GPU를 고르고 내장 GPU(CPU보다 느림)는 뺌, 63분 강의 예상 약 1분에 실제 29초. 남은 M1: 노트북 CPU로 90분 강의 `run`(사용자). 감지용 샘플은 작성자가 대본(`app/resources/probe-ko.txt`)을 읽은 39초 녹음 `app/resources/probe-ko.wav`(16kHz 모노, 공개)이고, `probe`의 기본 샘플이며 설치본에는 `resources/probe-ko.wav`로 들어간다. 데스크톱에서 CPU 9.4초, 외장 GPU 0.4초, 대본과 거의 같은 전사. TTS 샘플은 쉼이 없어 RTF가 실제 강의보다 높게 나온다(예상 시간이 넉넉함). 실제 작업의 전사 시간으로 예상치를 고치는 것은 W2. 잠자기 방지는 앱에서 Electron `powerSaveBlocker`로 한다(W2). 그 뒤 W2 화면은 화면 흐름 초안을 따른다.
+**다음 할 일** (최소 제출선 10/11 = W2 끝, 마감 10/24)
 
-W2 화면 진행: 마법사, 홈(시작 전 확인), 작업 목록, 설정(9/29, 시안대로. 로컬 LLM만 곧 지원)이 됐다. 노트 미리보기와 노트 목록(9/29)도 됐다. 계획의 W2에서 남은 것: CI 설치 파일(ffmpeg LGPL 빌드 포함), 실제 작업의 전사 시간으로 예상치 보정.
+1. 속도 재기 중 홈 배너. 첫 실행·모델 교체 뒤 1~2분 동안 홈에 표시가 없어 모델을 못 찾은 것처럼 보인다.
+2. 실제 작업의 받아쓰기 시간으로 예상치 보정. TTS가 아닌 사람이 읽은 샘플이어도 쉼이 적어 노트북 예상이 90분에 약 74분으로, S3 실측(약 27분)보다 크게 나온다.
+3. 설치 파일에 ffmpeg LGPL 빌드 넣기. 지금은 개발 PC의 PATH ffmpeg를 써서 설치본만 있는 PC에서는 처리할 수 없다.
+4. CI 설치 파일(GitHub Actions: whisper.cpp 빌드 → 설치 파일). 그 뒤 GPU 없는 노트북에서 설치 파일로 완주하는 주말 1차 테스트.
+5. 계획의 W3: 1차 테스트 수정, ChatKHU STT 선택지, 폴더 감시·트레이 메뉴·자동 실행, OpenAI·Gemini 프리셋. W4: Ollama(설정의 로컬 LLM), Mac 베타.
 
-남은 확인: S1 새 계정 설치와 SmartScreen 문구(내려받은 설치 파일이어야 뜸), 설치 파일에 ffmpeg LGPL 빌드 넣기, 첫 실행 속도 측정에서 결과가 정상인지 보는 검사(노트북 내장 GPU는 전사가 깨졌다).
+사용자가 할 것·정할 것:
 
-PC별 메모: 노트북(Ryzen 7 5700U)에는 모델과 `tools/.venv`가 있고 설치본을 이 계정에 깔아 두었다. 벤치용 녹음·기준 전사는 저장소 밖 `C:\ljh\2026-2\s3-data\`에 있다. 데스크톱은 TypeScript 전환 전 상태라 pull 뒤 `app/`에서 `npm ci`를 하고, 남아 있는 옛 `engine/` 폴더(`.venv`, 캐시)를 지운다. faster-whisper 벤치가 필요하면 `tools/.venv`를 새로 만든다.
+1. **노트북 CPU로 90분 강의를 앱으로 처리**(남은 M1). 예상치 보정의 실측값이 된다.
+2. **S1 새 Windows 계정 설치와 SmartScreen 문구**(내려받은 설치 파일이어야 뜸, CI 설치 파일 뒤).
+3. **앱 이름.** W4 전(그때까지 lecture-notes, `productName` 한 곳만 바꾸면 되게 둔다).
+4. **옵시디언에서 굵게.** `**파싱(Parsing)**을`처럼 닫는 `**` 앞이 문장부호이고 뒤에 조사가 붙으면 표준 규칙상 굵게가 안 된다. 앱 미리보기는 cjk-friendly로 고쳤고, 노트 파일(옵시디언)은 그대로다. 옵시디언에서 안 보이는 것을 확인하면 노트를 쓸 때 그 부분만 `<strong>`으로 바꾸는 안이 있다(프롬프트는 고치지 않기로 함).
+
+PC별 메모: 노트북(Ryzen 7 5700U)에는 모델과 `tools/.venv`가 있고 설치본을 이 계정에 깔아 두었다. 모델은 9/29에 Claude 가상화 폴더에서 실제 `%LOCALAPPDATA%\lecture-notes\models`로 옮겼다(Gotchas의 MSIX 참고). 벤치용 녹음·기준 전사는 저장소 밖 `C:\ljh\2026-2\s3-data\`에 있다. faster-whisper 벤치가 필요하면 `tools/.venv`를 새로 만든다.
 
 ## Gotchas (고치지 말 것)
 
