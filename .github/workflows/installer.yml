@@ -1,0 +1,77 @@
+# Windows 설치 파일: whisper.cpp 빌드(Vulkan) → ffmpeg(LGPL) 받기 → 테스트 → electron-builder.
+# 결과는 워크플로 실행의 아티팩트(NotecrAIte-windows)로 받는다. GitHub Release에 올리지는 않는다.
+name: installer
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      VULKAN_VERSION: 1.4.357.0
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      # whisper.cpp 빌드는 20분쯤 걸려, 빌드 스크립트(고정 커밋·옵션)가 같으면 전 결과를 쓴다
+      - name: whisper.cpp 캐시
+        id: whisper-cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/whisper/bin
+          key: whisper-${{ hashFiles('scripts/build_whisper.ps1') }}-vk${{ env.VULKAN_VERSION }}
+
+      - name: Vulkan SDK 설치
+        if: steps.whisper-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $exe = Join-Path $env:RUNNER_TEMP "vulkan-sdk.exe"
+          curl.exe -sSfL -o $exe "https://sdk.lunarg.com/sdk/download/$env:VULKAN_VERSION/windows/vulkansdk-windows-X64-$env:VULKAN_VERSION.exe"
+          & $exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "Vulkan SDK 설치 실패 (exit $LASTEXITCODE)" }
+          "VULKAN_SDK=C:\VulkanSDK" >> $env:GITHUB_ENV
+
+      - name: whisper.cpp 빌드
+        if: steps.whisper-cache.outputs.cache-hit != 'true'
+        shell: powershell
+        run: ./scripts/build_whisper.ps1
+
+      - name: ffmpeg 받기
+        shell: powershell
+        run: ./scripts/fetch_ffmpeg.ps1
+
+      - name: 의존성
+        working-directory: app
+        run: npm ci
+
+      - name: 타입 검사와 테스트
+        working-directory: app
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:GITHUB_WORKSPACE\.cache\ffmpeg\bin;$env:PATH"
+          npm run typecheck
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          npm test
+
+      - name: 설치 파일 만들기
+        working-directory: app
+        run: npx electron-vite build && npx electron-builder --win --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NotecrAIte-windows
+          path: dist/installer/*.exe
+          if-no-files-found: error
+          retention-days: 30

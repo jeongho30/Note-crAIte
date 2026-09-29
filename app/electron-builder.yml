@@ -4,10 +4,14 @@ directories:
   output: ../dist/installer
 files:
   - out/**
-# whisper(와 이후 ffmpeg) 실행 파일은 asar 밖에 둔다 (실행해야 하므로). 앱에서는 resources/bin/...으로 찾는다.
+# whisper·ffmpeg 실행 파일은 asar 밖에 둔다 (실행해야 하므로). 앱에서는 resources/bin/...으로 찾는다.
+# 빌드 전에 scripts/build_whisper.ps1과 scripts/fetch_ffmpeg.ps1을 돌려 둔다.
 extraResources:
   - from: ../.cache/whisper/bin
     to: bin/whisper
+  # ffmpeg.exe(LGPL 빌드)와 라이선스·소스 안내
+  - from: ../.cache/ffmpeg/bin
+    to: bin
   - from: resources/probe-ko.wav
     to: probe-ko.wav
   # 설정 > 고급의 [샘플로 시험하기]가 전사를 대본과 비교한다
