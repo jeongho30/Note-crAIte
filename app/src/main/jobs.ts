@@ -60,8 +60,8 @@ type Deps = {
   stt: () => Promise<{ model: string; args: string[] | null }>
   /** 작업을 만들 때의 요약 설정과, 실행할 때의 API 키 */
   llm: () => Promise<LlmSettings | null>
-  /** 지금 설정의 교정 검증·전사문 다듬기 모델 (다듬기가 꺼져 있으면 null) */
-  steps: () => Promise<{ verifyModel: string | null; polishModel: string | null }>
+  /** 지금 설정의 전사문 다듬기 모델 (꺼져 있으면 null) */
+  steps: () => Promise<{ polishModel: string | null }>
   apiKey: () => Promise<string | null>
   outDir: () => Promise<string>
   emit: (jobs: JobView[]) => void
@@ -276,9 +276,8 @@ export function createJobRunner(d: Deps) {
     const stage = job.error?.stage
     if ((stage === 'polish' || stage === 'summarize') && job.settings.llm) {
       job.settings.llm = (await d.llm()) ?? job.settings.llm
-      const steps = await d.steps()
-      job.settings.verifyModel = steps.verifyModel
-      if (stage === 'polish') job.settings.polishModel = steps.polishModel // 다듬기에서 멈췄으면 지금 설정대로(끄면 건너뜀)
+      job.settings.verifyModel = null // 앱은 교정 검증을 하지 않는다 (검증을 켜고 만든 이전 작업도)
+      if (stage === 'polish') job.settings.polishModel = (await d.steps()).polishModel // 다듬기에서 멈췄으면 지금 설정대로(끄면 건너뜀)
     }
     job.status = 'queued'
     delete job.error
@@ -294,7 +293,7 @@ export function createJobRunner(d: Deps) {
     const llm = await d.llm()
     if (!llm) throw new EngineError('auth', '요약 서비스를 먼저 연결해 주세요.')
     job.settings.llm = llm
-    job.settings.verifyModel = (await d.steps()).verifyModel
+    job.settings.verifyModel = null
     for (const s of ['summarize', 'note', 'save'] as const) job.stages[s] = { status: 'pending' }
     // 다듬은 전사문은 그대로 두고(다시 다듬지 않음) 요약만 다시 한다
     job.cost = job.cost?.polishCredits != null ? { summaryCredits: null, polishCredits: job.cost.polishCredits } : undefined

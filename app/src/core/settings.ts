@@ -3,7 +3,6 @@ import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { readJson, writeJsonAtomic } from './files.ts'
 import { DEFAULT_MODEL } from './job.ts'
-import { DEFAULT_STEP_MODEL } from './llmcatalog.ts'
 import type { ProviderId } from './providers.ts'
 
 export type Settings = {
@@ -20,8 +19,6 @@ export type Settings = {
   subjectLanguage: Record<string, Language>
   /** 요약 모델. null이면 서비스의 권장 모델 */
   summaryModel: string | null
-  /** 요약 뒤 교정 검증 모델 (설정 > 고급 > 요약 세부설정) */
-  verifyModel: string
   /** 전사문 다듬기 모델. null이면 다듬지 않는다(기본) */
   polishModel: string | null
   /** 받아쓰기 모델 (설정 > 고급 > 받아쓰기 세부설정) */
@@ -38,7 +35,7 @@ export type Language = 'ko' | 'en'
 
 export const DEFAULT_SETTINGS: Settings = {
   wizardStep: 0, wizardDone: false, outDir: null, provider: null, lastSubject: null, subjectLanguage: {},
-  summaryModel: null, verifyModel: DEFAULT_STEP_MODEL, polishModel: null, sttModel: DEFAULT_MODEL, sttArgs: null, theme: 'system'
+  summaryModel: null, polishModel: null, sttModel: DEFAULT_MODEL, sttArgs: null, theme: 'system'
 }
 
 function settingsPath(dataDir: string): string {

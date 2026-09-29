@@ -113,8 +113,8 @@ const runner = createJobRunner({
     return { endpoint: p.endpoint, model: summaryModel ?? p.model, creditsUrl: p.credits }
   },
   steps: async () => {
-    const { verifyModel, polishModel } = await loadSettings(dataDir)
-    return { verifyModel, polishModel }
+    const { polishModel } = await loadSettings(dataDir)
+    return { polishModel }
   },
   apiKey: async () => {
     const { provider } = await loadSettings(dataDir)
@@ -243,16 +243,15 @@ async function selectedModelCredits90(): Promise<number | null> {
 }
 
 /**
- * 90분 강의 한 개의 크레딧: 요약 + 교정 검증(다듬기를 끈 경우) + 전사문 다듬기(켠 경우).
+ * 90분 강의 한 개의 크레딧: 요약 + 전사문 다듬기(켠 경우).
  * polish: false면 다듬기를 빼고 센다 ([요약 다시 만들기]는 다시 다듬지 않는다)
  */
 async function jobCredits90({ polish = true } = {}): Promise<number> {
-  const { verifyModel, polishModel } = await loadSettings(dataDir)
+  const { polishModel } = await loadSettings(dataDir)
   const summary = (await selectedModelCredits90()) ?? CREDITS_PER_90MIN_SUMMARY
   const polished = polish && !!polishModel
-  const verify = polished ? 0 : (estimateStepCredits90('verify', verifyModel) ?? 0)
   const polishCredits = polished ? (estimateStepCredits90('polish', polishModel!) ?? 0) : 0
-  return summary + verify + polishCredits
+  return summary + polishCredits
 }
 
 /** 남은 크레딧으로 90분 강의를 몇 개 더 요약할 수 있는지 */
@@ -577,24 +576,19 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     await updateSettings(dataDir, { summaryModel: model === PRESETS['chatkhu'].model ? null : model })
     log.write(`요약 모델: ${model}`)
   },
-  // 설정 > 고급 > 요약 세부설정: 교정 검증·전사문 다듬기 모델. 고를 수 있는 모델은 추천 순서의 모델(90분 크레딧 어림과 함께)
+  // 설정 > 고급 > 요약 세부설정: 전사문 다듬기 모델. 고를 수 있는 모델은 추천 순서의 모델(90분 크레딧 어림과 함께)
   'llm.steps': async () => {
-    const { verifyModel, polishModel } = await loadSettings(dataDir)
-    const ids = [...new Set([...RANKED.map((r) => r.id), verifyModel, ...(polishModel ? [polishModel] : [])])]
+    const { polishModel } = await loadSettings(dataDir)
+    const ids = [...new Set([...RANKED.map((r) => r.id), ...(polishModel ? [polishModel] : [])])]
     return {
-      verifyModel,
       polishModel,
       defaultModel: DEFAULT_STEP_MODEL,
-      models: ids.map((id) => ({ id, verify90: estimateStepCredits90('verify', id), polish90: estimateStepCredits90('polish', id) }))
+      models: ids.map((id) => ({ id, polish90: estimateStepCredits90('polish', id) }))
     }
   },
   'llm.setSteps': async (p) => {
-    const { verifyModel, polishModel } = (p ?? {}) as { verifyModel?: unknown; polishModel?: unknown }
+    const { polishModel } = (p ?? {}) as { polishModel?: unknown }
     const patch: Partial<Settings> = {}
-    if (verifyModel !== undefined) {
-      if (typeof verifyModel !== 'string' || !verifyModel.trim()) throw new EngineError('input', '교정 검증 모델을 골라 주세요.')
-      patch.verifyModel = verifyModel.trim()
-    }
     if (polishModel !== undefined) {
       if (polishModel !== null && (typeof polishModel !== 'string' || !polishModel.trim())) throw new EngineError('input', '다듬기 모델을 골라 주세요.')
       patch.polishModel = polishModel === null ? null : polishModel.trim()

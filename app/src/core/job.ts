@@ -251,7 +251,7 @@ const RUNNERS: Record<StageName, Runner> = {
       corrections: polished ? [] : corrections.select(result.corrections, text),
       parseFailed: result.parseFailed
     }
-    // 교정 검증: 실제로 바꿀 곳이 있는 교정만 보낸다. 검증 호출이 실패하면 검증 없이 쓴다(요약까지 실패로 두지 않는다)
+    // 교정 검증(앱은 쓰지 않음, CLI --verify-model 실험용): 실제로 바꿀 곳이 있는 교정만 보낸다. 검증 호출이 실패하면 검증 없이 쓴다(요약까지 실패로 두지 않는다)
     const verifyModel = job.settings.verifyModel
     const toVerify = file.corrections.filter((c) => corrections.occurrences(text, c.wrong).length > 0)
     if (verifyModel && toVerify.length) {

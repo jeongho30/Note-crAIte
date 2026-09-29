@@ -29,15 +29,15 @@ type Props = {
   onStepsSaved: () => void
 }
 
-type StepModel = { id: string; verify90: number | null; polish90: number | null }
-type Steps = { verifyModel: string; polishModel: string | null; defaultModel: string; models: StepModel[] }
+type StepModel = { id: string; polish90: number | null }
+type Steps = { polishModel: string | null; defaultModel: string; models: StepModel[] }
 
 /** "약 0.4크레딧", 모르면 "크레딧 모름" */
 function creditsLabel(v: number | null): string {
   return v == null ? '크레딧 모름' : `약 ${v < 10 ? Math.round(v * 10) / 10 : Math.round(v)}크레딧`
 }
 
-// 고급(기본은 접힘): 받아쓰기 세부설정(모델, 실제 명령, 고칠 수 있는 옵션, 샘플로 시험), 요약 세부설정(교정 검증·전사문 다듬기 모델), 로컬 LLM(곧 지원).
+// 고급(기본은 접힘): 받아쓰기 세부설정(모델, 실제 명령, 고칠 수 있는 옵션, 샘플로 시험), 요약 세부설정(전사문 다듬기), 로컬 LLM(곧 지원).
 export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedSection({ setup, connected, onSaved, onStepsSaved }, ref) {
   const toast = useToast()
   const [open, setOpen] = useState(false)
@@ -49,7 +49,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
     if (open) call<Steps>('llm.steps').then(setSteps)
   }, [open])
 
-  async function saveSteps(patch: { verifyModel?: string; polishModel?: string | null }): Promise<void> {
+  async function saveSteps(patch: { polishModel?: string | null }): Promise<void> {
     try {
       await call('llm.setSteps', patch)
       setSteps(await call<Steps>('llm.steps'))
@@ -215,21 +215,6 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                 <p className={styles.hint}>불러오는 중…</p>
               ) : (
                 <>
-                  <Select
-                    label="교정 검증 모델"
-                    value={steps.verifyModel}
-                    disabled={!connected}
-                    onChange={(e) => void saveSteps({ verifyModel: e.target.value })}
-                    hint="요약이 찾은 받아쓰기 교정을 이 모델이 전사의 앞뒤 문맥과 함께 한 번 더 확인해, 틀리거나 표기만 바꾸는 교정을 걸러요. 크레딧은 90분 강의 기준(어림)이에요."
-                  >
-                    {steps.models.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.id}
-                        {m.id === steps.defaultModel ? ' (기본)' : ''} · {creditsLabel(m.verify90)}
-                      </option>
-                    ))}
-                  </Select>
-
                   <RadioCardGroup
                     label="전사문 다듬기"
                     value={steps.polishModel ? 'api' : 'off'}
@@ -266,7 +251,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                   )}
                   <p className={styles.hint}>
                     다듬기를 켜면 90분 강의에 위 크레딧이 더 들고 1~2분 더 걸려요. 모델이 하지 않은 말을 넣거나 빼는 경우가 있어, 원래 받아쓰기는 노트의 원문 정리본에 그대로
-                    남겨요. 다듬은 전사에는 교정 검증을 하지 않아요.
+                    남겨요. 크레딧은 90분 강의 기준(어림)이에요.
                     {!connected && ' 요약 서비스를 연결하면 바꿀 수 있어요.'}
                   </p>
                 </>
