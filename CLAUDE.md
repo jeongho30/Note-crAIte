@@ -90,6 +90,7 @@ powershell -File ../scripts/fetch_ffmpeg.ps1
 - 화면(`src/renderer/src/`): 색·크기는 `styles/tokens.css`의 CSS 변수만 쓰고(라이트 B2, 다크 D4, OS 설정을 따름), 부품은 `components/`(CSS Modules)에 있다. 화면은 이 부품을 조합하고 색·치수를 직접 쓰지 않는다. 본문 글꼴은 내장한 Pretendard 가변 글꼴(`assets/fonts/`, 서브셋 아님). 첫 실행 마법사는 `wizard/`(안내 → 이 PC 확인 → 요약 서비스 → 저장 폴더 → 준비 완료), 그 뒤는 `home/`(사이드바 `Shell`, `Home`: 상황 배너·끌어 놓기·진행 중·최근 노트, `ConfirmDialog`: 시작 전 확인, `JobList`: 작업 목록), `notes/`(노트 목록: 저장 폴더의 노트 전체, 검색·과목·정렬), `preview/`(노트 미리보기: `markdown.ts`가 머리말·callout·키워드를 나누고 나머지는 markdown-it(HTML 끔, cjk-friendly로 조사가 붙은 굵게도 인식)으로 그림. 미리보기는 앞 화면을 숨겨 둔 채 열어 돌아가면 상태가 그대로. [요약 다시 만들기]는 `runner.resummarize`로 요약부터 다시 해 같은 파일에 덮어씀), `settings/`(설정 시안대로: 요약 서비스·받아쓰기·과목 언어·저장 폴더·자동 처리(곧 지원)·저장 공간·고급(받아쓰기 세부설정, 요약 세부설정(전사문 다듬기 끔/요약 서비스/로컬 LLM 곧 지원, 다듬기 모델), 로컬 LLM은 곧 지원)·정보(오픈소스 라이선스 창의 [전체 고지 보기])이다. 홈 배너는 한 번에 하나: 모델 필요·받는 중 → 속도 재는 중 → 멈춘 작업 → 요약 서비스 연결. 홈의 [연결하기]와 작업 목록의 [키 다시 넣기]는 설정의 요약 서비스로 가서 키 입력칸에 초점을 둔다. 작업은 메인의 `main/jobs.ts`(실행기)가 한 번에 하나씩 돌리고 `jobs` 이벤트로 진행을 알린다. 작업이 있으면 `main/tray.ts`의 트레이가 생기고 창을 닫으면 트레이로 숨으며, 앱을 끝낼 때는 받아쓰기를 멈추고 작업을 대기로 되돌린다(`runner.shutdown`). 모델이 없으면 `setup.whenReady()`로 받고 속도를 잰 뒤 시작한다. 끌어 놓은 파일 경로는 preload의 `pathForFile`(`webUtils`)로 얻는다. 최근 노트는 저장 폴더의 .md(`core/recent.ts`), 녹음·필기 짝짓기는 `core/inputs.ts`의 `pairInputs`. 창의 화면 영역은 4:3(마법사 800×600, 홈 1000×750, 모니터에 맞춰 줄임, `main/fit.ts`)이고 크기 조절도 `will-resize`에서 4:3을 지킨다. 배치는 창 크기에 맞게 흐르고 본문은 `--content-max-w`(720px)까지만 넓어진다. 모든 화면은 최소 크기 800×600에서 스크롤 없이 들어가게 만든다.
 - `llmcatalog.ts`: 요약 모델 목록(글 모델만), 단가표(`PRICES`), 90분 요약 크레딧 어림(`estimateCredits90`), 추천 순서(`RANKED`, 2차 비교 기준 12개, 앞 `RECOMMENDED_COUNT`=5개가 추천). 설정의 `settings/ModelPicker.tsx`는 선택 칸에 "추천 모델 목록" 5개를 보이고, [전체 모델 보기] 창에 12개를 추천 순서대로, [직접 모델 입력]으로 그 밖의 이름을 받는다(목록을 불러왔으면 서비스의 글 모델 이름인지 확인). 다듬기 모델도 같은 부품(`kind="polish"`, 핸들러 `llm.steps`)이고 추천은 `POLISH_RECOMMENDED`(luna·gemma·grok·deepseek, 90분 약 20~30크레딧인 모델), 크레딧 어림은 `STEP_TOKENS_PER_90MIN.polish`(luna 90분 약 30). `src/cli/llmbench.ts`(`llm models`, `llm bench`)는 요약 모델 비교용이고 키는 환경변수 `LN_API_KEY`로만 받는다(결과는 강의 내용이라 데이터 폴더의 `bench/`에만). `secrets.ts`는 키를 풀지 못하면(암호화 키가 바뀜) 연결 안 된 것으로 본다.
 - 자동 처리(폴더 감시): `core/watch.ts`(폴더 읽기, 복사가 끝났는지 판단 `settled`, 같은 녹음 `fingerprint`, `처리됨`으로 옮기기, 처리 기록 `<데이터 폴더>/watch.json`)와 `main/watcher.ts`(20초 폴링, `runner.start`로 작업을 넘기고 `onDone`에서 녹음을 옮김, `watch` 이벤트). 설정은 `settings.watch`(enabled·folder·paused), 화면은 `settings/AutoSection.tsx`. 켜져 있으면 창을 닫아도 트레이에 남고, 트레이 메뉴(`main/tray.ts`)에서 멈추기/다시 시작. PC를 켜면 자동 실행은 `--hidden`으로 등록해 창 없이 시작하고 설치본에서만 된다.
+- 작은 공용 모듈: `files.ts`(`writeJsonAtomic`: 임시 파일 뒤 rename, Windows 백신 잠금 때문에 재시도. 작업·설정 JSON은 이것으로 쓴다), `proc.ts`(`runCapture`: 외부 실행 파일을 창 없이 돌림), `vault.ts`(저장 폴더가 쓸 수 있는지·옵시디언 볼트 안인지·기존 과목 폴더), `hardware.ts`(물리 코어·전원 상태는 OS 명령으로 읽음), `errors.ts`(`EngineError`).
 - `src/cli/bench.ts`: S3용. RTF와, 기준 전사(기존 파이프라인의 large-v3 결과) 대비 CER을 잰다.
 
 ## 지금 상태와 다음 할 일 (9/30 데스크톱 세션 끝)
@@ -109,19 +110,11 @@ S3는 9/28에 정했다: 로컬 STT는 whisper.cpp, CPU 기본 `large-v3-turbo-q
 
 **다음 할 일** (최소 제출선 10/11 = W2 끝, 마감 10/24)
 
-0. **요약 모델 비교 결과 반영(9/29~30 반영함).** 9/29에 두 번 쟀다(`docs/decisions.md`의 "요약 모델 비교"와 "2차"). 2차(데스크톱): 앱 받아쓰기 그대로의 강의 4개, 16개 모델, 호출 64회, 요약은 모델을 가린 체크리스트 채점, 교정 814개 판정.
-   - 결과: gpt-6-luna가 90분 약 3크레딧으로 요약 점수가 최상위권이다. gemini-3.8-flash는 교정이 가장 많고 정확하다. 느린 모델(glm-5.3-flash, qwen3.8-max, qwen3.7-plus)은 524로 실패하면서도 크레딧이 빠졌다.
-   - 제안: 권장을 gpt-6-luna로, sonnet-5 대신 sonnet-5-5, solar-pro4·flash-lite는 추천에서 뺌, 느린 모델은 경고, `PRICES`에 claude-sonnet-5-5 추가, 작업의 요약 크레딧을 잔액 차이 대신 토큰 × 단가로 기록, 짧은 한글 교정이 다른 단어 안에서 바뀌지 않게 거르기, 미리보기 수식 표시.
-   - 9/29 반영: 추천 순서(`RANKED`) 12개와 추천 5개, [직접 모델 입력], `PRICES`에 claude-sonnet-5-5, 기본 모델 gpt-6-luna(`PRESETS.chatkhu.model`), 12개의 90분 크레딧을 2차 실측값으로(`KNOWN_CREDITS_PER_90MIN`). 작업의 요약 크레딧은 토큰 × 단가(`job.cost.source`, 단가표 밖 모델만 잔액 차이, 평균에는 source 있는 기록만). 9/30: 요약은 스트리밍(524 방지), 시간 초과는 `timeout` 오류와 [요약 모델 바꾸기], 한글 교정은 앞쪽 단어 경계, 선택 기능 전사문 다듬기(`core/polish.ts`, `polish` 단계, 기본 꺼짐, 설정 > 고급 > 요약 세부설정에서 모델 선택). 교정 검증(`core/verify.ts`)은 앱에서 뺐고 코드와 CLI `--verify-model`만 남겼다. 남은 것: `TOKENS_PER_90MIN`(목록 밖 모델의 어림, 측정 전 값).
-   - 요약문·채점표는 강의 내용이라 저장소 밖에 있다. 1차는 노트북에, 2차는 데스크톱 데이터 폴더의 `bench/`에 있다.
-   - 받아쓰기 누락(9/30 해결): VAD로 이어 붙인 음성에서 whisper가 몇 분씩 건너뛰던 것을, 의심 구간이 있는 조각만 VAD 없이 다시 받아써 바꿔 끼우도록 했다(`docs/decisions.md`의 "받아쓰기 누락 조사").
+0. (9/29~30 반영함) 요약 모델 비교 결과 반영. 결과·제안·반영 내역은 `docs/decisions.md`의 "요약 모델 비교"·"2차"와 맨 아래 "CLAUDE.md에서 옮긴 기록". 남은 것: `TOKENS_PER_90MIN`(목록 밖 모델의 어림, 측정 전 값). 요약문·채점표는 강의 내용이라 저장소 밖(1차는 노트북, 2차는 데스크톱 데이터 폴더의 `bench/`).
 
-1. (9/30 됨) 속도 재기 중 홈 배너, 설치본 오픈소스 고지(`app/scripts/notices.mjs` → `THIRD_PARTY_NOTICES.txt`, 설정 > 정보 > 오픈소스 라이선스의 [전체 고지 보기]), CI 액션 버전(Node 24 대응).
-2. 실제 작업의 받아쓰기 시간으로 예상치 보정. TTS가 아닌 사람이 읽은 샘플이어도 쉼이 적어 노트북 예상이 90분에 약 74분으로, S3 실측(약 27분)보다 크게 나온다.
-3. (9/30 됨) 설치 파일에 ffmpeg LGPL 빌드, CI 설치 파일. 남은 것: GPU 없는 노트북에서 CI 설치 파일로 완주하는 주말 1차 테스트.
-4. (9/30 됨) 전사 품질 실험(`docs/decisions.md`의 "전사 품질 실험"): 전처리·whisper 옵션·프롬프트는 효과가 없거나 나빠 지금 설정 유지, small + 다듬기는 turbo를 대신 못 함. 다듬기 크레딧 어림은 실측에 맞춰 90분 약 30(luna)으로 올렸다.
-5. (9/30 됨) 자동 처리: 폴더 감시·처리됨으로 옮기기·트레이 메뉴·PC를 켜면 자동 실행(`docs/decisions.md` 9/30). 개발 실행으로 감시·옮기기·멈추기·트레이로 숨기·숨겨서 시작을 확인했고, 자동 실행 등록은 설치본에서 확인해야 한다.
-6. 계획의 W3: 1차 테스트 수정, ChatKHU STT 선택지, OpenAI·Gemini 프리셋. W4: Ollama(설정의 로컬 LLM), Mac 베타.
+1. 실제 작업의 받아쓰기 시간으로 예상치 보정. TTS가 아닌 사람이 읽은 샘플이어도 쉼이 적어 노트북 예상이 90분에 약 74분으로, S3 실측(약 27분)보다 크게 나온다.
+2. (9/30 됨, 남은 것) GPU 없는 노트북에서 CI 설치 파일로 완주하는 주말 1차 테스트. 자동 처리의 PC를 켜면 자동 실행 등록은 설치본에서 확인해야 한다. 나머지 9/30 된 것은 `docs/decisions.md`로 옮겼다.
+3. 계획의 W3: 1차 테스트 수정, ChatKHU STT 선택지, OpenAI·Gemini 프리셋. W4: Ollama(설정의 로컬 LLM), Mac 베타.
 
 사용자가 할 것·정할 것:
 
@@ -130,6 +123,9 @@ S3는 9/28에 정했다: 로컬 STT는 whisper.cpp, CPU 기본 `large-v3-turbo-q
 3. **옵시디언에서 굵게.** `**파싱(Parsing)**을`처럼 닫는 `**` 앞이 문장부호이고 뒤에 조사가 붙으면 표준 규칙상 굵게가 안 된다. 앱 미리보기는 cjk-friendly로 고쳤고, 노트 파일(옵시디언)은 그대로다. 옵시디언에서 안 보이는 것을 확인하면 노트를 쓸 때 그 부분만 `<strong>`으로 바꾸는 안이 있다(프롬프트는 고치지 않기로 함).
 
 PC별 메모: 노트북(Ryzen 7 5700U)에는 모델과 `tools/.venv`가 있고 설치본을 이 계정에 깔아 두었다. 모델은 9/29에 Claude 가상화 폴더에서 실제 `%LOCALAPPDATA%\lecture-notes\models`로 옮겼다(Gotchas의 MSIX 참고). 벤치용 녹음·기준 전사는 저장소 밖 `C:\ljh\2026-2\s3-data\`에 있다. faster-whisper 벤치가 필요하면 `tools/.venv`를 새로 만든다.
+
+- Claude 데스크톱 앱(MSIX)에서 실행한 명령·앱이 `%LOCALAPPDATA%`에 새로 쓴 파일은 `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Local\lecture-notes\`로 가상화된다. Claude 안의 프로세스는 두 곳을 합쳐 보지만, 사용자가 자기 터미널에서 띄운 앱은 실제 폴더만 본다(9/29 노트북: Claude 세션에서 받은 모델을 사용자 `npm run dev`가 못 찾음). 사용자 앱이 쓸 모델·데이터는 사용자 터미널에서 받거나 옮기게 하고, Claude 쪽에서는 실제 폴더에 쓸 수 없다. 앱이 켜질 때 로그에 모델 폴더와 파일 크기를 남긴다(`받아쓰기 모델: ...`).
+- 데스크톱의 `py -3.13`은 Microsoft Store판이라 `%LOCALAPPDATA%` 쓰기가 `...\Packages\PythonSoftwareFoundation...\LocalCache\`로 가상화된다. 벤치용 venv를 그 Python으로 만들지 않는다.
 
 ChatKHU 크레딧: 9/30 실험으로 월 할당(4000)을 다 썼다(4001.83 사용). 10/1에 갱신된다. 다듬기처럼 조각을 동시에 보내는 호출은 잔액이 떨어져도 진행 중인 호출이 끝까지 과금되어 할당을 조금 넘을 수 있다.
 
@@ -144,8 +140,6 @@ ChatKHU 크레딧: 9/30 실험으로 월 할당(4000)을 다 썼다(4001.83 사�
 - `-mc 0`이면 `--prompt`(초기 프롬프트)도 쓰이지 않는다. 쓰려면 `--carry-initial-prompt`와 `-mc`를 올려야 하는데 루프가 돌아오고, 9/30 실험에서 품질도 나빠졌다. 한글 인자는 명령줄로 넘기면 깨지므로 응답 파일(`whisper-cli @파일`, 한 줄에 인자 하나, UTF-8)로 넘겨야 한다.
 - VAD를 켜면 조각 시작 위치에 따라 whisper가 몇 분씩 건너뛰고(조각 하나가 2초 만에 끝남), 끄면 잡음을 "고춧가루" 같은 말로 받아쓴다. 그래서 VAD는 켜 두고 의심 구간만 VAD 없이 다시 받아쓴다(`stt/base.ts`). VAD를 통째로 끄지 않는다.
 - `app/package.json`에 `"type": "module"`을 넣지 않는다. electron-vite가 메인·preload를 ESM으로 만들게 되는데, sandbox preload는 CommonJS여야 한다. 그래서 Node로 `.ts`를 직접 돌릴 때는 `--disable-warning=MODULE_TYPELESS_PACKAGE_JSON`을 붙인다(npm 스크립트에 들어 있음).
-- Claude 데스크톱 앱(MSIX)에서 실행한 명령·앱이 `%LOCALAPPDATA%`에 새로 쓴 파일은 `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Local\lecture-notes\`로 가상화된다. Claude 안의 프로세스는 두 곳을 합쳐 보지만, 사용자가 자기 터미널에서 띄운 앱은 실제 폴더만 본다(9/29 노트북: Claude 세션에서 받은 모델을 사용자 `npm run dev`가 못 찾음). 사용자 앱이 쓸 모델·데이터는 사용자 터미널에서 받거나 옮기게 하고, Claude 쪽에서는 실제 폴더에 쓸 수 없다. 앱이 켜질 때 로그에 모델 폴더와 파일 크기를 남긴다(`받아쓰기 모델: ...`).
-- 데스크톱의 `py -3.13`은 Microsoft Store판이라 `%LOCALAPPDATA%` 쓰기가 `...\Packages\PythonSoftwareFoundation...\LocalCache\`로 가상화된다. 벤치용 venv를 그 Python으로 만들지 않는다.
 - `scripts/*.ps1`은 Windows PowerShell 5.1이 한글을 읽도록 UTF-8 BOM으로 저장한다. 네이티브 명령은 `Invoke-Checked`로 종료 코드만 본다.
 - 노트북 내장 GPU(Radeon, Vulkan)로 whisper를 돌리면 느리고 전사가 깨진다. GPU 사용 여부는 속도와 결과 정상 여부를 함께 실측해 정한다.
 - 사용자 파일 이름에는 점이 흔하다(예: `9.14 Lexical Analysis`). 파생 파일 이름을 확장자 바꾸기로 만들지 말고 고정 이름이나 문자열 연결을 쓴다.

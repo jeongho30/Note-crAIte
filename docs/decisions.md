@@ -370,3 +370,16 @@ S1 뒤에 구조를 다시 봤다. 설치본 Python 엔진의 의존성은 reque
 - Python·PyInstaller는 엔진을 TypeScript로 옮기면서 설치본에서 빠졌다. faster-whisper는 벤치 전용(`tools/`)이라 설치본에 없다. 앱에 넣게 되면 PyAV 휠에 든 FFmpeg의 라이선스를 다시 본다.
 - (9/30 됨) 설치본의 `THIRD_PARTY_NOTICES.txt`: `app/scripts/notices.mjs`가 `dist:win`에서 만든다. whisper.cpp(MIT 전문), FFmpeg(LGPL, 버전·빌드·소스 안내, 전문은 `bin/LICENSE-ffmpeg.txt`), MSVC 런타임, Pretendard(OFL 전문), 내려받는 모델(Whisper·ggml 변환본·Silero VAD), 화면 번들의 npm 패키지 11개(react·markdown-it과 그 의존성, 전문). 설정 > 정보 > 오픈소스 라이선스 창의 [전체 고지 보기]로 연다. Pretendard는 배포본을 고치지 않고 그대로 넣는다(직접 서브셋을 만들면 OFL의 수정본이 되어 "Pretendard" 이름을 쓸 수 없음). Chromium 고지는 electron-builder가 넣는다.
 - 라이선스 밖: 강의는 교수의 저작물이라 녹음·노트 공유는 사용자 책임으로 첫 실행 안내에 둔다. ChatKHU API 결과물의 이용 조건과 공모전 제출 규정(소스 공개, 라이선스)은 아직 확인하지 않았다.
+
+## CLAUDE.md에서 옮긴 기록 (9/30)
+
+0. **요약 모델 비교 결과 반영(9/29~30 반영함).** 9/29에 두 번 쟀다(`docs/decisions.md`의 "요약 모델 비교"와 "2차"). 2차(데스크톱): 앱 받아쓰기 그대로의 강의 4개, 16개 모델, 호출 64회, 요약은 모델을 가린 체크리스트 채점, 교정 814개 판정.
+   - 결과: gpt-6-luna가 90분 약 3크레딧으로 요약 점수가 최상위권이다. gemini-3.8-flash는 교정이 가장 많고 정확하다. 느린 모델(glm-5.3-flash, qwen3.8-max, qwen3.7-plus)은 524로 실패하면서도 크레딧이 빠졌다.
+   - 제안: 권장을 gpt-6-luna로, sonnet-5 대신 sonnet-5-5, solar-pro4·flash-lite는 추천에서 뺌, 느린 모델은 경고, `PRICES`에 claude-sonnet-5-5 추가, 작업의 요약 크레딧을 잔액 차이 대신 토큰 × 단가로 기록, 짧은 한글 교정이 다른 단어 안에서 바뀌지 않게 거르기, 미리보기 수식 표시.
+   - 9/29 반영: 추천 순서(`RANKED`) 12개와 추천 5개, [직접 모델 입력], `PRICES`에 claude-sonnet-5-5, 기본 모델 gpt-6-luna(`PRESETS.chatkhu.model`), 12개의 90분 크레딧을 2차 실측값으로(`KNOWN_CREDITS_PER_90MIN`). 작업의 요약 크레딧은 토큰 × 단가(`job.cost.source`, 단가표 밖 모델만 잔액 차이, 평균에는 source 있는 기록만). 9/30: 요약은 스트리밍(524 방지), 시간 초과는 `timeout` 오류와 [요약 모델 바꾸기], 한글 교정은 앞쪽 단어 경계, 선택 기능 전사문 다듬기(`core/polish.ts`, `polish` 단계, 기본 꺼짐, 설정 > 고급 > 요약 세부설정에서 모델 선택). 교정 검증(`core/verify.ts`)은 앱에서 뺐고 코드와 CLI `--verify-model`만 남겼다. 남은 것: `TOKENS_PER_90MIN`(목록 밖 모델의 어림, 측정 전 값).
+   - 요약문·채점표는 강의 내용이라 저장소 밖에 있다. 1차는 노트북에, 2차는 데스크톱 데이터 폴더의 `bench/`에 있다.
+   - 받아쓰기 누락(9/30 해결): VAD로 이어 붙인 음성에서 whisper가 몇 분씩 건너뛰던 것을, 의심 구간이 있는 조각만 VAD 없이 다시 받아써 바꿔 끼우도록 했다(`docs/decisions.md`의 "받아쓰기 누락 조사").
+
+1. (9/30 됨) 속도 재기 중 홈 배너, 설치본 오픈소스 고지(`app/scripts/notices.mjs` → `THIRD_PARTY_NOTICES.txt`, 설정 > 정보 > 오픈소스 라이선스의 [전체 고지 보기]), CI 액션 버전(Node 24 대응).
+4. (9/30 됨) 전사 품질 실험(`docs/decisions.md`의 "전사 품질 실험"): 전처리·whisper 옵션·프롬프트는 효과가 없거나 나빠 지금 설정 유지, small + 다듬기는 turbo를 대신 못 함. 다듬기 크레딧 어림은 실측에 맞춰 90분 약 30(luna)으로 올렸다.
+5. (9/30 됨) 자동 처리: 폴더 감시·처리됨으로 옮기기·트레이 메뉴·PC를 켜면 자동 실행(`docs/decisions.md` 9/30). 개발 실행으로 감시·옮기기·멈추기·트레이로 숨기·숨겨서 시작을 확인했고, 자동 실행 등록은 설치본에서 확인해야 한다.
