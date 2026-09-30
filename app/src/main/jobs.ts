@@ -28,8 +28,8 @@ export type JobView = {
   /** 받아쓰기가 끝날 때까지 남은 시간(초). 모르면 null */
   etaS: number | null
   durationS: number | null
-  /** queued일 때 무엇을 기다리는지 */
-  waiting: 'model' | 'turn' | null
+  /** queued일 때 무엇을 기다리는지 (recording: 앱에서 녹음하는 동안 받아쓰기를 멈춤) */
+  waiting: 'model' | 'turn' | 'recording' | null
   error: Job['error'] | null
   notePath: string | null
   // ── 작업 목록에서 펼쳐 보는 것 ──
@@ -67,6 +67,13 @@ type Deps = {
   emit: (jobs: JobView[]) => void
   /** 작업이 끝났을 때 (자동 처리로 들어온 녹음을 "처리됨"으로 옮기는 데 쓴다) */
   onDone?: (job: Job) => Promise<void>
+  /** 받아쓰기를 멈춰 둘 때 (앱에서 녹음하는 중). 받아쓰기가 끝난 작업의 요약 등은 계속한다 */
+  holdStt?: () => boolean
+}
+
+/** 오디오 준비·받아쓰기가 남은 작업 (CPU를 많이 쓴다) */
+function needsStt(job: Job): boolean {
+  return job.stages.stt.status !== 'done' && job.stages.stt.status !== 'skipped'
 }
 
 const EMIT_INTERVAL_MS = 500
@@ -81,6 +88,8 @@ export function createJobRunner(d: Deps) {
   let loopDone: Promise<void> = Promise.resolve()
   let controller: AbortController | null = null
   let stopping = false
+  let yielding = false // 녹음을 시작해 받아쓰기를 멈춘 것 (실패가 아니라 대기로 되돌린다)
+  const held = (job: Job): boolean => !!d.holdStt?.() && needsStt(job)
   const autoRetryAt = new Map<string, number>() // 저절로 다시 시도할 작업 → 시각
   const autoRetried = new Set<string>() // 이미 한 번 저절로 다시 시도한 작업
 
@@ -133,7 +142,10 @@ export function createJobRunner(d: Deps) {
       frac: live?.frac ?? 0,
       etaS,
       durationS,
-      waiting: job.status === 'queued' || (job.status === 'running' && !live) ? (firstQueued && !d.sttReady() ? 'model' : 'turn') : null,
+      waiting:
+        job.status === 'queued' || (job.status === 'running' && !live)
+          ? held(job) ? 'recording' : firstQueued && !d.sttReady() ? 'model' : 'turn'
+          : null,
       error: job.error ?? null,
       notePath: job.output?.notePath ?? null,
       createdAt: job.createdAt,
@@ -161,8 +173,9 @@ export function createJobRunner(d: Deps) {
   }
 
   // 앞에서부터(오래된 것부터) 끝나지 않은 작업. 실행 중이던 작업(앱이 꺼져 멈춘 것)도 다시 돌린다.
+  // 녹음 중에는 받아쓰기가 남은 작업을 건너뛴다 (녹음이 끝나면 kick으로 다시 돈다)
   async function nextPending(): Promise<Job | null> {
-    return (await listJobs(d.dataDir)).find((j) => j.status === 'queued' || j.status === 'running') ?? null
+    return (await listJobs(d.dataDir)).find((j) => (j.status === 'queued' || j.status === 'running') && !held(j)) ?? null
   }
 
   function loop(): Promise<void> {
@@ -219,9 +232,11 @@ export function createJobRunner(d: Deps) {
           await d.onDone?.(finished).catch(() => {}) // 옮기기 실패는 작업 실패가 아니다
         } catch {
           // 실패 이유는 job.json에 남는다 (화면이 error로 보여 준다)
-          if (stopping) await requeue(jobDir) // 앱을 끄느라 멈춘 것은 실패가 아니다: 다음에 켜면 이어서 한다
+          // 앱을 끄느라, 녹음을 시작해서 멈춘 것은 실패가 아니다: 다음에 켜거나 녹음이 끝나면 이어서 한다
+          if (stopping || yielding) await requeue(jobDir)
           else await scheduleAutoRetry(job.id)
         }
+        yielding = false
         controller = null
         current = null
       }
@@ -371,6 +386,14 @@ export function createJobRunner(d: Deps) {
     await Promise.race([loopDone, new Promise((r) => setTimeout(r, waitMs))])
   }
 
+  /** 녹음을 시작할 때: 오디오 준비·받아쓰기 중인 작업을 멈추고 대기로 되돌린다 (끝난 조각은 남음). 멈췄으면 true */
+  function holdNow(): boolean {
+    if (!current || (current.stage !== 'audio' && current.stage !== 'stt')) return false
+    yielding = true
+    controller?.abort()
+    return true
+  }
+
   /** 끝난 작업의 노트 경로 (화면이 임의의 경로를 열지 못하게 작업 id로만 연다) */
   async function notePath(id: string): Promise<string | null> {
     return (await loadJob(dirOf(id))).output?.notePath ?? null
@@ -419,7 +442,10 @@ export function createJobRunner(d: Deps) {
     noteEdited,
     noteDeleted,
     shutdown,
+    holdNow,
     kick: () => void loop(),
+    /** 목록을 다시 보낸다 (녹음을 시작·끝내 대기 이유가 바뀌었을 때) */
+    refresh: () => void emitNow(),
     /** 대기 중이거나 도는 작업 수 */
     activeCount: () => last.filter((j) => j.status === 'running' || j.status === 'queued').length,
     busy: () => running,

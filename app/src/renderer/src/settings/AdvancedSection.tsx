@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useState } from 'react'
 import { ApiError, call } from '../api'
-import { Button, RadioCardGroup, TextField, useToast } from '../components'
+import { Button, Checkbox, RadioCardGroup, TextField, useToast } from '../components'
+import type { Settings } from '../../../core/settings'
 import { cx } from '../components/cx'
 import { ModelPicker, type ModelOption } from './ModelPicker'
 import type { SetupState } from '../../../main/setup'
@@ -45,9 +46,23 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
   // 다듬기를 켤 때 고를 모델 (끈 동안에도 마지막으로 고른 모델을 기억)
   const [polishPick, setPolishPick] = useState<string | null>(null)
 
+  const [sttWhileRecording, setSttWhileRecording] = useState<boolean | null>(null)
+
   useEffect(() => {
-    if (open) call<Steps>('llm.steps').then(setSteps)
+    if (!open) return
+    call<Steps>('llm.steps').then(setSteps)
+    call<Settings>('settings.get').then((s) => setSttWhileRecording(s.sttWhileRecording))
   }, [open])
+
+  async function saveSttWhileRecording(on: boolean): Promise<void> {
+    setSttWhileRecording(on)
+    try {
+      setSttWhileRecording(await call<boolean>('settings.setSttWhileRecording', on))
+    } catch (e) {
+      setSttWhileRecording(!on)
+      toast(e instanceof ApiError ? e.message : '저장하지 못했어요.', 'danger')
+    }
+  }
 
   async function saveSteps(patch: { polishModel?: string | null }): Promise<void> {
     try {
@@ -116,7 +131,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
         <button className={styles.advHead} aria-expanded={open} onClick={() => setOpen(!open)}>
           <span className={styles.chev} aria-hidden="true" />
           <b>고급</b>
-          <span>받아쓰기 세부설정 · 요약 세부설정 · 로컬 LLM</span>
+          <span>받아쓰기 세부설정 · 요약 세부설정 · 녹음 · 로컬 LLM</span>
         </button>
         {open && (
           <div className={styles.advBody}>
@@ -252,6 +267,16 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                   </p>
                 </>
               )}
+            </Block>
+
+            <Block title="녹음" foldable>
+              <Checkbox
+                checked={!!sttWhileRecording}
+                disabled={sttWhileRecording === null}
+                onChange={(on) => void saveSttWhileRecording(on)}
+                label="녹음하는 동안에도 받아쓰기"
+                hint="끄면(기본) 앱에서 녹음하는 동안 앞서 넣은 녹음의 받아쓰기를 멈추고, 녹음이 끝나면 멈춘 곳부터 이어서 해요. 켜면 둘이 함께 돌아 PC가 느려질 수 있어요."
+              />
             </Block>
 
             <Block title="로컬 LLM (Ollama)" foldable>

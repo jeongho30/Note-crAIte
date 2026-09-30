@@ -55,6 +55,16 @@
   line-height: var(--line-height-tight);
 }
 
+.buttons {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.dialogText {
+  margin: 0;
+  color: var(--color-text-2);
+}
+
 .types,
 .hint,
 .meta {

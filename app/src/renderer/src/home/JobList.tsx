@@ -12,6 +12,7 @@ import {
   localDateTime,
   noteTitle,
   STAGE_LABEL,
+  waitingText,
   type JobView
 } from './shared'
 import styles from './JobList.module.css'
@@ -154,7 +155,7 @@ function JobRow({ job: j, now, open, onToggle, act, onConnect, onSettings, onPre
     actions.push(button('취소', () => void act('jobs.cancel', j.id), 'ghost'))
   } else if (isActive(j)) {
     status = <StatusPill tone="waiting">대기</StatusPill>
-    meta = j.waiting === 'model' ? '받아쓰기 모델을 다 받으면 시작해요' : '앞의 작업이 끝나면 시작해요'
+    meta = waitingText(j.waiting)
     actions.push(button('취소', () => void act('jobs.cancel', j.id), 'ghost'))
   } else if (waitingRetry) {
     const left = Math.max(0, Math.ceil((j.autoRetryAt! - now) / 1000))

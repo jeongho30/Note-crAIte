@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { ApiError, call } from '../api'
-import { Banner, Button, Card, ProgressBar, StatusPill, useToast } from '../components'
+import { Banner, Button, Card, Dialog, ProgressBar, StatusPill, useToast } from '../components'
 import { cx } from '../components/cx'
 import type { RecentNote } from '../../../core/recent'
 import { mb, percent, useSetup, type LlmStatus } from '../wizard/shared'
 import { ConfirmDialog } from './ConfirmDialog'
-import { aboutMinutes, isActive, lengthMinutes, STAGE_LABEL, type JobView } from './shared'
+import { onRecordingFinished, useRecorder } from './recording'
+import { RecordDialog, RecordingCard } from './Recorder'
+import { aboutMinutes, isActive, lengthMinutes, STAGE_LABEL, waitingText, type JobView } from './shared'
 import styles from './Home.module.css'
 
 type Props = {
@@ -30,11 +32,36 @@ export function Home({ jobs, llm, onConnect, onShowJobs, onPreview, refresh }: P
   const [pending, setPending] = useState<string[] | null>(null)
   const [recent, setRecent] = useState<RecentNote[] | null>(null)
   const doneCount = jobs?.filter((j) => j.status === 'done').length ?? 0
+  const rec = useRecorder()
+  const [recordOpen, setRecordOpen] = useState(false)
+  const [unprocessed, setUnprocessed] = useState<{ path: string; name: string }[]>([])
+  const [confirmTrash, setConfirmTrash] = useState(false)
 
   // 노트가 새로 저장되면 최근 노트를 다시 읽는다
   useEffect(() => {
     call<RecentNote[]>('notes.recent').then(setRecent, () => setRecent([]))
   }, [doneCount, refresh])
+
+  // 녹음을 끝내면 그 녹음으로 시작 전 확인을 연다
+  useEffect(() => onRecordingFinished((path) => setPending([path])), [])
+
+  // 아직 노트로 만들지 않은 앱 녹음: 시작 전 확인을 닫거나, 녹음이 끝나거나, 작업이 늘면 다시 본다
+  const jobCount = jobs?.length ?? 0
+  useEffect(() => {
+    if (pending || rec.status !== 'idle') return
+    call<{ path: string; name: string }[]>('rec.unprocessed').then(setUnprocessed, () => setUnprocessed([]))
+  }, [pending, rec.status, jobCount])
+
+  async function trashUnprocessed(): Promise<void> {
+    setConfirmTrash(false)
+    try {
+      const n = await call<number>('rec.trash', unprocessed.map((r) => r.path))
+      toast(`녹음 ${n}개를 휴지통으로 옮겼어요.`, 'success')
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : '옮기지 못했어요.', 'danger')
+    }
+    setUnprocessed(await call<{ path: string; name: string }[]>('rec.unprocessed').catch(() => []))
+  }
 
   function onDragEnter(e: DragEvent): void {
     if (!e.dataTransfer.types.includes('Files')) return
@@ -70,6 +97,8 @@ export function Home({ jobs, llm, onConnect, onShowJobs, onPreview, refresh }: P
   // 진행 중인 것만 처리 순서대로(도는 것이 맨 위). 목록은 최근 것부터 온다. 멈춘 작업은 작업 목록에서 다룬다.
   const shown = (jobs ?? []).filter(isActive).reverse()
   const stopped = (jobs ?? []).filter((j) => j.status === 'failed' || j.status === 'cancelled').length
+  // 녹음을 시작하면 멈출 받아쓰기(오디오 준비 포함)가 돌고 있는가
+  const transcribing = (jobs ?? []).some((j) => j.status === 'running' && (j.stage === 'audio' || j.stage === 'stt'))
 
   return (
     <div
@@ -79,7 +108,9 @@ export function Home({ jobs, llm, onConnect, onShowJobs, onPreview, refresh }: P
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
-      {/* 상황 배너: 한 번에 하나. 모델 → 속도 재기 → 멈춘 작업 → 요약 서비스 순 */}
+      <RecordingCard />
+
+      {/* 상황 배너: 한 번에 하나. 모델 → 속도 재기 → 처리하지 않은 녹음 → 멈춘 작업 → 요약 서비스 순 */}
       {model && (model.state === 'missing' || model.state === 'error') ? (
         <Banner
           tone="warning"
@@ -102,6 +133,23 @@ export function Home({ jobs, llm, onConnect, onShowJobs, onPreview, refresh }: P
       ) : model?.state === 'ready' && setup?.probe.state === 'running' ? (
         <Banner tone="info" title="이 PC의 받아쓰기 속도를 재는 중">
           1~2분 걸려요. 녹음을 먼저 넣어도 돼요. 다 재면 시작해요.
+        </Banner>
+      ) : unprocessed.length > 0 ? (
+        <Banner
+          tone="warning"
+          title={unprocessed.length === 1 ? `노트로 만들지 않은 녹음 · ${unprocessed[0].name}` : `노트로 만들지 않은 녹음 ${unprocessed.length}개`}
+          action={
+            <>
+              <Button size="sm" variant="ghost" onClick={() => setConfirmTrash(true)}>
+                지우기
+              </Button>
+              <Button size="sm" variant="primary" onClick={() => setPending(unprocessed.map((r) => r.path))}>
+                노트 만들기
+              </Button>
+            </>
+          }
+        >
+          앱에서 한 녹음이 이 PC에 남아 있어요. 앱이 꺼져 끊긴 녹음도 끊기기 전까지 저장돼 있어요.
         </Banner>
       ) : stopped > 0 ? (
         <Banner
@@ -144,7 +192,12 @@ export function Home({ jobs, llm, onConnect, onShowJobs, onPreview, refresh }: P
           <>
             <h2 className={styles.dropTitle}>녹음 파일을 여기에 끌어 놓으세요</h2>
             <p className={styles.types}>m4a · mp3 · wav · mp4 · webm 등</p>
-            <Button onClick={() => void pick()}>파일 고르기</Button>
+            <div className={styles.buttons}>
+              <Button onClick={() => void pick()}>파일 고르기</Button>
+              <Button disabled={rec.status !== 'idle'} onClick={() => setRecordOpen(true)}>
+                녹음하기
+              </Button>
+            </div>
             <p className={styles.hint}>같은 이름의 필기(.md·.txt)를 함께 넣으면 용어를 더 정확히 고쳐요</p>
           </>
         )}
@@ -197,6 +250,22 @@ export function Home({ jobs, llm, onConnect, onShowJobs, onPreview, refresh }: P
       </section>
 
       {pending && <ConfirmDialog paths={pending} llm={llm} onClose={() => setPending(null)} />}
+      <RecordDialog open={recordOpen} onClose={() => setRecordOpen(false)} transcribing={transcribing} />
+      <Dialog
+        open={confirmTrash}
+        onClose={() => setConfirmTrash(false)}
+        title={`녹음 ${unprocessed.length}개를 지울까요?`}
+        actions={
+          <>
+            <Button onClick={() => setConfirmTrash(false)}>취소</Button>
+            <Button variant="danger" onClick={() => void trashUnprocessed()}>
+              휴지통으로 옮기기
+            </Button>
+          </>
+        }
+      >
+        <p className={styles.dialogText}>노트로 만들지 않은 앱 녹음을 휴지통으로 옮겨요. 휴지통에서 되살릴 수 있어요.</p>
+      </Dialog>
     </div>
   )
 }
@@ -212,7 +281,7 @@ function JobRow({ job }: { job: JobView }): React.JSX.Element {
     meta = [...parts.filter(Boolean), '창을 닫아도 계속돼요'].join(' · ')
   } else {
     right = <StatusPill tone="waiting">대기</StatusPill>
-    meta = job.waiting === 'model' ? '받아쓰기 모델을 다 받으면 시작해요' : '앞의 작업이 끝나면 시작해요'
+    meta = waitingText(job.waiting)
   }
   return (
     <div className={styles.job}>

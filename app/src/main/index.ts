@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, screen, shell } from 'electron'
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, nativeTheme, screen, session, shell } from 'electron'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, stat, statfs } from 'node:fs/promises'
 import { basename, isAbsolute, join, relative } from 'path'
@@ -20,6 +20,7 @@ import type { ModelItem } from '../core/llmcatalog.ts'
 import { CREDITS_PER_90MIN_SUMMARY, creditsPer90ByModel, listModels, PRESETS, PROVIDERS, verifyKey } from '../core/providers.ts'
 import type { ProviderId } from '../core/providers.ts'
 import { listNotes, recentNotes } from '../core/recent.ts'
+import { forgetProcessed, isRecording, listRecordings, markProcessed, recordingsDir, repairRecordings, unprocessedRecordings } from '../core/recordings.ts'
 import { loadSettings, updateSettings } from '../core/settings.ts'
 import { checkArgs } from '../core/stt/whispercpp.ts'
 import { defaultArgs, parseArgs, previewCommand } from '../core/sttargs.ts'
@@ -30,6 +31,7 @@ import type { JobInput, JobView } from './jobs.ts'
 import { fitContent } from './fit.ts'
 import type { Size } from './fit.ts'
 import { createLog } from './log.ts'
+import { createRecorder } from './recorder.ts'
 import { keyHint, readKey, removeKey, saveKey } from './secrets.ts'
 import { createSetup } from './setup.ts'
 import { createTray } from './tray.ts'
@@ -68,7 +70,7 @@ const setup = createSetup({
   model: DEFAULT_MODEL, // 앱을 켤 때 settings.json의 모델로 바꾼다 (init)
   whisperCli: () => findWhisperCli(whisperDirs),
   sample: probeSample,
-  busy: () => runner.transcribing(),
+  busy: () => runner.transcribing() || holdStt(),
   log: log.write,
   emit: (s) => {
     emit('setup', s)
@@ -128,8 +130,55 @@ const runner = createJobRunner({
     onJobs(jobs)
     if (!runner.transcribing()) setup.resume() // 작업 때문에 미룬 속도 재기
   },
-  onDone: (job) => watcher.onDone(job)
+  onDone: (job) => watcher.onDone(job),
+  holdStt: () => holdStt()
 })
+
+// ── 앱에서 녹음하기 ──
+// 녹음하는 동안에는 받아쓰기(와 속도 재기)를 멈춰 둔다. 설정 > 고급 > 녹음에서 켜면 함께 돈다.
+let sttWhileRecording = false
+const holdStt = (): boolean => recorder.active() && !sttWhileRecording
+
+const recorder = createRecorder({
+  dataDir,
+  ffmpeg: () => findFfmpeg(binDir),
+  log: log.write,
+  onChange: (on) => {
+    // 창이 숨어 있어도 화면의 녹음·소리 크기 계산이 늦춰지지 않게
+    mainWindow?.webContents.setBackgroundThrottling(!on)
+    if (!on) {
+      runner.kick()
+      setup.resume()
+    }
+    runner.refresh()
+    updateTray()
+  }
+})
+
+/** 앱에서 한 녹음 중 대기·실행 중인 작업이 아직 쓰는 것 (지우면 안 됨) */
+async function recordingsInUse(): Promise<Set<string>> {
+  const jobs = await listJobs(dataDir)
+  const busy = jobs.filter((j) => j.status !== 'done' && j.stages.audio.status !== 'done')
+  return new Set(busy.map((j) => j.input.audio.toLowerCase()))
+}
+
+/** 녹음을 휴지통으로 옮긴다 (되살릴 수 있게). 옮긴 수 */
+async function trashRecordings(paths: string[]): Promise<number> {
+  const inUse = await recordingsInUse()
+  const targets = paths.filter((p) => isRecording(dataDir, p) && !inUse.has(p.toLowerCase()))
+  const done: string[] = []
+  for (const p of targets) {
+    try {
+      await shell.trashItem(p)
+      done.push(p)
+    } catch {
+      // 못 옮긴 것은 그대로 둔다 (다른 프로그램이 열고 있음 등)
+    }
+  }
+  await forgetProcessed(dataDir, done)
+  if (done.length) log.write(`앱 녹음 ${done.length}개 휴지통으로`)
+  return done.length
+}
 
 // 자동 처리(폴더 감시). 켜져 있으면 창을 닫아도 트레이에 남아 감시한다
 const watcher = createWatcher({
@@ -183,13 +232,15 @@ function updateTray(): void {
   const active = lastJobs.filter((j) => j.status === 'running' || j.status === 'queued')
   const hidden = !!mainWindow && !mainWindow.isVisible()
   const w = watcher.get()
-  if (!active.length && !hidden && !w.enabled) return tray.destroy()
+  const recording = recorder.active()
+  if (!active.length && !hidden && !w.enabled && !recording) return tray.destroy()
   tray.ensure()
   const run = active.find((j) => j.status === 'running' && j.stage)
   const waiting = active.length - (run ? 1 : 0)
   const watchLine = !w.enabled ? null : w.paused ? '자동 처리 멈춤' : w.error ? '자동 처리: 확인이 필요해요' : '폴더 감시 중'
   tray.update({
     lines: [
+      recording ? '녹음 중' : null,
       run ? `${run.name} · ${run.stage === 'stt' ? `받아쓰기 ${Math.floor(run.frac * 100)}%` : '처리 중'}` : null,
       waiting ? `대기 ${waiting}개` : null,
       watchLine
@@ -238,7 +289,19 @@ function navigate(to: { view: 'home' | 'jobs' } | { view: 'preview'; path: strin
 }
 
 async function quitFromTray(): Promise<void> {
-  if (runner.activeCount() > 0) {
+  if (recorder.active()) {
+    const { response } = await dialog.showMessageBox({
+      type: 'question',
+      title: PRODUCT_NAME,
+      message: '녹음 중이에요',
+      detail: '끝내면 녹음을 여기까지 저장해요. 다음에 앱을 켜면 홈에서 노트로 만들 수 있어요.',
+      buttons: ['계속 녹음하기', '끝내기'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true
+    })
+    if (response !== 1) return
+  } else if (runner.activeCount() > 0) {
     const { response } = await dialog.showMessageBox({
       type: 'question',
       title: PRODUCT_NAME,
@@ -557,6 +620,7 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     for (const i of items) if (i.subject) next[i.subject] = i.language
     await updateSettings(dataDir, { lastSubject: items[0].subject, subjectLanguage: next })
     await runner.start(items)
+    await markProcessed(dataDir, items.map((i) => i.audio))
   },
   'jobs.retry': (p) => runner.retry(String(p)),
   'jobs.transcriptOnly': (p) => runner.transcriptOnly(String(p)),
@@ -715,6 +779,7 @@ const handlers: Record<string, (params: unknown) => unknown> = {
 
   'storage.info': async () => {
     const jobs = await listJobs(dataDir)
+    const recordings = await listRecordings(dataDir)
     const downloaded = []
     for (const id of Object.keys(MODELS.whisper)) if (await haveModel(id)) downloaded.push(id)
     return {
@@ -722,13 +787,43 @@ const handlers: Record<string, (params: unknown) => unknown> = {
       models: downloaded,
       jobsBytes: await dirSize(jobsDir(dataDir)),
       done: jobs.filter((j) => j.status === 'done').length,
-      stopped: jobs.filter((j) => j.status === 'failed' || j.status === 'cancelled').length
+      stopped: jobs.filter((j) => j.status === 'failed' || j.status === 'cancelled').length,
+      recordings: recordings.length,
+      recordingsBytes: recordings.reduce((n, r) => n + r.bytes, 0)
     }
   },
   'jobs.clearDone': async () => {
     const n = await runner.clearDone()
     log.write(`완료한 작업 기록 ${n}개 지움`)
     return n
+  },
+
+  // ── 앱에서 녹음하기 ──
+  // 녹음을 시작하면 도는 받아쓰기를 멈추고 대기로 되돌린다 (설정에서 함께 돌게 켜지 않았으면)
+  'rec.begin': async (p) => {
+    const source = p === 'system' ? 'system' : 'mic'
+    if (source === 'system' && process.platform !== 'win32') throw new EngineError('input', '컴퓨터 소리 녹음은 Windows에서만 돼요.')
+    await recorder.begin(source)
+    if (!sttWhileRecording) runner.holdNow()
+  },
+  'rec.chunk': (p) => recorder.chunk(p),
+  'rec.end': () => recorder.end(),
+  // 아직 노트로 만들지 않은 앱 녹음 (홈 배너)
+  'rec.unprocessed': async () => (await unprocessedRecordings(dataDir)).map(({ path, name, bytes }) => ({ path, name, bytes })),
+  'rec.trash': (p) => trashRecordings((p as unknown[]).map(String)),
+  // 설정 > 저장 공간: 앱 녹음을 모두 휴지통으로 (아직 처리 중인 녹음은 뺀다)
+  'rec.clear': async () => trashRecordings((await listRecordings(dataDir)).map((r) => r.path)),
+  'rec.openFolder': () => openFolder(recordingsDir(dataDir)),
+  'rec.openMicSettings': () => {
+    if (process.platform === 'win32') void shell.openExternal('ms-settings:privacy-microphone')
+  },
+  'settings.setSttWhileRecording': async (p) => {
+    sttWhileRecording = p === true
+    await updateSettings(dataDir, { sttWhileRecording })
+    log.write(`녹음 중 받아쓰기: ${sttWhileRecording ? '켬' : '끔'}`)
+    runner.kick()
+    runner.refresh()
+    return sttWhileRecording
   },
 
   'app.openData': () => openFolder(dataDir),
@@ -886,13 +981,15 @@ function createWindow(target: Size, show = true): void {
   mainWindow = win
   win.on('closed', () => (mainWindow = null))
   win.on('close', (event) => {
-    if (quitting || (runner.activeCount() === 0 && !watcher.enabled())) return
+    if (quitting || (runner.activeCount() === 0 && !watcher.enabled() && !recorder.active())) return
     event.preventDefault()
     win.hide()
     updateTray()
     if (!closeHintShown) {
       closeHintShown = true
-      if (runner.activeCount() > 0) {
+      if (recorder.active()) {
+        tray.notify('창을 닫아도 녹음은 계속돼요', '끝내려면 작업 표시줄 오른쪽 아이콘으로 창을 다시 열어 주세요.')
+      } else if (runner.activeCount() > 0) {
         tray.notify('창을 닫아도 계속해요', '받아쓰기가 끝나면 알려 드려요. 작업 표시줄 오른쪽 아이콘으로 다시 열 수 있어요.')
       } else {
         tray.notify('창을 닫아도 폴더를 계속 살펴요', '녹음이 들어오면 노트를 만들고 알려 드려요. 작업 표시줄 오른쪽 아이콘으로 다시 열 수 있어요.')
@@ -917,9 +1014,9 @@ app.on('second-instance', showWindow)
 let stopped = false
 app.on('before-quit', (event) => {
   quitting = true
-  if (stopped || !runner.busy()) return
+  if (stopped || (!runner.busy() && !recorder.active())) return
   event.preventDefault()
-  void runner.shutdown().finally(() => {
+  void Promise.all([runner.shutdown(), recorder.close()]).finally(() => {
     stopped = true
     app.quit()
   })
@@ -943,6 +1040,16 @@ app.whenReady().then(async () => {
   log.write(`앱 시작 ${app.getVersion()} · ${process.platform} ${process.arch}${app.isPackaged ? '' : ' · 개발 실행'}`)
   const settings = await loadSettings(dataDir)
   nativeTheme.themeSource = settings.theme
+  sttWhileRecording = settings.sttWhileRecording
+  // 앱이 꺼져 녹음 중 파일로 남은 앱 녹음을 녹음 파일로 만든다 (홈의 "처리하지 않은 녹음"에 뜬다)
+  await repairRecordings(findFfmpeg(binDir), dataDir, null).catch((e) => log.write(`남은 녹음 고치기 실패: ${(e as Error).message}`))
+  // 컴퓨터 소리 녹음: 화면의 getDisplayMedia에 화면 하나와 시스템 소리(loopback)를 준다. 영상은 화면 쪽에서 바로 끈다
+  session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
+    desktopCapturer.getSources({ types: ['screen'] }).then(
+      (sources) => callback(sources[0] && process.platform === 'win32' ? { video: sources[0], audio: 'loopback' } : {}),
+      () => callback({})
+    )
+  })
   await setup.init(settings.sttModel)
   runner.kick() // 앱이 꺼져 멈췄던 작업을 이어서 한다
   await watcher.init()

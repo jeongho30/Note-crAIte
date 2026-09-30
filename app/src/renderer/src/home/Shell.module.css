@@ -54,6 +54,17 @@
   font-variant-numeric: tabular-nums;
 }
 
+.rec {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: var(--font-size-xs);
+}
+
 .foot {
   display: flex;
   flex-direction: column;

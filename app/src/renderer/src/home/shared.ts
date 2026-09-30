@@ -32,6 +32,13 @@ export const STAGE_LABEL: Record<StageName, string> = {
 
 export const isActive = (j: JobView): boolean => j.status === 'running' || j.status === 'queued'
 
+/** 대기 중인 작업이 무엇을 기다리는지 */
+export function waitingText(waiting: JobView['waiting']): string {
+  if (waiting === 'model') return '받아쓰기 모델을 다 받으면 시작해요'
+  if (waiting === 'recording') return '녹음이 끝나면 이어서 해요'
+  return '앞의 작업이 끝나면 시작해요'
+}
+
 /** "약 23분", 1분이 안 되면 "1분 안쪽" */
 export function aboutMinutes(seconds: number): string {
   return seconds < 60 ? '1분 안쪽' : `약 ${Math.round(seconds / 60)}분`

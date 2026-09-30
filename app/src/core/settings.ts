@@ -29,6 +29,8 @@ export type Settings = {
   theme: Theme
   /** 자동 처리(폴더 감시). 설정 > 자동 처리에서만 켠다. paused면 켜져 있지만 트레이 메뉴에서 잠시 멈춘 상태 */
   watch: { enabled: boolean; folder: string | null; paused: boolean }
+  /** 앱에서 녹음하는 동안에도 앞서 넣은 녹음을 받아쓴다. 기본은 꺼짐(녹음이 끝날 때까지 받아쓰기를 멈춤). 설정 > 고급 > 녹음 */
+  sttWhileRecording: boolean
 }
 
 export type Theme = 'system' | 'light' | 'dark'
@@ -38,7 +40,7 @@ export type Language = 'ko' | 'en'
 export const DEFAULT_SETTINGS: Settings = {
   wizardStep: 0, wizardDone: false, outDir: null, provider: null, lastSubject: null, subjectLanguage: {},
   summaryModel: null, polishModel: null, sttModel: DEFAULT_MODEL, sttArgs: null, theme: 'system',
-  watch: { enabled: false, folder: null, paused: false }
+  watch: { enabled: false, folder: null, paused: false }, sttWhileRecording: false
 }
 
 function settingsPath(dataDir: string): string {

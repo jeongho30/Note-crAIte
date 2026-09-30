@@ -11,7 +11,7 @@ import { Row, Section, SettingsCard, sizeLabel } from './parts'
 import { ProviderSection } from './ProviderSection'
 import styles from './Settings.module.css'
 
-type Storage = { modelsBytes: number; models: string[]; jobsBytes: number; done: number; stopped: number }
+type Storage = { modelsBytes: number; models: string[]; jobsBytes: number; done: number; stopped: number; recordings: number; recordingsBytes: number }
 // 과목 없이 저장한 노트가 가는 폴더 이름 (core/note.ts의 saveNote). 과목 목록에는 폴더로 나온다
 const UNFILED = '미분류'
 
@@ -62,6 +62,7 @@ export function Settings({ llm, doneCount, openKey, onLlmChange, onRestartWizard
   const [storage, setStorage] = useState<Storage | null>(null)
   const [version, setVersion] = useState('')
   const [confirmClear, setConfirmClear] = useState(false)
+  const [confirmRecordings, setConfirmRecordings] = useState(false)
   const [allSubjects, setAllSubjects] = useState(false)
   const [licenses, setLicenses] = useState(false)
 
@@ -132,6 +133,17 @@ export function Settings({ llm, doneCount, openKey, onLlmChange, onRestartWizard
     try {
       const n = await call<number>('jobs.clearDone')
       toast(`완료한 작업 기록 ${n}개를 지웠어요.`, 'success')
+      await loadStorage()
+    } catch (e) {
+      fail(e)
+    }
+  }
+
+  async function clearRecordings(): Promise<void> {
+    setConfirmRecordings(false)
+    try {
+      const n = await call<number>('rec.clear')
+      toast(`앱 녹음 ${n}개를 휴지통으로 옮겼어요.`, 'success')
       await loadStorage()
     } catch (e) {
       fail(e)
@@ -307,6 +319,20 @@ export function Settings({ llm, doneCount, openKey, onLlmChange, onRestartWizard
               </Button>
             }
           />
+          <Row
+            title="앱에서 한 녹음"
+            sub={storage ? (storage.recordings ? `${sizeLabel(storage.recordingsBytes)} · ${storage.recordings}개` : '없어요') : ''}
+            ctrl={
+              <>
+                <Button size="sm" variant="ghost" onClick={() => void call('rec.openFolder').catch(fail)}>
+                  폴더 열기
+                </Button>
+                <Button size="sm" variant="outline" disabled={!storage?.recordings} onClick={() => setConfirmRecordings(true)}>
+                  모두 지우기
+                </Button>
+              </>
+            }
+          />
         </SettingsCard>
       </Section>
 
@@ -372,6 +398,22 @@ export function Settings({ llm, doneCount, openKey, onLlmChange, onRestartWizard
         }
       >
         <p className={styles.dialogText}>작업 목록의 "완료"에서 빠져요. 만든 노트와 원래 녹음은 그대로예요. 되돌릴 수 없어요.</p>
+      </Dialog>
+
+      <Dialog
+        open={confirmRecordings}
+        onClose={() => setConfirmRecordings(false)}
+        title={`앱에서 한 녹음 ${storage?.recordings ?? 0}개를 지울까요?`}
+        actions={
+          <>
+            <Button onClick={() => setConfirmRecordings(false)}>취소</Button>
+            <Button variant="danger" onClick={() => void clearRecordings()}>
+              휴지통으로 옮기기
+            </Button>
+          </>
+        }
+      >
+        <p className={styles.dialogText}>휴지통으로 옮겨요(되살릴 수 있어요). 만든 노트는 그대로예요. 아직 노트로 만드는 중인 녹음은 빼요.</p>
       </Dialog>
 
       <Dialog

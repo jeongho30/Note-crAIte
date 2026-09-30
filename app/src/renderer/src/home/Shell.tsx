@@ -8,6 +8,7 @@ import { Settings } from '../settings/Settings'
 import type { LlmStatus } from '../wizard/shared'
 import { Home } from './Home'
 import { JobList } from './JobList'
+import { useRecorder } from './recording'
 import { isActive, useJobs } from './shared'
 import styles from './Shell.module.css'
 
@@ -100,6 +101,9 @@ export default function Shell({ onRestartWizard }: Props): React.JSX.Element {
   }, [jobs, toast])
 
   const active = jobs?.filter(isActive).length ?? 0
+  // 다른 화면에 있어도 녹음 중인 것이 보이게 (끝내기는 홈에서)
+  const rec = useRecorder()
+  const recording = rec.status === 'recording' || rec.status === 'paused' || rec.status === 'stopping'
 
   return (
     <div className={styles.shell}>
@@ -113,6 +117,7 @@ export default function Shell({ onRestartWizard }: Props): React.JSX.Element {
           >
             {n.label}
             {n.view === 'jobs' && active > 0 && <span className={styles.count}>{active}</span>}
+            {n.view === 'home' && recording && <span className={styles.rec}>녹음 중</span>}
           </button>
         ))}
         <div className={styles.foot}>
