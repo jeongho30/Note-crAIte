@@ -28,13 +28,13 @@
 
 /* 가운데 점 하나와 양옆의 점 둘: 글꼴과 상관없이 같은 모양으로 그린다 */
 .dots {
-  width: 4px;
-  height: 4px;
+  width: 3px;
+  height: 3px;
   border-radius: 50%;
   background: currentColor;
   box-shadow:
-    -7px 0 currentColor,
-    7px 0 currentColor;
+    -6px 0 currentColor,
+    6px 0 currentColor;
 }
 
 .menu {
