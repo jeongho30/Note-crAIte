@@ -7,7 +7,7 @@ import { PRODUCT_NAME } from '../core/brand.ts'
 import { EngineError } from '../core/errors.ts'
 import { dirSize, readJson } from '../core/files.ts'
 import { defaultThreads, detect } from '../core/hardware.ts'
-import { AUDIO_EXTS, NOTE_EXTS, pairInputs } from '../core/inputs.ts'
+import { attachNotes, AUDIO_EXTS, NOTE_EXTS, pairInputs } from '../core/inputs.ts'
 import { DEFAULT_BEAM_SIZE, DEFAULT_MODEL, jobsDir, listJobs, STT_MODEL_CHOICES, VAD_MODEL } from '../core/job.ts'
 import type { LlmSettings } from '../core/job.ts'
 import { MODELS } from '../core/models.ts'
@@ -528,6 +528,12 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     return r.canceled ? [] : r.filePaths
   },
   'inputs.prepare': (p) => prepare((p as unknown[]).map(String)),
+  // 시작 전 확인에서 파일을 더 넣을 때: 이미 목록에 있는 녹음의 필기는 그 녹음에 붙이고, 나머지만 새로 확인한다
+  'inputs.attach': (p) => {
+    const { existing, picked } = p as { existing: unknown[]; picked: unknown[] }
+    const { attached, rest } = attachNotes(existing.map(String), picked.map(String))
+    return { attached: attached.map((a) => ({ ...a, notesName: basename(a.notes) })), rest }
+  },
   // 과목 목록(저장 폴더의 하위 폴더), 마지막 과목, 과목별 강의 언어
   'subjects.get': async () => {
     const s = await loadSettings(dataDir)

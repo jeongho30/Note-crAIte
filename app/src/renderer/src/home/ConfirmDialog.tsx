@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ApiError, call } from '../api'
 import { Banner, Button, Dialog, SegmentedControl, Select, TextField } from '../components'
+import { cx } from '../components/cx'
 import type { Language } from '../../../core/settings'
 import { mb, useSetup, type LlmStatus } from '../wizard/shared'
 import { aboutMinutes, lengthMinutes } from './shared'
@@ -34,6 +35,19 @@ function subjectOf(c: Choice): string | null {
   if (c.pick === NONE) return null
   if (c.pick === NEW) return c.newName.trim() || null
   return c.pick
+}
+
+/** 뺀 파일 안내에서 같은 파일이 여러 번 나오지 않게 하고, 그 뒤에 목록의 녹음에 붙은 필기는 안내에서 뺀다 */
+function tidy(p: Prepared): Prepared {
+  const attached = new Set(p.recordings.map((r) => r.notesName?.toLowerCase()))
+  const seen = new Set<string>()
+  const rejected = p.rejected.filter((r) => {
+    const key = `${r.name.toLowerCase()}|${r.reason}`
+    if (seen.has(key) || attached.has(r.name.toLowerCase())) return false
+    seen.add(key)
+    return true
+  })
+  return { ...p, rejected }
 }
 
 function recordedLabel(iso: string): string {
@@ -95,6 +109,7 @@ export function ConfirmDialog({ paths, llm, onClose }: Props): React.JSX.Element
   const [own, setOwn] = useState<Record<string, Choice>>({}) // 따로 정한 파일
   const [dropped, setDropped] = useState<Set<string>>(new Set()) // 뺀 필기
   const [starting, setStarting] = useState(false)
+  const [adding, setAdding] = useState(false)
 
   useEffect(() => {
     Promise.all([call<Prepared>('inputs.prepare', paths), call<Subjects>('subjects.get')]).then(
@@ -111,6 +126,40 @@ export function ConfirmDialog({ paths, llm, onClose }: Props): React.JSX.Element
   // 과목을 바꾸면 그 과목의 강의 언어 기본값으로 맞춘다 (여기서 바꾼 언어는 이 녹음에만)
   const withDefaultLanguage = (prev: Choice, next: Choice): Choice =>
     next.pick !== prev.pick ? { ...next, language: subjects?.subjectLanguage[next.pick] ?? 'ko' } : next
+
+  // 목록에서 녹음을 빼고, 파일 선택 창으로 녹음·필기를 더 넣는다 (넣은 파일도 같은 방식으로 필기 짝을 찾고 길이를 읽는다)
+  const removeRecording = (audio: string): void => setPrepared((p) => (p ? { ...p, recordings: p.recordings.filter((r) => r.audio !== audio) } : p))
+
+  async function addRecordings(): Promise<void> {
+    setAdding(true)
+    try {
+      const picked = await call<string[]>('inputs.pick')
+      if (!picked.length) return
+      // 이미 목록에 있는 녹음과 이름이 같은 필기는 그 녹음에 붙이고, 나머지만 새로 확인한다
+      const { attached, rest } = await call<{ attached: { audio: string; notes: string; notesName: string }[]; rest: string[] }>('inputs.attach', {
+        existing: recs.map((r) => r.audio),
+        picked
+      })
+      if (attached.length) {
+        const by = new Map(attached.map((a) => [a.audio, a]))
+        setPrepared((p) =>
+          p ? tidy({ ...p, recordings: p.recordings.map((r) => (by.has(r.audio) ? { ...r, notes: by.get(r.audio)!.notes, notesName: by.get(r.audio)!.notesName } : r)) }) : p
+        )
+        setDropped((d) => new Set([...d].filter((x) => !by.has(x))))
+      }
+      if (!rest.length) return
+      const more = await call<Prepared>('inputs.prepare', rest)
+      setPrepared((p) => {
+        if (!p) return more
+        const has = new Set(p.recordings.map((r) => r.audio.toLowerCase()))
+        return tidy({ recordings: [...p.recordings, ...more.recordings.filter((r) => !has.has(r.audio.toLowerCase()))], rejected: [...p.rejected, ...more.rejected] })
+      })
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : '녹음을 넣지 못했어요.')
+    } finally {
+      setAdding(false)
+    }
+  }
 
   const recs = prepared?.recordings ?? []
   const choiceOf = (r: Recording): Choice => own[r.audio] ?? all!
@@ -180,110 +229,125 @@ export function ConfirmDialog({ paths, llm, onClose }: Props): React.JSX.Element
           </Banner>
         )}
 
-        {recs.length > 0 && subjects && all && (
+        {prepared && subjects && all && (
           <>
-            <ul className={styles.files}>
-              {recs.map((r) => {
-                const c = own[r.audio]
-                return (
-                  <li key={r.audio} className={styles.file}>
-                    <div className={styles.fileHead}>
-                      <div className={styles.fileMain}>
-                        <b className={styles.fileName}>{r.name}</b>
-                        <span className={styles.muted}>
-                          {[r.durationS ? lengthMinutes(r.durationS) : null, `녹음 ${recordedLabel(r.recordedAt)}`].filter(Boolean).join(' · ')}
-                        </span>
-                      </div>
-                      {recs.length > 1 && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() =>
-                            setOwn((o) => {
-                              const next = { ...o }
-                              if (next[r.audio]) delete next[r.audio]
-                              else next[r.audio] = { ...all }
-                              return next
-                            })
-                          }
-                        >
-                          {c ? '같이 정하기' : '따로 정하기'}
-                        </Button>
-                      )}
-                    </div>
-                    {r.notes && (
-                      <div className={styles.notesLine}>
-                        {dropped.has(r.audio) ? (
-                          <span className={styles.muted}>필기를 빼고 넣어요</span>
-                        ) : (
-                          <span>
-                            필기 <b>{r.notesName}</b> <span className={styles.muted}>· 같은 이름이라 함께 넣었어요</span>
+            {recs.length > 0 && (
+              <ul className={styles.files}>
+                {recs.map((r) => {
+                  const c = own[r.audio]
+                  return (
+                    <li key={r.audio} className={styles.file}>
+                      <div className={styles.fileHead}>
+                        <button type="button" className={styles.remove} aria-label={`${r.name} 빼기`} title="이 녹음 빼기" disabled={starting} onClick={() => removeRecording(r.audio)} />
+                        <div className={styles.fileMain}>
+                          <b className={styles.fileName}>{r.name}</b>
+                          <span className={styles.muted}>
+                            {[r.durationS ? lengthMinutes(r.durationS) : null, `녹음 ${recordedLabel(r.recordedAt)}`].filter(Boolean).join(' · ')}
                           </span>
+                        </div>
+                        {recs.length > 1 && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              setOwn((o) => {
+                                const next = { ...o }
+                                if (next[r.audio]) delete next[r.audio]
+                                else next[r.audio] = { ...all }
+                                return next
+                              })
+                            }
+                          >
+                            {c ? '같이 정하기' : '따로 정하기'}
+                          </Button>
                         )}
-                        <Button
-                          variant="link"
-                          onClick={() =>
-                            setDropped((d) => {
-                              const next = new Set(d)
-                              if (next.has(r.audio)) next.delete(r.audio)
-                              else next.add(r.audio)
-                              return next
-                            })
-                          }
-                        >
-                          {dropped.has(r.audio) ? '되돌리기' : '빼기'}
-                        </Button>
                       </div>
-                    )}
-                    {c && (
-                      <SubjectPicker
-                        subjects={subjects.subjects}
-                        value={c}
-                        idPrefix={`own-${r.name}`}
-                        onChange={(next) => setOwn((o) => ({ ...o, [r.audio]: withDefaultLanguage(c, next) }))}
-                      />
-                    )}
-                  </li>
-                )
-              })}
-            </ul>
-
-            {recs.some((r) => !own[r.audio]) && (
-              <div className={styles.group}>
-                {Object.keys(own).length > 0 && <span className={styles.groupLabel}>나머지 녹음</span>}
-                <SubjectPicker subjects={subjects.subjects} value={all} onChange={(next) => setAll(withDefaultLanguage(all, next))} />
-              </div>
+                      {r.notes && (
+                        <div className={styles.notesLine}>
+                          {dropped.has(r.audio) ? (
+                            <>
+                              <span className={styles.iconSpace} aria-hidden="true" />
+                              <span className={styles.muted}>필기를 빼고 넣어요</span>
+                              <Button variant="link" onClick={() => setDropped((d) => new Set([...d].filter((x) => x !== r.audio)))}>
+                                되돌리기
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                className={cx(styles.remove, styles.removeSm)}
+                                aria-label={`${r.notesName} 빼기`}
+                                title="이 필기 빼기"
+                                disabled={starting}
+                                onClick={() => setDropped((d) => new Set(d).add(r.audio))}
+                              />
+                              <span>
+                                필기 <b>{r.notesName}</b> <span className={styles.muted}>· 같은 이름이라 함께 넣었어요</span>
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      )}
+                      {c && (
+                        <SubjectPicker
+                          subjects={subjects.subjects}
+                          value={c}
+                          idPrefix={`own-${r.name}`}
+                          onChange={(next) => setOwn((o) => ({ ...o, [r.audio]: withDefaultLanguage(c, next) }))}
+                        />
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
             )}
 
-            {!modelReady && <Banner tone="warning" title="받아쓰기 모델이 필요해요">[받고 시작]을 누르면 모델을 받고, 다 받으면 바로 시작해요.</Banner>}
+            <button type="button" className={styles.add} disabled={adding || starting} onClick={() => void addRecordings()}>
+              <span className={styles.plus} aria-hidden="true" />
+              {adding ? '넣는 중…' : '파일 추가'}
+            </button>
 
-            <dl className={styles.summary}>
-              <dt>받아쓰기</dt>
-              <dd>
-                {sttLine}
-                {recs.length > 1 && ' · 한 번에 하나씩 해요'}
-              </dd>
-              <dt>요약</dt>
-              <dd>
-                {llm?.provider
-                  ? [
-                      llm.name,
-                      creditTotal !== null ? `약 ${creditTotal}크레딧 소모 예상` : null,
-                      llm.credits != null ? `남은 크레딧 ${llm.credits.toLocaleString()}` : null
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')
-                  : '요약 없이 전사문만 만들어요'}
-              </dd>
-              <dt>예상 총 소요 시간</dt>
-              <dd className={styles.total}>
-                {total !== null && modelReady
-                  ? aboutMinutes(total)
-                  : modelReady
-                    ? '이 PC의 속도를 잰 뒤 알려 드려요'
-                    : '모델을 받고 속도를 잰 뒤 알려 드려요'}
-              </dd>
-            </dl>
+            {recs.length > 0 && (
+              <>
+                {recs.some((r) => !own[r.audio]) && (
+                  <div className={styles.group}>
+                    {Object.keys(own).length > 0 && <span className={styles.groupLabel}>나머지 녹음</span>}
+                    <SubjectPicker subjects={subjects.subjects} value={all} onChange={(next) => setAll(withDefaultLanguage(all, next))} />
+                  </div>
+                )}
+
+                {!modelReady && <Banner tone="warning" title="받아쓰기 모델이 필요해요">[받고 시작]을 누르면 모델을 받고, 다 받으면 바로 시작해요.</Banner>}
+
+                <dl className={styles.summary}>
+                  <dt>받아쓰기</dt>
+                  <dd>
+                    {sttLine}
+                    {recs.length > 1 && ' · 한 번에 하나씩 해요'}
+                  </dd>
+                  <dt>요약</dt>
+                  <dd>
+                    {llm?.provider
+                      ? [
+                          llm.name,
+                          creditTotal !== null ? `약 ${creditTotal}크레딧 소모 예상` : null,
+                          llm.credits != null ? `남은 크레딧 ${llm.credits.toLocaleString()}` : null
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')
+                      : '요약 없이 전사문만 만들어요'}
+                  </dd>
+                  <dt>예상 총 소요 시간</dt>
+                  <dd className={styles.total}>
+                    {total !== null && modelReady
+                      ? aboutMinutes(total)
+                      : modelReady
+                        ? '이 PC의 속도를 잰 뒤 알려 드려요'
+                        : '모델을 받고 속도를 잰 뒤 알려 드려요'}
+                  </dd>
+                </dl>
+              </>
+            )}
           </>
         )}
       </div>

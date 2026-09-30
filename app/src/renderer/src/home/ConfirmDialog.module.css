@@ -54,7 +54,7 @@
 .notesLine {
   display: flex;
   align-items: baseline;
-  gap: var(--space-2);
+  gap: var(--space-3); /* 파일 줄(.fileHead)과 같은 간격: 아이콘 칸 다음에 글자가 시작한다 */
   font-size: var(--font-size-sm);
 }
 
@@ -118,4 +118,110 @@
 
 .total {
   font-weight: var(--font-weight-semibold);
+}
+
+/* 녹음 빼기: 빨간 동그라미 안의 빼기(−) */
+.remove {
+  position: relative;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-danger);
+  cursor: pointer;
+}
+
+.remove::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 10px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--color-on-danger);
+  transform: translate(-50%, -50%);
+}
+
+.remove:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.remove:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* 녹음 추가: 점선 테두리 칸 안의 더하기(+) */
+.add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1.5px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text-2);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.add:hover:not(:disabled) {
+  border-color: var(--color-text-3);
+  color: var(--color-text);
+}
+
+.add:disabled {
+  cursor: default;
+}
+
+.plus {
+  position: relative;
+  width: 12px;
+  height: 12px;
+}
+
+.plus::before,
+.plus::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border-radius: 1px;
+  background: currentColor;
+  transform: translate(-50%, -50%);
+}
+
+.plus::before {
+  width: 12px;
+  height: 2px;
+}
+
+.plus::after {
+  width: 2px;
+  height: 12px;
+}
+
+/* 필기 줄의 아이콘 자리(20px): 뺀 상태에서도 글자 시작이 위 파일 이름과 맞는다 */
+.iconSpace {
+  flex: none;
+  width: 20px;
+}
+
+/* 필기 빼기: 필기 파일 이름(13px)에 맞춘 작은 크기 */
+.removeSm {
+  width: 14px;
+  height: 14px;
+  margin-top: 0;
+  margin-inline: 3px; /* 위 녹음 아이콘(20px) 칸과 가운데 축을 맞춘다: (20 − 14) / 2 */
+  align-self: center;
+}
+
+.removeSm::before {
+  width: 8px;
 }
