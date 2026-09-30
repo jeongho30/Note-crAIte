@@ -4,10 +4,14 @@
 
 import MarkdownIt from 'markdown-it'
 import cjkFriendly from 'markdown-it-cjk-friendly'
+import katexModule from '@vscode/markdown-it-katex'
 
 // HTML은 그대로 글자로 보인다(노트에 섞인 태그가 화면에서 실행되지 않게). 링크는 미리보기의 onClick에서 브라우저로 넘긴다.
 // cjk-friendly: 표준 규칙은 "**파싱(Parsing)**을"처럼 닫는 ** 앞이 문장부호이고 뒤에 조사가 붙으면 굵게 하지 않는다. 한국어에서도 굵게 되게 넓힌다.
-export const md = new MarkdownIt({ html: false, linkify: false, typographer: false }).use(cjkFriendly)
+// katex: 한 줄 수식과 블록 수식을 LaTeX로 그린다(달러 기호 한 쌍과 두 쌍). 문법 오류는 던지지 않고 빨간 글자로 보인다. "$5와 $10"처럼 $ 안쪽이 공백이거나 닫는 $ 뒤에 숫자가 오면 수식으로 보지 않는다.
+// CommonJS 패키지라 Node(테스트)에서는 default가 모듈 객체로 들어온다
+const katex = (katexModule as unknown as { default?: typeof katexModule }).default ?? katexModule
+export const md = new MarkdownIt({ html: false, linkify: false, typographer: false }).use(cjkFriendly).use(katex, { throwOnError: false })
 
 export type Frontmatter = Record<string, unknown>
 

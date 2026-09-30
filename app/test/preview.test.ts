@@ -54,6 +54,13 @@ test('닫는 ** 앞이 문장부호이고 뒤에 조사가 붙어도 굵게, HTM
   assert.equal(md.render('<b>x</b>'), '<p>&lt;b&gt;x&lt;/b&gt;</p>\n')
 })
 
+test('수식: 한 줄·블록은 LaTeX로 그리고, 돈 표기의 $는 그대로, 오류는 던지지 않는다', () => {
+  assert.match(md.render(String.raw`합 $\sum_{i=1}^n i$ 이다`), /class="katex"/)
+  assert.match(md.render(String.raw`$$\int_0^1 x\,dx$$`), /katex-display/)
+  assert.doesNotMatch(md.render('$5와 $10 입니다'), /katex/)
+  assert.match(md.render(String.raw`$\frac{1}{$ 오류`), /katex-error/)
+})
+
 test('노트 목록: 제목·과목의 낱말로 찾고, 과목·미분류로 거르고, 강의 날짜 순은 같은 날이면 최근 수정 순', () => {
   const note = (title: string, subject: string | null, date: string, modifiedMs: number) => ({ path: `${title}.md`, title, subject, date, modifiedMs })
   const notes = [

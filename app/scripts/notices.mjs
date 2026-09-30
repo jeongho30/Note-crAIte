@@ -8,7 +8,7 @@ const REPO = join(APP, '..')
 const OUT = join(APP, 'build', 'THIRD_PARTY_NOTICES.txt')
 
 // 화면 번들(out/renderer)에 들어가는 패키지. 메인·preload는 Node·Electron 기능만 쓴다.
-const ROOTS = ['react', 'react-dom', 'markdown-it', 'markdown-it-cjk-friendly']
+const ROOTS = ['react', 'react-dom', 'markdown-it', 'markdown-it-cjk-friendly', '@vscode/markdown-it-katex']
 // markdown-it의 argparse는 명령줄 도구에서만 써서 번들에 들어가지 않는다
 const SKIP = new Set(['argparse'])
 

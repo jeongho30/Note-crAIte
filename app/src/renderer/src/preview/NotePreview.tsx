@@ -3,6 +3,7 @@ import { ApiError, call } from '../api'
 import { Banner, Button, Dialog, useToast } from '../components'
 import { isActive, lengthMinutes, STAGE_LABEL, type JobView } from '../home/shared'
 import type { LlmStatus } from '../wizard/shared'
+import 'katex/dist/katex.min.css'
 import { md, parseNote, type Segment } from './markdown'
 import styles from './NotePreview.module.css'
 
