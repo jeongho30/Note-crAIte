@@ -104,8 +104,14 @@
   gap: 6px;
 }
 
-.dim {
-  opacity: var(--opacity-disabled);
+/* 쓸 수 없는 줄: 반투명(opacity) 대신 글자 색으로 흐리게 한다.
+   화면 배율이 소수(예: 137.5%)면 반투명 부분이 스크롤할 때 주변 글자와 1px씩 어긋나 흔들려 보였다 */
+.dim .label b {
+  color: var(--color-text-3);
+}
+
+.dim .label span {
+  color: color-mix(in oklab, var(--color-text-3) 60%, var(--color-surface));
 }
 
 .block {
@@ -356,4 +362,28 @@
   color: var(--color-text-3);
   font-size: var(--font-size-xs);
   font-variant-numeric: tabular-nums;
+}
+
+/* ── 자동 처리 켜기 창 ── */
+.autoDialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.autoFolder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+}
+
+.autoFolder .fieldLabel {
+  flex-basis: 100%;
+}
+
+.autoPath {
+  min-width: 0;
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
 }

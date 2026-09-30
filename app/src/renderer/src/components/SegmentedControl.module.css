@@ -39,12 +39,15 @@
   outline-offset: var(--focus-ring-offset);
 }
 
-.disabled {
-  opacity: var(--opacity-disabled);
+/* 반투명(opacity) 대신 색으로 흐리게 한다 (소수 화면 배율에서 스크롤할 때 흔들려 보이지 않게) */
+.disabled .option,
+.disabled .option:hover {
+  color: color-mix(in oklab, var(--color-text-3) 70%, var(--color-surface-2));
+  cursor: not-allowed;
 }
 
-.disabled .option {
-  cursor: not-allowed;
+.disabled .selected {
+  box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
 /* 라디오는 보이지 않게 두고 라벨이 모양을 맡는다 */

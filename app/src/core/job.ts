@@ -53,7 +53,8 @@ export type JobSettings = {
 export type Job = {
   id: string
   createdAt: string
-  input: { audio: string; notes: string | null; subject: string | null } // notes는 작업 폴더에 복사한 필기의 파일 이름
+  // notes는 작업 폴더에 복사한 필기의 파일 이름. from이 'watch'면 자동 처리(폴더 감시)로 들어온 녹음이라, 끝나면 "처리됨"으로 옮긴다
+  input: { audio: string; notes: string | null; subject: string | null; from?: 'watch' }
   settings: JobSettings
   stages: Record<StageName, StageState>
   status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled'
@@ -120,7 +121,7 @@ async function saveJob(jobDir: string, job: Job): Promise<void> {
 
 /** 작업 폴더를 만들고 필기를 복사해 둔다 (원본을 옮기거나 지워도 재개할 수 있게). */
 export async function createJob(dataDir: string, audio: string, notes: string | null, subject: string | null,
-                                settings: JobSettings): Promise<string> {
+                                settings: JobSettings, from?: 'watch'): Promise<string> {
   const id = newId()
   const jobDir = join(jobsDir(dataDir), id)
   await mkdir(jobDir, { recursive: true })
@@ -131,7 +132,7 @@ export async function createJob(dataDir: string, audio: string, notes: string | 
   }
   const stages = Object.fromEntries(STAGES.map((s) => [s, { status: 'pending' }])) as Record<StageName, StageState>
   await saveJob(jobDir, {
-    id, createdAt: now(), input: { audio, notes: notesFile, subject }, settings, stages, status: 'queued'
+    id, createdAt: now(), input: { audio, notes: notesFile, subject, ...(from ? { from } : {}) }, settings, stages, status: 'queued'
   })
   return jobDir
 }

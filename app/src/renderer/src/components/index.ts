@@ -2,6 +2,7 @@
 export { Banner } from './Banner'
 export { Button } from './Button'
 export { Card } from './Card'
+export { Checkbox } from './Checkbox'
 export { Dialog } from './Dialog'
 export { ListRow } from './ListRow'
 export { ProgressBar } from './ProgressBar'

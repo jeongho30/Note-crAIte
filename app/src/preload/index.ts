@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { IpcRendererEvent } from 'electron'
 
 // 화면이 받을 수 있는 메인 이벤트 (허용 목록)
-const EVENTS = ['setup', 'jobs', 'navigate']
+const EVENTS = ['setup', 'jobs', 'navigate', 'watch']
 
 contextBridge.exposeInMainWorld('api', {
   call: (method: string, params?: unknown): Promise<unknown> => ipcRenderer.invoke('api:call', method, params),

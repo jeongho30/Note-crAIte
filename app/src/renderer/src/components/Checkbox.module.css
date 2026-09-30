@@ -1,0 +1,37 @@
+.item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+.disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
+.input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  /* 첫 줄 글자의 가운데에 맞춘다 */
+  margin: calc((var(--font-size-md) * var(--line-height-body) - 16px) / 2) 0 0;
+  accent-color: var(--color-primary);
+  cursor: inherit;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.label {
+  color: var(--color-text);
+}
+
+.hint {
+  color: var(--color-text-3);
+  font-size: var(--font-size-xs);
+}

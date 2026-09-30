@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, call } from '../api'
-import { Button, Dialog, SegmentedControl, StatusPill, useToast } from '../components'
+import { Button, Dialog, SegmentedControl, useToast } from '../components'
 import { PRODUCT_NAME, PRODUCT_NAME_KO, TAGLINE } from '../../../core/brand'
 import type { FolderInfo } from '../../../core/vault'
 import type { Language, Settings as AppSettings, Theme } from '../../../core/settings'
 import { gpuLabel, percent, useSetup, type LlmStatus } from '../wizard/shared'
 import { AdvancedSection } from './AdvancedSection'
+import { AutoSection } from './AutoSection'
 import { Row, Section, SettingsCard, sizeLabel } from './parts'
 import { ProviderSection } from './ProviderSection'
 import styles from './Settings.module.css'
@@ -263,12 +264,7 @@ export function Settings({ llm, doneCount, openKey, onLlmChange, onRestartWizard
         </SettingsCard>
       </Section>
 
-      <Section ref={refFor('자동 처리')} title="자동 처리">
-        <SettingsCard>
-          <Row title="폴더 감시" sub="정한 폴더에 녹음을 넣으면 확인 없이 노트를 만들어요" ctrl={<StatusPill tone="waiting">곧 지원</StatusPill>} dim />
-          <Row title="PC를 켜면 자동으로 실행" sub="폴더 감시를 켠 경우에만 필요해요" ctrl={<StatusPill tone="waiting">곧 지원</StatusPill>} dim />
-        </SettingsCard>
-      </Section>
+      <AutoSection ref={refFor('자동 처리')} />
 
       <Section ref={refFor('저장 공간')} title="저장 공간">
         <SettingsCard>

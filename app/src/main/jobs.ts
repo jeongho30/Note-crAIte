@@ -13,7 +13,7 @@ import { estimateSttSeconds } from '../core/probe.ts'
 import type { ProbeResult } from '../core/probe.ts'
 import type { Language } from '../core/settings.ts'
 
-export type JobInput = { audio: string; notes: string | null; subject: string | null; language: Language }
+export type JobInput = { audio: string; notes: string | null; subject: string | null; language: Language; from?: 'watch' }
 
 export type StageView = { name: StageName; status: StageState['status']; ms: number | null }
 
@@ -65,6 +65,8 @@ type Deps = {
   apiKey: () => Promise<string | null>
   outDir: () => Promise<string>
   emit: (jobs: JobView[]) => void
+  /** 작업이 끝났을 때 (자동 처리로 들어온 녹음을 "처리됨"으로 옮기는 데 쓴다) */
+  onDone?: (job: Job) => Promise<void>
 }
 
 const EMIT_INTERVAL_MS = 500
@@ -213,7 +215,8 @@ export function createJobRunner(d: Deps) {
           }
         }
         try {
-          await runJob(jobDir, ctx)
+          const finished = await runJob(jobDir, ctx)
+          await d.onDone?.(finished).catch(() => {}) // 옮기기 실패는 작업 실패가 아니다
         } catch {
           // 실패 이유는 job.json에 남는다 (화면이 error로 보여 준다)
           if (stopping) await requeue(jobDir) // 앱을 끄느라 멈춘 것은 실패가 아니다: 다음에 켜면 이어서 한다
@@ -241,11 +244,13 @@ export function createJobRunner(d: Deps) {
     }, RATE_LIMIT_RETRY_MS)
   }
 
-  async function start(inputs: JobInput[]): Promise<void> {
+  /** 작업을 만들고 돌리기 시작한다. 만든 작업 id를 넣은 순서대로 돌려준다. */
+  async function start(inputs: JobInput[]): Promise<string[]> {
     const probe = await d.probe()
     const [llm, outDir, stt, steps] = await Promise.all([d.llm(), d.outDir(), d.stt(), d.steps()])
+    const ids: string[] = []
     for (const input of inputs) {
-      await createJob(d.dataDir, input.audio, input.notes, input.subject, {
+      const jobDir = await createJob(d.dataDir, input.audio, input.notes, input.subject, {
         language: input.language,
         model: stt.model,
         beamSize: DEFAULT_BEAM_SIZE,
@@ -255,10 +260,12 @@ export function createJobRunner(d: Deps) {
         outDir,
         llm,
         ...steps
-      })
+      }, input.from)
+      ids.push(basename(jobDir))
     }
     await emitNow()
     void loop()
+    return ids
   }
 
   async function save(job: Job): Promise<void> {

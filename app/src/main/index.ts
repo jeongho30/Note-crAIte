@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, screen, shell } from 'electron'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, stat, statfs } from 'node:fs/promises'
-import { basename, join, relative } from 'path'
+import { basename, isAbsolute, join, relative } from 'path'
 import { probe as probeAudio } from '../core/audio.ts'
 import { PRODUCT_NAME } from '../core/brand.ts'
 import { EngineError } from '../core/errors.ts'
@@ -32,6 +32,7 @@ import { createLog } from './log.ts'
 import { keyHint, readKey, removeKey, saveKey } from './secrets.ts'
 import { createSetup } from './setup.ts'
 import { createTray } from './tray.ts'
+import { createWatcher } from './watcher.ts'
 
 // 설치본은 extraResources로 넣은 resources/bin, 개발 중에는 저장소의 .cache/whisper/bin과 PATH의 ffmpeg.
 const binDir = app.isPackaged ? join(process.resourcesPath, 'bin') : undefined
@@ -125,8 +126,35 @@ const runner = createJobRunner({
     emit('jobs', jobs)
     onJobs(jobs)
     if (!runner.transcribing()) setup.resume() // 작업 때문에 미룬 속도 재기
+  },
+  onDone: (job) => watcher.onDone(job)
+})
+
+// 자동 처리(폴더 감시). 켜져 있으면 창을 닫아도 트레이에 남아 감시한다
+const watcher = createWatcher({
+  dataDir,
+  start: (inputs) => runner.start(inputs),
+  log: log.write,
+  emit: (s) => {
+    emit('watch', { ...s, login: loginState() })
+    updateTray()
   }
 })
+
+// PC를 켜면 자동 실행: 이 인자로 켜지면 창 없이 트레이로만 시작한다
+const HIDDEN_ARG = '--hidden'
+
+/** 로그인할 때 자동 실행. 개발 실행(electron.exe)을 등록하면 앱이 아니라 빈 Electron이 켜지므로 설치본에서만 */
+function loginState(): { supported: boolean; openAtLogin: boolean } {
+  if (!app.isPackaged) return { supported: false, openAtLogin: false }
+  return { supported: true, openAtLogin: app.getLoginItemSettings({ args: [HIDDEN_ARG] }).openAtLogin }
+}
+
+function setOpenAtLogin(on: boolean): void {
+  if (!app.isPackaged) throw new EngineError('input', 'PC를 켜면 자동으로 실행하기는 설치한 앱에서만 쓸 수 있어요.')
+  app.setLoginItemSettings({ openAtLogin: on, args: [HIDDEN_ARG] })
+  log.write(`PC를 켜면 자동 실행: ${on ? '켬' : '끔'}`)
+}
 
 // ── 창 닫기와 트레이 ──
 // 작업(대기 포함)이 있을 때 창을 닫으면 트레이로 숨어 계속하고, 없으면 앱을 끝낸다(9/28 결정).
@@ -135,7 +163,11 @@ let closeHintShown = false
 let lastJobs: JobView[] = []
 let seenStatus = new Map<string, JobView['status']>()
 
-const tray = createTray({ open: showWindow, quit: () => void quitFromTray() })
+const tray = createTray({
+  open: showWindow,
+  quit: () => void quitFromTray(),
+  toggleWatch: () => void watcher.pause(!watcher.get().paused)
+})
 
 function showWindow(): void {
   if (!mainWindow) return
@@ -145,19 +177,24 @@ function showWindow(): void {
   updateTray()
 }
 
-/** 작업 중이거나 창이 숨어 있으면 트레이를 두고, 아니면 없앤다. */
+/** 작업 중이거나, 창이 숨어 있거나, 자동 처리가 켜져 있으면 트레이를 두고, 아니면 없앤다. */
 function updateTray(): void {
   const active = lastJobs.filter((j) => j.status === 'running' || j.status === 'queued')
   const hidden = !!mainWindow && !mainWindow.isVisible()
-  if (!active.length && !hidden) return tray.destroy()
+  const w = watcher.get()
+  if (!active.length && !hidden && !w.enabled) return tray.destroy()
   tray.ensure()
   const run = active.find((j) => j.status === 'running' && j.stage)
   const waiting = active.length - (run ? 1 : 0)
-  tray.status(
-    [PRODUCT_NAME, run ? `${run.name} ${run.stage === 'stt' ? `받아쓰기 ${Math.floor(run.frac * 100)}%` : '처리 중'}` : null, waiting ? `대기 ${waiting}개` : null]
-      .filter(Boolean)
-      .join(' · ')
-  )
+  const watchLine = !w.enabled ? null : w.paused ? '자동 처리 멈춤' : w.error ? '자동 처리: 확인이 필요해요' : '폴더 감시 중'
+  tray.update({
+    lines: [
+      run ? `${run.name} · ${run.stage === 'stt' ? `받아쓰기 ${Math.floor(run.frac * 100)}%` : '처리 중'}` : null,
+      waiting ? `대기 ${waiting}개` : null,
+      watchLine
+    ].filter((x): x is string => !!x),
+    watch: !w.enabled ? 'off' : w.paused ? 'paused' : 'on'
+  })
 }
 
 // 작업 상태가 바뀔 때마다 기록에 남긴다 (앱을 켠 뒤 처음 받은 목록은 남기지 않음)
@@ -688,6 +725,44 @@ const handlers: Record<string, (params: unknown) => unknown> = {
   'app.openNotices': () => openNotices(),
   'app.openReleases': () => void shell.openExternal(RELEASES_URL),
 
+  // ── 자동 처리(폴더 감시) ──
+  'watch.get': () => ({ ...watcher.get(), login: loginState() }),
+  // 켜기 전 확인: 폴더에 있는 녹음 수, 감시 폴더에 없는 과목, 저장 폴더와 겹치는지
+  'watch.inspect': (p) => {
+    const folder = String(p ?? '')
+    if (!isAbsolute(folder)) throw new EngineError('input', '감시할 폴더를 골라 주세요.')
+    return watcher.inspect(folder)
+  },
+  'watch.enable': async (p) => {
+    const o = p as { folder: unknown; createSubjects: unknown; processExisting: unknown; openAtLogin: unknown }
+    const folder = String(o.folder ?? '')
+    if (!isAbsolute(folder)) throw new EngineError('input', '감시할 폴더를 골라 주세요.')
+    await outDir() // 저장 폴더가 있어야 노트를 만든다
+    const subjects = Array.isArray(o.createSubjects) ? o.createSubjects.map(String).filter((s) => s && !/[\\/]/.test(s)) : []
+    await watcher.enable(folder, { createSubjects: subjects, processExisting: o.processExisting === true })
+    if (o.openAtLogin === true && app.isPackaged) setOpenAtLogin(true)
+    return { ...watcher.get(), login: loginState() }
+  },
+  // 끄면 자동 실행도 끈다 (자동 처리가 없으면 PC를 켤 때 앱을 띄울 이유가 없다)
+  'watch.disable': async () => {
+    await watcher.disable()
+    if (loginState().openAtLogin) setOpenAtLogin(false)
+    return { ...watcher.get(), login: loginState() }
+  },
+  'watch.pause': async (p) => {
+    await watcher.pause(p === true)
+    return { ...watcher.get(), login: loginState() }
+  },
+  'watch.setOpenAtLogin': (p) => {
+    setOpenAtLogin(p === true)
+    return { ...watcher.get(), login: loginState() }
+  },
+  'watch.openFolder': async () => {
+    const { folder } = (await loadSettings(dataDir)).watch
+    if (!folder) throw new EngineError('input', '감시 폴더가 정해지지 않았어요.')
+    await openFolder(folder)
+  },
+
   'notes.recent': async () => recentNotes(await outDir()),
   'notes.list': async () => listNotes(await outDir()),
   'notes.open': (p) => openNote(String(p)),
@@ -752,8 +827,9 @@ function keepContentAspect(win: BrowserWindow): void {
   })
 }
 
-function createWindow(target: Size): void {
+function createWindow(target: Size, show = true): void {
   const win = new BrowserWindow({
+    show,
     width: target.width,
     height: target.height,
     minWidth: MIN_CONTENT.width,
@@ -770,13 +846,17 @@ function createWindow(target: Size): void {
   mainWindow = win
   win.on('closed', () => (mainWindow = null))
   win.on('close', (event) => {
-    if (quitting || runner.activeCount() === 0) return
+    if (quitting || (runner.activeCount() === 0 && !watcher.enabled())) return
     event.preventDefault()
     win.hide()
     updateTray()
     if (!closeHintShown) {
       closeHintShown = true
-      tray.notify('창을 닫아도 계속해요', '받아쓰기가 끝나면 알려 드려요. 작업 표시줄 오른쪽 아이콘으로 다시 열 수 있어요.')
+      if (runner.activeCount() > 0) {
+        tray.notify('창을 닫아도 계속해요', '받아쓰기가 끝나면 알려 드려요. 작업 표시줄 오른쪽 아이콘으로 다시 열 수 있어요.')
+      } else {
+        tray.notify('창을 닫아도 폴더를 계속 살펴요', '녹음이 들어오면 노트를 만들고 알려 드려요. 작업 표시줄 오른쪽 아이콘으로 다시 열 수 있어요.')
+      }
     }
   })
   win.on('show', updateTray)
@@ -825,9 +905,13 @@ app.whenReady().then(async () => {
   nativeTheme.themeSource = settings.theme
   await setup.init(settings.sttModel)
   runner.kick() // 앱이 꺼져 멈췄던 작업을 이어서 한다
+  await watcher.init()
   // 설치본에는 기본 메뉴 줄(File·Edit·View…)을 두지 않는다. 개발 실행에서는 새로 고침·개발자 도구 단축키 때문에 남긴다.
   if (app.isPackaged) Menu.setApplicationMenu(null)
-  createWindow(settings.wizardDone ? HOME_CONTENT : WIZARD_CONTENT)
+  // PC를 켜면서 자동 실행된 경우: 자동 처리가 켜져 있으면 창 없이 트레이로만 시작한다
+  const startHidden = process.argv.includes(HIDDEN_ARG) && settings.wizardDone && settings.watch.enabled
+  createWindow(settings.wizardDone ? HOME_CONTENT : WIZARD_CONTENT, !startHidden)
+  if (startHidden) updateTray()
 })
 
 app.on('window-all-closed', () => {
