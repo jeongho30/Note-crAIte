@@ -186,8 +186,10 @@ function JobRow({ job: j, now, open, onToggle, act, onConnect, onSettings, onPre
       .filter(Boolean)
       .join(' · ')
     const note = j.notePath
-    if (note) actions.push(button('노트 보기', () => onPreview(note)))
-    actions.push(button('폴더에서 보기', () => void act('jobs.revealNote', j.id), 'ghost'))
+    if (note) {
+      actions.push(button('노트 보기', () => onPreview(note)))
+      actions.push(button('폴더에서 보기', () => void act('jobs.revealNote', j.id), 'ghost'))
+    }
   }
 
   const title = j.status === 'done' && j.notePath ? noteTitle(j.notePath) : j.name

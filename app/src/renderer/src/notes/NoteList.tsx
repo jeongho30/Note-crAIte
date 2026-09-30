@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ApiError, call } from '../api'
-import { Button, Card, Select, StatusPill, TextField, useToast } from '../components'
+import { Button, Card, MoreMenu, Select, StatusPill, TextField, useToast } from '../components'
 import type { RecentNote } from '../../../core/recent'
+import { NoteDeleteDialog } from './NoteDeleteDialog'
 import { NotePropsDialog } from './NotePropsDialog'
 import { filterNotes, type Sort, type SubjectFilter } from './filter'
 import styles from './NoteList.module.css'
@@ -34,6 +35,7 @@ export function NoteList({ doneCount, refresh, onPreview }: Props): React.JSX.El
   const [sort, setSort] = useState<Sort>('modified')
   const [shown, setShown] = useState(PAGE)
   const [editing, setEditing] = useState<string | null>(null) // 정보를 수정하는 노트
+  const [deleting, setDeleting] = useState<RecentNote | null>(null) // 삭제를 확인하는 노트
   const [version, setVersion] = useState(0) // 수정한 뒤 목록을 다시 읽는다
 
   useEffect(() => {
@@ -115,9 +117,13 @@ export function NoteList({ doneCount, refresh, onPreview }: Props): React.JSX.El
                     </span>
                     <span className={styles.meta}>{n.date}</span>
                   </button>
-                  <Button size="sm" variant="ghost" aria-label={`${n.title} 정보 수정`} onClick={() => setEditing(n.path)}>
-                    수정
-                  </Button>
+                  <MoreMenu
+                    label={`${n.title} 더 보기`}
+                    items={[
+                      { label: '수정', onClick: () => setEditing(n.path) },
+                      { label: '삭제', onClick: () => setDeleting(n), danger: true }
+                    ]}
+                  />
                 </div>
               ))}
             </Card>
@@ -130,6 +136,7 @@ export function NoteList({ doneCount, refresh, onPreview }: Props): React.JSX.El
           )}
         </>
       )}
+      {deleting && <NoteDeleteDialog path={deleting.path} title={deleting.title} onClose={() => setDeleting(null)} onDeleted={() => setVersion((v) => v + 1)} />}
       {editing && <NotePropsDialog path={editing} onClose={() => setEditing(null)} onSaved={() => setVersion((v) => v + 1)} />}
     </div>
   )

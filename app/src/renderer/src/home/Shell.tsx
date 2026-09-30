@@ -133,7 +133,7 @@ export default function Shell({ onRestartWizard }: Props): React.JSX.Element {
         </div>
       </nav>
       <main className={styles.main} ref={mainRef}>
-        {preview && <NotePreview path={preview} jobs={jobs} llm={llm} onBack={() => setPreview(null)} onConnect={onConnect} onMoved={(next) => { setPreview(next); setNotesVersion((v) => v + 1) }} />}
+        {preview && <NotePreview path={preview} jobs={jobs} llm={llm} onBack={() => setPreview(null)} onConnect={onConnect} onMoved={(next) => { setPreview(next); setNotesVersion((v) => v + 1) }} onDeleted={() => { setPreview(null); setNotesVersion((v) => v + 1) }} />}
         <div hidden={!!preview}>
           {view === 'home' && <Home refresh={notesVersion} jobs={jobs} llm={llm} onConnect={onConnect} onShowJobs={() => setView('jobs')} onPreview={setPreview} />}
           {view === 'jobs' && <JobList jobs={jobs} onConnect={onConnect} onSettings={() => go('settings')} onHome={() => setView('home')} onPreview={setPreview} />}

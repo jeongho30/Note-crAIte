@@ -795,6 +795,18 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     await runner.noteEdited(checked, r.path, r.props)
     return r.path
   },
+  // 노트 삭제: 파일은 휴지통으로 옮긴다 (되살릴 수 있게). 이 노트를 만든 작업은 노트 경로만 비운다
+  'notes.delete': async (p) => {
+    const checked = await checkNotePath(String(p))
+    if (await runner.noteBusy(checked)) throw new EngineError('input', '요약을 만드는 중이라 끝난 뒤에 삭제할 수 있어요.')
+    try {
+      await shell.trashItem(checked)
+    } catch (e) {
+      throw new EngineError('input', '휴지통으로 옮기지 못했어요: ' + (e instanceof Error ? e.message : String(e)))
+    }
+    await runner.noteDeleted(checked)
+    log.write('노트 삭제(휴지통)')
+  },
   'notes.reveal': async (p) => shell.showItemInFolder(await checkNotePath(String(p))),
   // 저장 폴더가 옵시디언 볼트일 때만 화면이 부른다
   'notes.openObsidian': async (p) => {

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { ApiError, call } from '../api'
-import { Banner, Button, Dialog, useToast } from '../components'
+import { Banner, Button, Dialog, MoreMenu, useToast } from '../components'
 import { isActive, lengthMinutes, STAGE_LABEL, type JobView } from '../home/shared'
 import type { LlmStatus } from '../wizard/shared'
 import 'katex/dist/katex.min.css'
+import { NoteDeleteDialog } from '../notes/NoteDeleteDialog'
 import { NotePropsDialog } from '../notes/NotePropsDialog'
 import { md, parseNote, type Segment } from './markdown'
 import styles from './NotePreview.module.css'
@@ -46,16 +47,19 @@ type Props = {
   onConnect: () => void
   /** 정보를 수정해 파일 이름이나 폴더가 바뀌었을 때: 새 경로로 다시 연다 */
   onMoved: (newPath: string) => void
+  /** 노트를 삭제했을 때: 이 미리보기를 닫고 목록을 다시 읽는다 */
+  onDeleted: () => void
 }
 
 // 노트 미리보기: 저장된 .md를 읽어 옵시디언과 비슷한 모양으로 보여 준다. 편집은 옵시디언이나 다른 편집기에서 한다.
-export function NotePreview({ path, jobs, llm, onBack, onConnect, onMoved }: Props): React.JSX.Element {
+export function NotePreview({ path, jobs, llm, onBack, onConnect, onMoved, onDeleted }: Props): React.JSX.Element {
   const toast = useToast()
   const [note, setNote] = useState<NoteData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [confirm, setConfirm] = useState(false)
   const [starting, setStarting] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const load = useCallback(() => {
     call<NoteData>('notes.read', path).then(
@@ -166,11 +170,6 @@ export function NotePreview({ path, jobs, llm, onBack, onConnect, onMoved }: Pro
               다른 앱에서 열기
             </Button>
           )}
-          {typeof meta['stt'] === 'string' && (
-            <Button size="sm" variant="ghost" disabled={working} onClick={() => setEditing(true)}>
-              정보 수정
-            </Button>
-          )}
           {hasSummary && canSummarize && (
             <Button
               size="sm"
@@ -182,6 +181,13 @@ export function NotePreview({ path, jobs, llm, onBack, onConnect, onMoved }: Pro
               요약 다시 만들기
             </Button>
           )}
+          <MoreMenu
+            label="노트 더 보기"
+            items={[
+              ...(typeof meta['stt'] === 'string' ? [{ label: '수정', onClick: () => setEditing(true), disabled: working }] : []),
+              { label: '삭제', onClick: () => setDeleting(true), danger: true, disabled: working }
+            ]}
+          />
         </div>
       </header>
 
@@ -210,6 +216,7 @@ export function NotePreview({ path, jobs, llm, onBack, onConnect, onMoved }: Pro
         ))}
       </div>
 
+      {deleting && <NoteDeleteDialog path={path} title={title} onClose={() => setDeleting(false)} onDeleted={onDeleted} />}
       {editing && <NotePropsDialog path={path} onClose={() => setEditing(false)} onSaved={(next) => (next === path ? load() : onMoved(next))} />}
 
       <Dialog

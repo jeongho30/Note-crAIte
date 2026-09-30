@@ -395,6 +395,16 @@ export function createJobRunner(d: Deps) {
     await emitNow()
   }
 
+  /** 노트를 지운 뒤: 그 노트를 만든 작업의 노트 경로를 비운다 (작업 목록에 없는 노트 보기 버튼이 남지 않게) */
+  async function noteDeleted(path: string): Promise<void> {
+    for (const job of await listJobs(d.dataDir)) {
+      if (!job.output?.notePath || !samePath(job.output.notePath, path)) continue
+      delete job.output
+      await save(job)
+    }
+    await emitNow()
+  }
+
   return {
     list,
     start,
@@ -407,6 +417,7 @@ export function createJobRunner(d: Deps) {
     notePath,
     noteBusy,
     noteEdited,
+    noteDeleted,
     shutdown,
     kick: () => void loop(),
     /** 대기 중이거나 도는 작업 수 */
