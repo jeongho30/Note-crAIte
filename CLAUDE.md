@@ -114,8 +114,7 @@ S3는 9/28에 정했다: 로컬 STT는 whisper.cpp, CPU 기본 `large-v3-turbo-q
 
 1. 실제 작업의 받아쓰기 시간으로 예상치 보정. TTS가 아닌 사람이 읽은 샘플이어도 쉼이 적어 노트북 예상이 90분에 약 74분으로, S3 실측(약 27분)보다 크게 나온다.
 2. (9/30 됨, 남은 것) GPU 없는 노트북에서 CI 설치 파일로 완주하는 주말 1차 테스트. 자동 처리의 PC를 켜면 자동 실행 등록은 설치본에서 확인해야 한다. 나머지 9/30 된 것은 `docs/decisions.md`로 옮겼다.
-3. 설치본 오픈소스 고지에 수식 플러그인(@vscode/markdown-it-katex, katex) 넣기(9/30에 `notices.mjs`의 ROOTS에는 추가함). 고지 파일은 `.cache/ffmpeg/bin/FFMPEG-SOURCE.txt`가 있어야 만들어지는데 그 캐시가 데스크톱에만 있고 노트북에는 전달되지 않은 듯해서, 이 PC에서는 `fetch_ffmpeg.ps1`을 돌린 뒤 `npm run dist:win`(또는 CI)으로 만들어 KaTeX 항목이 들어갔는지 `build/THIRD_PARTY_NOTICES.txt`에서 확인한다.
-4. 계획의 W3: 1차 테스트 수정, ChatKHU STT 선택지, OpenAI·Gemini 프리셋. W4: Ollama(설정의 로컬 LLM), Mac 베타.
+3. 계획의 W3: 1차 테스트 수정, ChatKHU STT 선택지, OpenAI·Gemini 프리셋. W4: Ollama(설정의 로컬 LLM), Mac 베타.
 
 사용자가 할 것·정할 것:
 
@@ -123,7 +122,7 @@ S3는 9/28에 정했다: 로컬 STT는 whisper.cpp, CPU 기본 `large-v3-turbo-q
 2. **S1 새 Windows 계정 설치와 SmartScreen 문구**(내려받은 설치 파일이어야 뜸. CI 설치 파일이 생겨 이제 할 수 있다).
 3. **옵시디언에서 굵게.** `**파싱(Parsing)**을`처럼 닫는 `**` 앞이 문장부호이고 뒤에 조사가 붙으면 표준 규칙상 굵게가 안 된다. 앱 미리보기는 cjk-friendly로 고쳤고, 노트 파일(옵시디언)은 그대로다. 옵시디언에서 안 보이는 것을 확인하면 노트를 쓸 때 그 부분만 `<strong>`으로 바꾸는 안이 있다(프롬프트는 고치지 않기로 함).
 
-PC별 메모: 노트북(Ryzen 7 5700U)에는 모델과 `tools/.venv`가 있고 설치본을 이 계정에 깔아 두었다. 모델은 9/29에 Claude 가상화 폴더에서 실제 `%LOCALAPPDATA%\lecture-notes\models`로 옮겼다(Gotchas의 MSIX 참고). 벤치용 녹음·기준 전사는 저장소 밖 `C:\ljh\2026-2\s3-data\`에 있다. faster-whisper 벤치가 필요하면 `tools/.venv`를 새로 만든다.
+PC별 메모: 노트북(Ryzen 7 5700U)에는 모델과 `tools/.venv`가 있고 설치본을 이 계정에 깔아 두었다. 모델은 9/29에 Claude 가상화 폴더에서 실제 `%LOCALAPPDATA%\lecture-notes\models`로 옮겼다(Gotchas의 MSIX 참고). 벤치용 녹음·기준 전사는 저장소 밖 `C:\ljh\2026-2\s3-data\`에 있다. faster-whisper 벤치가 필요하면 `tools/.venv`를 새로 만든다. 오픈소스 고지에 수식 플러그인(katex)이 들어간 것은 9/30 데스크톱에서 `notices.mjs`로 확인했다. `.cache/ffmpeg`는 PC마다 `fetch_ffmpeg.ps1`로 받아야 하니(저장소에 없음) 노트북에서 `dist:win`이나 `notices.mjs`를 돌릴 때는 먼저 받는다.
 
 - Claude 데스크톱 앱(MSIX)에서 실행한 명령·앱이 `%LOCALAPPDATA%`에 새로 쓴 파일은 `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Local\lecture-notes\`로 가상화된다. Claude 안의 프로세스는 두 곳을 합쳐 보지만, 사용자가 자기 터미널에서 띄운 앱은 실제 폴더만 본다(9/29 노트북: Claude 세션에서 받은 모델을 사용자 `npm run dev`가 못 찾음). 사용자 앱이 쓸 모델·데이터는 사용자 터미널에서 받거나 옮기게 하고, Claude 쪽에서는 실제 폴더에 쓸 수 없다. 앱이 켜질 때 로그에 모델 폴더와 파일 크기를 남긴다(`받아쓰기 모델: ...`).
 - 데스크톱의 `py -3.13`은 Microsoft Store판이라 `%LOCALAPPDATA%` 쓰기가 `...\Packages\PythonSoftwareFoundation...\LocalCache\`로 가상화된다. 벤치용 venv를 그 Python으로 만들지 않는다.
