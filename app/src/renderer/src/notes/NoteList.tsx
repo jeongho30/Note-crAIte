@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ApiError, call } from '../api'
 import { Button, Card, Select, StatusPill, TextField, useToast } from '../components'
 import type { RecentNote } from '../../../core/recent'
+import { NotePropsDialog } from './NotePropsDialog'
 import { filterNotes, type Sort, type SubjectFilter } from './filter'
 import styles from './NoteList.module.css'
 
@@ -18,11 +19,13 @@ function toFilter(value: string): SubjectFilter {
 type Props = {
   /** 끝난 작업 수 (바뀌면 다시 읽는다) */
   doneCount: number
+  /** 바뀌면 다시 읽는다 (미리보기에서 노트 정보를 고친 뒤) */
+  refresh?: number
   onPreview: (path: string) => void
 }
 
 // 노트 목록: 저장 폴더의 노트 전체. 제목·과목으로 찾고, 과목으로 거르고, 최근 수정 순 또는 강의 날짜 순으로 본다.
-export function NoteList({ doneCount, onPreview }: Props): React.JSX.Element {
+export function NoteList({ doneCount, refresh, onPreview }: Props): React.JSX.Element {
   const toast = useToast()
   const [notes, setNotes] = useState<RecentNote[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -30,6 +33,8 @@ export function NoteList({ doneCount, onPreview }: Props): React.JSX.Element {
   const [subject, setSubject] = useState(ALL)
   const [sort, setSort] = useState<Sort>('modified')
   const [shown, setShown] = useState(PAGE)
+  const [editing, setEditing] = useState<string | null>(null) // 정보를 고치는 노트
+  const [version, setVersion] = useState(0) // 고친 뒤 목록을 다시 읽는다
 
   useEffect(() => {
     call<RecentNote[]>('notes.list').then(
@@ -39,7 +44,7 @@ export function NoteList({ doneCount, onPreview }: Props): React.JSX.Element {
       },
       (e) => setError(e instanceof ApiError ? e.message : '노트를 읽지 못했어요.')
     )
-  }, [doneCount])
+  }, [doneCount, refresh, version])
 
   // 찾는 조건이 바뀌면 처음 20개부터
   useEffect(() => setShown(PAGE), [query, subject, sort])
@@ -102,13 +107,18 @@ export function NoteList({ doneCount, onPreview }: Props): React.JSX.Element {
           ) : (
             <Card className={styles.notes}>
               {found.slice(0, shown).map((n) => (
-                <button key={n.path} className={styles.note} onClick={() => onPreview(n.path)}>
-                  <StatusPill>{n.subject ?? '미분류'}</StatusPill>
-                  <span className={styles.title} title={n.title}>
-                    {n.title}
-                  </span>
-                  <span className={styles.meta}>{n.date}</span>
-                </button>
+                <div key={n.path} className={styles.row}>
+                  <button className={styles.note} onClick={() => onPreview(n.path)}>
+                    <StatusPill>{n.subject ?? '미분류'}</StatusPill>
+                    <span className={styles.title} title={n.title}>
+                      {n.title}
+                    </span>
+                    <span className={styles.meta}>{n.date}</span>
+                  </button>
+                  <Button size="sm" variant="ghost" aria-label={`${n.title} 정보 고치기`} onClick={() => setEditing(n.path)}>
+                    고치기
+                  </Button>
+                </div>
               ))}
             </Card>
           )}
@@ -120,6 +130,7 @@ export function NoteList({ doneCount, onPreview }: Props): React.JSX.Element {
           )}
         </>
       )}
+      {editing && <NotePropsDialog path={editing} onClose={() => setEditing(null)} onSaved={() => setVersion((v) => v + 1)} />}
     </div>
   )
 }

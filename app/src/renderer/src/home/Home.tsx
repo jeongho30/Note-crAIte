@@ -15,12 +15,14 @@ type Props = {
   onShowJobs: () => void
   /** 최근 노트를 누르면 앱 안에서 미리보기 */
   onPreview: (path: string) => void
+  /** 바뀌면 최근 노트를 다시 읽는다 (노트 정보를 고친 뒤) */
+  refresh?: number
 }
 
 // 녹음 파형 모양 (끌어 놓기 칸 장식)
 const WAVE = [10, 18, 26, 14, 22, 8, 16]
 
-export function Home({ jobs, llm, onConnect, onShowJobs, onPreview }: Props): React.JSX.Element {
+export function Home({ jobs, llm, onConnect, onShowJobs, onPreview, refresh }: Props): React.JSX.Element {
   const setup = useSetup()
   const toast = useToast()
   const [over, setOver] = useState(false)
@@ -32,7 +34,7 @@ export function Home({ jobs, llm, onConnect, onShowJobs, onPreview }: Props): Re
   // 노트가 새로 저장되면 최근 노트를 다시 읽는다
   useEffect(() => {
     call<RecentNote[]>('notes.recent').then(setRecent, () => setRecent([]))
-  }, [doneCount])
+  }, [doneCount, refresh])
 
   function onDragEnter(e: DragEvent): void {
     if (!e.dataTransfer.types.includes('Files')) return

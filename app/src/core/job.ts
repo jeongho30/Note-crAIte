@@ -65,6 +65,8 @@ export type Job = {
    */
   cost?: { summaryCredits: number | null; source?: 'tokens' | 'balance'; verifyCredits?: number | null; polishCredits?: number | null }
   output?: { notePath: string }
+  /** 노트 목록에서 고친 제목·날짜. 있으면 요약을 다시 만들어도 이 값을 쓴다 (과목은 input.subject를 고친다) */
+  edits?: { title: string; date: string }
   error?: { code: string; message: string; stage: StageName }
 }
 
@@ -277,9 +279,9 @@ const RUNNERS: Record<StageName, Runner> = {
     const [transcript, applied] = corrections.apply(paragraphs.map((p) => p.text), summary?.corrections ?? [])
     const s = job.settings
     const markdown = renderNote({
-      title: summary?.title ?? stem(job.input.audio),
+      title: job.edits?.title ?? summary?.title ?? stem(job.input.audio),
       subject: job.input.subject,
-      date: localDate(job.audio!.recordedAt),
+      date: job.edits?.date ?? localDate(job.audio!.recordedAt),
       source: basename(job.input.audio),
       stt: `whisper.cpp ${s.model}`,
       llm: summary ? s.llm!.model : null,

@@ -4,6 +4,7 @@ import { Banner, Button, Dialog, useToast } from '../components'
 import { isActive, lengthMinutes, STAGE_LABEL, type JobView } from '../home/shared'
 import type { LlmStatus } from '../wizard/shared'
 import 'katex/dist/katex.min.css'
+import { NotePropsDialog } from '../notes/NotePropsDialog'
 import { md, parseNote, type Segment } from './markdown'
 import styles from './NotePreview.module.css'
 
@@ -43,15 +44,18 @@ type Props = {
   onBack: () => void
   /** 키 없이 만든 노트의 [요약 만들기]: 설정의 요약 서비스로 */
   onConnect: () => void
+  /** 정보를 고쳐 파일 이름이나 폴더가 바뀌었을 때: 새 경로로 다시 연다 */
+  onMoved: (newPath: string) => void
 }
 
 // 노트 미리보기: 저장된 .md를 읽어 옵시디언과 비슷한 모양으로 보여 준다. 편집은 옵시디언이나 다른 편집기에서 한다.
-export function NotePreview({ path, jobs, llm, onBack, onConnect }: Props): React.JSX.Element {
+export function NotePreview({ path, jobs, llm, onBack, onConnect, onMoved }: Props): React.JSX.Element {
   const toast = useToast()
   const [note, setNote] = useState<NoteData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [confirm, setConfirm] = useState(false)
   const [starting, setStarting] = useState(false)
+  const [editing, setEditing] = useState(false)
 
   const load = useCallback(() => {
     call<NoteData>('notes.read', path).then(
@@ -162,6 +166,11 @@ export function NotePreview({ path, jobs, llm, onBack, onConnect }: Props): Reac
               다른 앱에서 열기
             </Button>
           )}
+          {typeof meta['stt'] === 'string' && (
+            <Button size="sm" variant="ghost" disabled={working} onClick={() => setEditing(true)}>
+              정보 고치기
+            </Button>
+          )}
           {hasSummary && canSummarize && (
             <Button
               size="sm"
@@ -200,6 +209,8 @@ export function NotePreview({ path, jobs, llm, onBack, onConnect }: Props): Reac
           <SegmentView key={i} segment={s} />
         ))}
       </div>
+
+      {editing && <NotePropsDialog path={path} onClose={() => setEditing(false)} onSaved={(next) => (next === path ? load() : onMoved(next))} />}
 
       <Dialog
         open={confirm}

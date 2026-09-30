@@ -7,6 +7,7 @@ import { PRODUCT_NAME } from '../core/brand.ts'
 import { EngineError } from '../core/errors.ts'
 import { dirSize, readJson } from '../core/files.ts'
 import { defaultThreads, detect } from '../core/hardware.ts'
+import { editNote, parseNoteProps } from '../core/noteedit.ts'
 import { attachNotes, AUDIO_EXTS, NOTE_EXTS, pairInputs } from '../core/inputs.ts'
 import { DEFAULT_BEAM_SIZE, DEFAULT_MODEL, jobsDir, listJobs, STT_MODEL_CHOICES, VAD_MODEL } from '../core/job.ts'
 import type { LlmSettings } from '../core/job.ts'
@@ -777,6 +778,23 @@ const handlers: Record<string, (params: unknown) => unknown> = {
   'notes.list': async () => listNotes(await outDir()),
   'notes.open': (p) => openNote(String(p)),
   'notes.read': (p) => readNote(String(p)),
+  // 노트 목록·미리보기의 [정보 수정]: 이 앱이 만든 노트만 고친다 (머리말·파일 이름·폴더를 함께 바꾼다)
+  'notes.editInfo': async (p) => {
+    const checked = await checkNotePath(String(p))
+    const text = await readFile(checked, 'utf8').catch(() => {
+      throw new EngineError('input', '노트 파일을 찾지 못했어요. 옮기거나 지웠을 수 있어요.')
+    })
+    const props = parseNoteProps(text)
+    return props ? { editable: true, ...props } : { editable: false }
+  },
+  'notes.edit': async (p) => {
+    const { path, title, subject, date } = p as { path: unknown; title: unknown; subject: unknown; date: unknown }
+    const checked = await checkNotePath(String(path))
+    if (await runner.noteBusy(checked)) throw new EngineError('input', '요약을 만드는 중이라 끝난 뒤에 고칠 수 있어요.')
+    const r = await editNote(await outDir(), checked, { title: String(title ?? ''), subject: subject ? String(subject) : null, date: String(date ?? '') })
+    await runner.noteEdited(checked, r.path, r.props)
+    return r.path
+  },
   'notes.reveal': async (p) => shell.showItemInFolder(await checkNotePath(String(p))),
   // 저장 폴더가 옵시디언 볼트일 때만 화면이 부른다
   'notes.openObsidian': async (p) => {

@@ -34,7 +34,7 @@ function callout(title: string, lines: string[]): string {
 }
 
 /** 옵시디언 태그에는 공백·문장부호를 쓸 수 없다. */
-function tag(text: string): string {
+export function tag(text: string): string {
   return text.trim().replace(/[^\p{L}\p{N}_\-/]+/gu, '_')
 }
 

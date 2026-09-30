@@ -49,6 +49,7 @@ export default function Shell({ onRestartWizard }: Props): React.JSX.Element {
   const toast = useToast()
   const seen = useRef<Map<string, string> | null>(null)
   const doneCount = jobs?.filter((j) => j.status === 'done').length ?? 0
+  const [notesVersion, setNotesVersion] = useState(0) // 미리보기에서 노트 정보를 고치면 앞 화면의 노트 목록을 다시 읽는다
 
   const loadLlm = useCallback(() => {
     call<LlmStatus>('llm.status').then(setLlm, () => setLlm({ provider: null }))
@@ -132,11 +133,11 @@ export default function Shell({ onRestartWizard }: Props): React.JSX.Element {
         </div>
       </nav>
       <main className={styles.main} ref={mainRef}>
-        {preview && <NotePreview path={preview} jobs={jobs} llm={llm} onBack={() => setPreview(null)} onConnect={onConnect} />}
+        {preview && <NotePreview path={preview} jobs={jobs} llm={llm} onBack={() => setPreview(null)} onConnect={onConnect} onMoved={(next) => { setPreview(next); setNotesVersion((v) => v + 1) }} />}
         <div hidden={!!preview}>
-          {view === 'home' && <Home jobs={jobs} llm={llm} onConnect={onConnect} onShowJobs={() => setView('jobs')} onPreview={setPreview} />}
+          {view === 'home' && <Home refresh={notesVersion} jobs={jobs} llm={llm} onConnect={onConnect} onShowJobs={() => setView('jobs')} onPreview={setPreview} />}
           {view === 'jobs' && <JobList jobs={jobs} onConnect={onConnect} onSettings={() => go('settings')} onHome={() => setView('home')} onPreview={setPreview} />}
-          {view === 'notes' && <NoteList doneCount={doneCount} onPreview={setPreview} />}
+          {view === 'notes' && <NoteList refresh={notesVersion} doneCount={doneCount} onPreview={setPreview} />}
           {view === 'settings' && (
             <Settings llm={llm} doneCount={doneCount} openKey={openKey} onLlmChange={loadLlm} onRestartWizard={onRestartWizard} />
           )}
