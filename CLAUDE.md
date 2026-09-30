@@ -114,7 +114,8 @@ S3는 9/28에 정했다: 로컬 STT는 whisper.cpp, CPU 기본 `large-v3-turbo-q
 
 1. 실제 작업의 받아쓰기 시간으로 예상치 보정. TTS가 아닌 사람이 읽은 샘플이어도 쉼이 적어 노트북 예상이 90분에 약 74분으로, S3 실측(약 27분)보다 크게 나온다.
 2. (9/30 됨, 남은 것) GPU 없는 노트북에서 CI 설치 파일로 완주하는 주말 1차 테스트. 자동 처리의 PC를 켜면 자동 실행 등록은 설치본에서 확인해야 한다. 나머지 9/30 된 것은 `docs/decisions.md`로 옮겼다.
-3. 계획의 W3: 1차 테스트 수정, ChatKHU STT 선택지, OpenAI·Gemini 프리셋. W4: Ollama(설정의 로컬 LLM), Mac 베타.
+3. 설치본 오픈소스 고지에 수식 플러그인(@vscode/markdown-it-katex, katex) 넣기(9/30에 `notices.mjs`의 ROOTS에는 추가함). 고지 파일은 `.cache/ffmpeg/bin/FFMPEG-SOURCE.txt`가 있어야 만들어지는데 그 캐시가 데스크톱에만 있고 노트북에는 전달되지 않은 듯해서, 이 PC에서는 `fetch_ffmpeg.ps1`을 돌린 뒤 `npm run dist:win`(또는 CI)으로 만들어 KaTeX 항목이 들어갔는지 `build/THIRD_PARTY_NOTICES.txt`에서 확인한다.
+4. 계획의 W3: 1차 테스트 수정, ChatKHU STT 선택지, OpenAI·Gemini 프리셋. W4: Ollama(설정의 로컬 LLM), Mac 베타.
 
 사용자가 할 것·정할 것:
 
