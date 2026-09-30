@@ -45,6 +45,8 @@ export type JobView = {
   sttChunks: { done: number; total: number } | null
   /** 요청이 몰려(429) 저절로 다시 시도할 시각 (ms). 없으면 null */
   autoRetryAt: number | null
+  /** 받아쓰기 방식 (chatkhu: ChatKHU 받아쓰기, 크레딧 사용) */
+  sttService: 'whisper' | 'chatkhu'
 }
 
 type Deps = {
@@ -69,11 +71,17 @@ type Deps = {
   onDone?: (job: Job) => Promise<void>
   /** 받아쓰기를 멈춰 둘 때 (앱에서 녹음하는 중). 받아쓰기가 끝난 작업의 요약 등은 계속한다 */
   holdStt?: () => boolean
+  /** 새 작업의 받아쓰기 방식 (설정 > 고급 > 실험 기능, ChatKHU가 연결돼 있을 때만 chatkhu) */
+  sttService: () => Promise<'whisper' | 'chatkhu'>
+  /** ChatKHU 게이트웨이 주소 */
+  chatkhuBase: string
 }
 
-/** 오디오 준비·받아쓰기가 남은 작업 (CPU를 많이 쓴다) */
+const cloudStt = (job: Job): boolean => job.settings.sttService === 'chatkhu'
+
+/** 이 PC에서 오디오 준비·받아쓰기가 남은 작업 (CPU를 많이 쓴다). ChatKHU로 받아쓰는 작업은 뺀다 */
 function needsStt(job: Job): boolean {
-  return job.stages.stt.status !== 'done' && job.stages.stt.status !== 'skipped'
+  return !cloudStt(job) && job.stages.stt.status !== 'done' && job.stages.stt.status !== 'skipped'
 }
 
 const EMIT_INTERVAL_MS = 500
@@ -81,7 +89,7 @@ const RATE_LIMIT_RETRY_MS = 60_000 // 요청 몰림(429)은 1분 뒤 한 번만 
 
 export function createJobRunner(d: Deps) {
   let running = false
-  let current: { id: string; stage: StageName; frac: number; stageStartedAt: number } | null = null
+  let current: { id: string; stage: StageName; frac: number; stageStartedAt: number; cloud: boolean } | null = null
   let lastEmit = 0
   let probeCache: ProbeResult | null = null
   let last: JobView[] = [] // 마지막으로 보낸 목록 (트레이·창 닫기 판단용)
@@ -115,11 +123,11 @@ export function createJobRunner(d: Deps) {
     })
   }
 
-  /** 요약·교정 검증·전사문 다듬기 크레딧의 합. 요약 크레딧을 모르면 null */
+  /** ChatKHU 받아쓰기·요약·교정 검증·전사문 다듬기 크레딧의 합. 요약 크레딧도 받아쓰기 크레딧도 모르면 null */
   function totalCredits(job: Job): number | null {
     const c = job.cost
-    if (c?.summaryCredits == null) return null
-    return Math.round((c.summaryCredits + (c.verifyCredits ?? 0) + (c.polishCredits ?? 0)) * 100) / 100
+    if (c?.summaryCredits == null && c?.sttCredits == null) return null
+    return Math.round(((c.summaryCredits ?? 0) + (c.sttCredits ?? 0) + (c.verifyCredits ?? 0) + (c.polishCredits ?? 0)) * 100) / 100
   }
 
   function view(job: Job, firstQueued: boolean): JobView {
@@ -130,7 +138,7 @@ export function createJobRunner(d: Deps) {
       const elapsedS = (Date.now() - live.stageStartedAt) / 1000
       // 처음엔 이 PC에서 잰 속도로, 어느 정도 진행되면 실제 속도로 남은 시간을 계산한다
       if (live.frac >= 0.05) etaS = (elapsedS / live.frac) * (1 - live.frac)
-      else if (probeCache) etaS = estimateSttSeconds(durationS, probeCache) - elapsedS
+      else if (probeCache && !cloudStt(job)) etaS = estimateSttSeconds(durationS, probeCache) - elapsedS
       if (etaS !== null) etaS = Math.max(0, Math.round(etaS))
     }
     return {
@@ -144,7 +152,7 @@ export function createJobRunner(d: Deps) {
       durationS,
       waiting:
         job.status === 'queued' || (job.status === 'running' && !live)
-          ? held(job) ? 'recording' : firstQueued && !d.sttReady() ? 'model' : 'turn'
+          ? held(job) ? 'recording' : firstQueued && !d.sttReady() && !cloudStt(job) ? 'model' : 'turn'
           : null,
       error: job.error ?? null,
       notePath: job.output?.notePath ?? null,
@@ -156,7 +164,8 @@ export function createJobRunner(d: Deps) {
       stages: stageViews(job),
       credits: totalCredits(job),
       sttChunks: job.status === 'done' ? null : sttChunks(job),
-      autoRetryAt: autoRetryAt.get(job.id) ?? null
+      autoRetryAt: autoRetryAt.get(job.id) ?? null,
+      sttService: cloudStt(job) ? 'chatkhu' : 'whisper'
     }
   }
 
@@ -191,11 +200,14 @@ export function createJobRunner(d: Deps) {
       for (let job = await nextPending(); job && !stopping; job = await nextPending()) {
         blocker ??= powerSaveBlocker.start('prevent-app-suspension') // 작업 중에는 PC가 잠들지 않게
         await emitNow()
-        try {
-          await d.whenSttReady()
-        } catch {
-          // 모델을 받지 못함: 작업은 대기로 두고 멈춘다. 화면의 [이어 받기]로 받으면 다시 돈다.
-          break
+        // ChatKHU로 받아쓰는 작업은 이 PC의 받아쓰기 모델·속도 재기를 기다리지 않는다
+        if (!cloudStt(job)) {
+          try {
+            await d.whenSttReady()
+          } catch {
+            // 모델을 받지 못함: 작업은 대기로 두고 멈춘다. 화면의 [이어 받기]로 받으면 다시 돈다.
+            break
+          }
         }
         probeCache = await d.probe()
         const jobDir = dirOf(job.id)
@@ -212,13 +224,14 @@ export function createJobRunner(d: Deps) {
           await writeJsonAtomic(join(jobDir, 'job.json'), job)
         }
         if (stopping) break
-        current = { id: job.id, stage: 'audio', frac: 0, stageStartedAt: Date.now() }
+        current = { id: job.id, stage: 'audio', frac: 0, stageStartedAt: Date.now(), cloud: cloudStt(job) }
         controller = new AbortController()
         const ctx: JobContext = {
           ffmpeg: d.ffmpeg(),
           whisperCli: [d.whisperCli()],
           modelPath: async (kind, name) => join(d.dataDir, 'models', MODELS[kind][name].file),
           apiKey: await d.apiKey(),
+          chatkhuBase: d.chatkhuBase,
           signal: controller.signal,
           onProgress: (stage, frac) => {
             if (!current) return
@@ -262,7 +275,7 @@ export function createJobRunner(d: Deps) {
   /** 작업을 만들고 돌리기 시작한다. 만든 작업 id를 넣은 순서대로 돌려준다. */
   async function start(inputs: JobInput[]): Promise<string[]> {
     const probe = await d.probe()
-    const [llm, outDir, stt, steps] = await Promise.all([d.llm(), d.outDir(), d.stt(), d.steps()])
+    const [llm, outDir, stt, steps, sttService] = await Promise.all([d.llm(), d.outDir(), d.stt(), d.steps(), d.sttService()])
     const ids: string[] = []
     for (const input of inputs) {
       const jobDir = await createJob(d.dataDir, input.audio, input.notes, input.subject, {
@@ -274,7 +287,8 @@ export function createJobRunner(d: Deps) {
         args: stt.args,
         outDir,
         llm,
-        ...steps
+        ...steps,
+        ...(sttService === 'chatkhu' ? { sttService } : {})
       }, input.from)
       ids.push(basename(jobDir))
     }
@@ -318,7 +332,12 @@ export function createJobRunner(d: Deps) {
     job.settings.verifyModel = null
     for (const s of ['summarize', 'note', 'save'] as const) job.stages[s] = { status: 'pending' }
     // 다듬은 전사문은 그대로 두고(다시 다듬지 않음) 요약만 다시 한다
-    job.cost = job.cost?.polishCredits != null ? { summaryCredits: null, polishCredits: job.cost.polishCredits } : undefined
+    // 다듬기·ChatKHU 받아쓰기 크레딧은 그대로 둔다 (다시 하지 않는다)
+    const kept = {
+      ...(job.cost?.polishCredits != null ? { polishCredits: job.cost.polishCredits } : {}),
+      ...(job.cost?.sttCredits != null ? { sttCredits: job.cost.sttCredits } : {})
+    }
+    job.cost = Object.keys(kept).length ? { summaryCredits: null, ...kept } : undefined
     job.status = 'queued'
     await save(job)
     await emitNow()
@@ -333,6 +352,19 @@ export function createJobRunner(d: Deps) {
     job.settings.llm = null
     if (job.stages.polish?.status !== 'done') job.stages.polish = { status: 'skipped' }
     job.stages.summarize = { status: 'skipped' }
+    job.status = 'queued'
+    delete job.error
+    await save(job)
+    await emitNow()
+    void loop()
+  }
+
+  /** ChatKHU 받아쓰기에서 멈춘 작업을 이 PC의 whisper로 받아쓴다. ChatKHU로 끝낸 조각은 그대로 쓴다 */
+  async function localStt(id: string): Promise<void> {
+    autoRetryAt.delete(id)
+    const job = await loadJob(dirOf(id))
+    if ((job.status !== 'failed' && job.status !== 'cancelled') || !cloudStt(job) || job.stages.stt.status === 'done') return
+    delete job.settings.sttService
     job.status = 'queued'
     delete job.error
     await save(job)
@@ -388,7 +420,8 @@ export function createJobRunner(d: Deps) {
 
   /** 녹음을 시작할 때: 오디오 준비·받아쓰기 중인 작업을 멈추고 대기로 되돌린다 (끝난 조각은 남음). 멈췄으면 true */
   function holdNow(): boolean {
-    if (!current || (current.stage !== 'audio' && current.stage !== 'stt')) return false
+    // ChatKHU로 받아쓰는 작업은 이 PC의 CPU를 쓰지 않으니 두고 간다
+    if (!current || current.cloud || (current.stage !== 'audio' && current.stage !== 'stt')) return false
     yielding = true
     controller?.abort()
     return true
@@ -433,6 +466,7 @@ export function createJobRunner(d: Deps) {
     start,
     retry,
     transcriptOnly,
+    localStt,
     resummarize,
     cancel,
     remove,

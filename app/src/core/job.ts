@@ -16,7 +16,8 @@ import { readNotes } from './inputs.ts'
 import { creditsFromTokens, PRICES } from './llmcatalog.ts'
 import { renderNote, saveNote } from './note.ts'
 import { transcribeChunks } from './stt/base.ts'
-import type { Segment } from './stt/base.ts'
+import type { Segment, SttEngine } from './stt/base.ts'
+import { chargedCredits, ChatkhuStt } from './stt/chatkhu.ts'
 import { WhisperCpp } from './stt/whispercpp.ts'
 import { polishParagraphs } from './polish.ts'
 import { summarize } from './summarize.ts'
@@ -48,6 +49,8 @@ export type JobSettings = {
   verifyModel?: string | null
   /** 전사문 다듬기 모델. null이거나 없으면 다듬지 않는다 */
   polishModel?: string | null
+  /** 받아쓰기 방식. chatkhu면 ChatKHU 받아쓰기(Soniox, 크레딧 사용), 없으면 이 PC의 whisper (설정 > 고급 > 실험 기능) */
+  sttService?: 'whisper' | 'chatkhu'
 }
 
 export type Job = {
@@ -63,7 +66,7 @@ export type Job = {
    * source: tokens는 응답의 토큰 수 × 단가, balance는 요약 전후 잔액 차이(단가표에 없는 모델만).
    * source가 없는 것은 9/29 전 기록(잔액 차이)이다. 잔액 차이는 실패한 호출의 늦은 차감이나 다른 사용이 섞일 수 있다.
    */
-  cost?: { summaryCredits: number | null; source?: 'tokens' | 'balance'; verifyCredits?: number | null; polishCredits?: number | null }
+  cost?: { summaryCredits: number | null; source?: 'tokens' | 'balance'; verifyCredits?: number | null; polishCredits?: number | null; sttCredits?: number | null }
   output?: { notePath: string }
   /** 노트 목록에서 수정한 제목·날짜. 있으면 요약을 다시 만들어도 이 값을 쓴다 (과목은 input.subject를 고친다) */
   edits?: { title: string; date: string }
@@ -96,6 +99,8 @@ export type JobContext = {
   whisperCli: string[] // 실행 명령 (테스트에서는 node + 가짜 스크립트)
   modelPath: (kind: 'whisper' | 'vad', name: string) => Promise<string> // 없으면 받아 온다
   apiKey: string | null // job.json에는 저장하지 않는다
+  /** ChatKHU 게이트웨이 주소 (ChatKHU 받아쓰기를 쓰는 작업만) */
+  chatkhuBase?: string
   onProgress?: (stage: StageName, frac: number) => void
   signal?: AbortSignal
 }
@@ -190,19 +195,32 @@ const RUNNERS: Record<StageName, Runner> = {
 
   async stt(job, jobDir, ctx) {
     const s = job.settings
-    const engine = new WhisperCpp({
-      cli: ctx.whisperCli,
-      model: await ctx.modelPath('whisper', s.model),
-      vadModel: await ctx.modelPath('vad', VAD_MODEL),
-      threads: s.threads,
-      gpuDevice: s.gpuDevice,
-      beamSize: s.beamSize,
-      args: s.args ?? null
-    })
-    const segments = await transcribeChunks(engine, job.audio!.chunks, join(jobDir, 'chunks'), join(jobDir, 'stt'), {
-      language: s.language, signal: ctx.signal, onProgress: (f) => ctx.onProgress?.('stt', f)
-    })
-    await writeJsonAtomic(join(jobDir, 'stt.json'), segments)
+    const partsDir = join(jobDir, 'stt')
+    let engine: SttEngine
+    if (s.sttService === 'chatkhu') {
+      if (!ctx.apiKey || !ctx.chatkhuBase) throw new EngineError('auth', 'ChatKHU 키가 없어요. 설정에서 키를 넣어 주세요.')
+      await mkdir(partsDir, { recursive: true })
+      engine = new ChatkhuStt({ base: ctx.chatkhuBase, apiKey: ctx.apiKey, ffmpeg: ctx.ffmpeg, workDir: partsDir })
+    } else {
+      engine = new WhisperCpp({
+        cli: ctx.whisperCli,
+        model: await ctx.modelPath('whisper', s.model),
+        vadModel: await ctx.modelPath('vad', VAD_MODEL),
+        threads: s.threads,
+        gpuDevice: s.gpuDevice,
+        beamSize: s.beamSize,
+        args: s.args ?? null
+      })
+    }
+    try {
+      const segments = await transcribeChunks(engine, job.audio!.chunks, join(jobDir, 'chunks'), partsDir, {
+        language: s.language, signal: ctx.signal, onProgress: (f) => ctx.onProgress?.('stt', f)
+      })
+      await writeJsonAtomic(join(jobDir, 'stt.json'), segments)
+    } finally {
+      // 실패해도 이미 빠진 크레딧은 남긴다 (작업 목록의 크레딧)
+      if (s.sttService === 'chatkhu') job.cost = { ...job.cost, summaryCredits: job.cost?.summaryCredits ?? null, sttCredits: await chargedCredits(partsDir) }
+    }
     await rm(join(jobDir, 'chunks'), { recursive: true, force: true }) // 조각 WAV는 전사가 끝나면 필요 없다
     return 'done'
   },
@@ -240,7 +258,11 @@ const RUNNERS: Record<StageName, Runner> = {
     const result = await summarize(text, notes, job.input.subject, {
       endpoint: llm.endpoint, apiKey: ctx.apiKey, model: llm.model, fallbackTitle: stem(job.input.audio)
     })
-    const polish = job.cost?.polishCredits !== undefined ? { polishCredits: job.cost.polishCredits } : {}
+    // 앞 단계(다듬기·ChatKHU 받아쓰기)의 크레딧은 그대로 둔다
+    const polish = {
+      ...(job.cost?.polishCredits !== undefined ? { polishCredits: job.cost.polishCredits } : {}),
+      ...(job.cost?.sttCredits != null ? { sttCredits: job.cost.sttCredits } : {})
+    }
     if (priced) {
       job.cost = { summaryCredits: creditsFromTokens(llm.model, result.usage?.prompt_tokens, result.usage?.completion_tokens), source: 'tokens', ...polish }
     } else {

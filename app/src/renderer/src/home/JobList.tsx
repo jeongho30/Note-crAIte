@@ -149,7 +149,12 @@ function JobRow({ job: j, now, open, onToggle, act, onConnect, onSettings, onPre
 
   if (j.status === 'running' && j.stage) {
     status = <span className={styles.stage}>{j.stage === 'stt' ? `${stageLabel('stt')} ${Math.floor(j.frac * 100)}%` : `${stageLabel(j.stage)} 중`}</span>
-    meta = [j.durationS ? `${lengthMinutes(j.durationS)} 녹음` : null, j.etaS != null ? `${aboutMinutes(j.etaS)} 남음` : null, '창을 닫아도 계속돼요']
+    meta = [
+      j.durationS ? `${lengthMinutes(j.durationS)} 녹음` : null,
+      j.sttService === 'chatkhu' && j.stage === 'stt' ? 'ChatKHU로 받아쓰는 중' : null,
+      j.etaS != null ? `${aboutMinutes(j.etaS)} 남음` : null,
+      '창을 닫아도 계속돼요'
+    ]
       .filter(Boolean)
       .join(' · ')
     actions.push(button('취소', () => void act('jobs.cancel', j.id), 'ghost'))
@@ -171,10 +176,13 @@ function JobRow({ job: j, now, open, onToggle, act, onConnect, onSettings, onPre
     // 다시 시도하면 지금 설정의 요약 모델로 한다(main/jobs.ts retry)
     if (code === 'timeout') actions.push(button('요약 모델 바꾸기', onSettings))
     if ((code === 'credits' || code === 'too_large') && sttDone) actions.push(button('전사만 저장', () => void act('jobs.transcriptOnly', j.id)))
+    // ChatKHU 받아쓰기에서 멈췄으면 이 PC에서 받아쓸 수 있다 (크레딧이 들지 않음)
+    if (j.sttService === 'chatkhu' && !sttDone) actions.push(button('이 PC에서 받아쓰기', () => void act('jobs.localStt', j.id)))
     if (code !== 'too_large') actions.push(button('이어서 다시 시도', () => void act('jobs.retry', j.id)))
   } else if (j.status === 'cancelled') {
     status = <StatusPill tone="waiting">취소됨</StatusPill>
     meta = j.sttChunks ? `받아쓰기 ${j.sttChunks.total}조각 중 ${j.sttChunks.done}조각까지 했어요` : '취소했어요'
+    if (j.sttService === 'chatkhu' && !sttDone) actions.push(button('이 PC에서 받아쓰기', () => void act('jobs.localStt', j.id)))
     actions.push(button('이어서 다시 시도', () => void act('jobs.retry', j.id)))
   } else {
     status = <StatusPill tone="success">완료</StatusPill>

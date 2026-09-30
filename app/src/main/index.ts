@@ -17,7 +17,8 @@ import { estimateJobSeconds, estimateSttSeconds, testSample } from '../core/prob
 import type { ProbeResult } from '../core/probe.ts'
 import { DEFAULT_STEP_MODEL, estimateCredits90, estimateStepCredits90, POLISH_RECOMMENDED, RANKED, RECOMMENDED_COUNT } from '../core/llmcatalog.ts'
 import type { ModelItem } from '../core/llmcatalog.ts'
-import { CREDITS_PER_90MIN_SUMMARY, creditsPer90ByModel, listModels, PRESETS, PROVIDERS, verifyKey } from '../core/providers.ts'
+import { CHATKHU_BASE, CREDITS_PER_90MIN_SUMMARY, creditsPer90ByModel, listModels, PRESETS, PROVIDERS, verifyKey } from '../core/providers.ts'
+import { chatkhuSttCredits } from '../core/stt/chatkhu.ts'
 import type { ProviderId } from '../core/providers.ts'
 import { listNotes, recentNotes } from '../core/recent.ts'
 import { forgetProcessed, isRecording, listRecordings, markProcessed, recordingsDir, repairRecordings, unprocessedRecordings } from '../core/recordings.ts'
@@ -131,8 +132,16 @@ const runner = createJobRunner({
     if (!runner.transcribing()) setup.resume() // 작업 때문에 미룬 속도 재기
   },
   onDone: (job) => watcher.onDone(job),
-  holdStt: () => holdStt()
+  holdStt: () => holdStt(),
+  sttService: () => sttService(),
+  chatkhuBase: CHATKHU_BASE
 })
+
+/** 새 작업의 받아쓰기 방식: 설정 > 고급 > 실험 기능에서 켜고 ChatKHU가 연결돼 있을 때만 ChatKHU 받아쓰기 */
+async function sttService(): Promise<'whisper' | 'chatkhu'> {
+  const { chatkhuStt, provider } = await loadSettings(dataDir)
+  return chatkhuStt && provider === 'chatkhu' && (await readKey(dataDir, 'chatkhu')) ? 'chatkhu' : 'whisper'
+}
 
 // ── 앱에서 녹음하기 ──
 // 녹음하는 동안에는 받아쓰기(와 속도 재기)를 멈춰 둔다. 설정 > 고급 > 녹음에서 켜면 함께 돈다.
@@ -326,14 +335,18 @@ type Prepared = {
     notesName: string | null
     durationS: number | null
     recordedAt: string
-    /** 이 PC에서 받아쓰기 예상 시간(초). 속도를 아직 안 쟀으면 null */
+    /** 이 PC에서 받아쓰기 예상 시간(초). 속도를 아직 안 쟀거나 ChatKHU로 받아쓰면 null */
     sttS: number | null
     /** 요약 예상 크레딧 (ChatKHU일 때만) */
     credits: number | null
-    /** 오디오 준비부터 노트 저장까지 예상 시간(초). 속도를 아직 안 쟀으면 null */
+    /** ChatKHU 받아쓰기 예상 크레딧 (ChatKHU로 받아쓸 때만) */
+    sttCredits: number | null
+    /** 오디오 준비부터 노트 저장까지 예상 시간(초). 속도를 아직 안 쟀거나 ChatKHU로 받아쓰면 null */
     totalS: number | null
   }[]
   rejected: { name: string; reason: string }[]
+  /** 이 녹음들을 받아쓸 방식 (지금 설정) */
+  stt: 'whisper' | 'chatkhu'
 }
 
 /** 지금 고른 요약 모델의 90분 요약 크레딧. 써 본 적 없는 모델이면 null */
@@ -368,7 +381,8 @@ async function prepare(paths: string[]): Promise<Prepared> {
     name: basename(p),
     reason: NOTE_EXTS.some((e) => p.toLowerCase().endsWith('.' + e)) ? '같은 이름의 녹음이 없는 필기예요' : '녹음 파일이 아니에요'
   }))
-  const [probe, settings, per90] = await Promise.all([loadProbe(), loadSettings(dataDir), jobCredits90()])
+  const [probe, settings, per90, stt] = await Promise.all([loadProbe(), loadSettings(dataDir), jobCredits90(), sttService()])
+  const cloud = stt === 'chatkhu'
   const ffmpeg = findFfmpeg(binDir)
   const out: Prepared['recordings'] = []
   for (const r of recordings) {
@@ -384,15 +398,16 @@ async function prepare(paths: string[]): Promise<Prepared> {
         notesName: r.notes ? basename(r.notes) : null,
         durationS: info.durationS,
         recordedAt,
-        sttS: probe && info.durationS ? Math.round(estimateSttSeconds(info.durationS, probe)) : null,
-        totalS: probe && info.durationS ? Math.round(estimateJobSeconds(info.durationS, probe, settings.provider !== null)) : null,
-        credits: settings.provider === 'chatkhu' && info.durationS ? Math.max(1, Math.round((info.durationS / 5400) * per90)) : null
+        sttS: probe && info.durationS && !cloud ? Math.round(estimateSttSeconds(info.durationS, probe)) : null,
+        totalS: probe && info.durationS && !cloud ? Math.round(estimateJobSeconds(info.durationS, probe, settings.provider !== null)) : null,
+        credits: settings.provider === 'chatkhu' && info.durationS ? Math.max(1, Math.round((info.durationS / 5400) * per90)) : null,
+        sttCredits: cloud && info.durationS ? chatkhuSttCredits(info.durationS) : null
       })
     } catch {
       rejected.push({ name: basename(r.audio), reason: '소리를 읽을 수 없는 파일이에요' })
     }
   }
-  return { recordings: out, rejected }
+  return { recordings: out, rejected, stt }
 }
 
 /** 저장 폴더 안의 .md만 연다 (화면이 임의의 파일을 열지 못하게). */
@@ -624,6 +639,8 @@ const handlers: Record<string, (params: unknown) => unknown> = {
   },
   'jobs.retry': (p) => runner.retry(String(p)),
   'jobs.transcriptOnly': (p) => runner.transcriptOnly(String(p)),
+  // ChatKHU 받아쓰기에서 멈춘 작업을 이 PC에서 받아쓰기
+  'jobs.localStt': (p) => runner.localStt(String(p)),
   'jobs.cancel': (p) => runner.cancel(String(p)),
   'jobs.remove': (p) => runner.remove(String(p)),
   // 끝난 작업의 노트를 폴더에서 보기 (경로는 화면이 아니라 job.json에서 가져온다)
@@ -816,6 +833,17 @@ const handlers: Record<string, (params: unknown) => unknown> = {
   'rec.openFolder': () => openFolder(recordingsDir(dataDir)),
   'rec.openMicSettings': () => {
     if (process.platform === 'win32') void shell.openExternal('ms-settings:privacy-microphone')
+  },
+  // 설정 > 고급 > 실험 기능: ChatKHU 받아쓰기. 켜는 것은 ChatKHU가 연결돼 있을 때만
+  'settings.setChatkhuStt': async (p) => {
+    const on = p === true
+    if (on) {
+      const { provider } = await loadSettings(dataDir)
+      if (provider !== 'chatkhu' || !(await readKey(dataDir, 'chatkhu'))) throw new EngineError('auth', 'ChatKHU를 먼저 연결해 주세요.')
+    }
+    await updateSettings(dataDir, { chatkhuStt: on })
+    log.write(`ChatKHU 받아쓰기: ${on ? '켬' : '끔'}`)
+    return on
   },
   'settings.setSttWhileRecording': async (p) => {
     sttWhileRecording = p === true

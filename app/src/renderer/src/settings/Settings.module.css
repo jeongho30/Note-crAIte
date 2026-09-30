@@ -303,6 +303,13 @@
   font-weight: var(--font-weight-semibold);
 }
 
+/* 실험 기능: 토글 스위치 줄들 */
+.switches {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
 .btns {
   display: flex;
   flex-wrap: wrap;

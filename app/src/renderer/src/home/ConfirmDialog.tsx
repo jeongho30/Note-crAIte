@@ -16,9 +16,10 @@ type Recording = {
   recordedAt: string
   sttS: number | null
   credits: number | null
+  sttCredits: number | null
   totalS: number | null
 }
-type Prepared = { recordings: Recording[]; rejected: { name: string; reason: string }[] }
+type Prepared = { recordings: Recording[]; rejected: { name: string; reason: string }[]; stt: 'whisper' | 'chatkhu' }
 type Subjects = { subjects: string[]; lastSubject: string | null; subjectLanguage: Record<string, Language> }
 
 // 과목 고르기: 저장 폴더의 과목 폴더, 미분류, 새 과목
@@ -152,7 +153,7 @@ export function ConfirmDialog({ paths, llm, onClose }: Props): React.JSX.Element
       setPrepared((p) => {
         if (!p) return more
         const has = new Set(p.recordings.map((r) => r.audio.toLowerCase()))
-        return tidy({ recordings: [...p.recordings, ...more.recordings.filter((r) => !has.has(r.audio.toLowerCase()))], rejected: [...p.rejected, ...more.rejected] })
+        return tidy({ ...p, recordings: [...p.recordings, ...more.recordings.filter((r) => !has.has(r.audio.toLowerCase()))], rejected: [...p.rejected, ...more.rejected] })
       })
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '녹음을 넣지 못했어요.')
@@ -167,16 +168,20 @@ export function ConfirmDialog({ paths, llm, onClose }: Props): React.JSX.Element
     const c = choiceOf(r)
     return c.pick === NEW && !c.newName.trim()
   })
-  const modelReady = setup?.model.state === 'ready'
+  // ChatKHU로 받아쓰면 이 PC의 받아쓰기 모델이 없어도 된다
+  const cloud = prepared?.stt === 'chatkhu'
+  const modelReady = cloud || setup?.model.state === 'ready'
+  const sttCreditTotal = recs.every((r) => r.sttCredits !== null) ? recs.reduce((n, r) => n + r.sttCredits!, 0) : null
   const sttTotal = recs.every((r) => r.sttS !== null) ? recs.reduce((n, r) => n + r.sttS!, 0) : null
   const creditTotal = recs.every((r) => r.credits !== null) ? recs.reduce((n, r) => n + r.credits!, 0) : null
   const total = recs.every((r) => r.totalS !== null) ? recs.reduce((n, r) => n + r.totalS!, 0) : null
 
   // 받아쓰는 장치는 보여 주지 않고 걸리는 시간만 안내한다
   const sttLine = useMemo(() => {
+    if (cloud) return `ChatKHU Soniox로 받아써요${sttCreditTotal !== null ? ` · 약 ${sttCreditTotal.toLocaleString()}크레딧 소모 예상` : ''}`
     if (!modelReady) return `받아쓰기 모델(${setup ? mb(setup.model.total) : '약 875MB'})을 받은 뒤 시작해요`
     return sttTotal !== null ? aboutMinutes(sttTotal) : '이 PC의 속도를 잰 뒤 알려 드려요'
-  }, [modelReady, sttTotal, setup])
+  }, [cloud, sttCreditTotal, modelReady, sttTotal, setup])
 
   async function start(): Promise<void> {
     setStarting(true)
@@ -339,7 +344,9 @@ export function ConfirmDialog({ paths, llm, onClose }: Props): React.JSX.Element
                   </dd>
                   <dt>예상 총 소요 시간</dt>
                   <dd className={styles.total}>
-                    {total !== null && modelReady
+                    {cloud
+                      ? 'ChatKHU 서버에 따라 달라요'
+                      : total !== null && modelReady
                       ? aboutMinutes(total)
                       : modelReady
                         ? '이 PC의 속도를 잰 뒤 알려 드려요'

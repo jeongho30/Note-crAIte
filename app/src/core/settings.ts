@@ -31,6 +31,8 @@ export type Settings = {
   watch: { enabled: boolean; folder: string | null; paused: boolean }
   /** 앱에서 녹음하는 동안에도 앞서 넣은 녹음을 받아쓴다. 기본은 꺼짐(녹음이 끝날 때까지 받아쓰기를 멈춤). 설정 > 고급 > 녹음 */
   sttWhileRecording: boolean
+  /** 받아쓰기를 이 PC의 whisper 대신 ChatKHU 받아쓰기(Soniox)로. ChatKHU가 연결돼 있을 때만 쓰인다. 설정 > 고급 > 실험 기능 */
+  chatkhuStt: boolean
 }
 
 export type Theme = 'system' | 'light' | 'dark'
@@ -40,7 +42,7 @@ export type Language = 'ko' | 'en'
 export const DEFAULT_SETTINGS: Settings = {
   wizardStep: 0, wizardDone: false, outDir: null, provider: null, lastSubject: null, subjectLanguage: {},
   summaryModel: null, polishModel: null, sttModel: DEFAULT_MODEL, sttArgs: null, theme: 'system',
-  watch: { enabled: false, folder: null, paused: false }, sttWhileRecording: false
+  watch: { enabled: false, folder: null, paused: false }, sttWhileRecording: false, chatkhuStt: false
 }
 
 function settingsPath(dataDir: string): string {

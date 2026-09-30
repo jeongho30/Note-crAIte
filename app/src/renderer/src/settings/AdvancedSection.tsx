@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useState } from 'react'
 import { ApiError, call } from '../api'
-import { Button, Checkbox, RadioCardGroup, TextField, useToast } from '../components'
+import { Button, RadioCardGroup, Switch, TextField, useToast } from '../components'
 import type { Settings } from '../../../core/settings'
 import { cx } from '../components/cx'
 import { ModelPicker, type ModelOption } from './ModelPicker'
@@ -38,7 +38,7 @@ function creditsLabel(v: number | null): string {
   return v == null ? '크레딧 모름' : `약 ${v < 10 ? Math.round(v * 10) / 10 : Math.round(v)}크레딧`
 }
 
-// 고급(기본은 접힘): 받아쓰기 세부설정(모델, 실제 명령, 고칠 수 있는 옵션, 샘플로 시험), 요약 세부설정(전사문 다듬기), 로컬 LLM(곧 지원).
+// 고급(기본은 접힘): 받아쓰기 세부설정(모델, 실제 명령, 고칠 수 있는 옵션, 샘플로 시험), 요약 세부설정(전사문 다듬기), 로컬 LLM(곧 지원), 실험 기능(ChatKHU 받아쓰기, 녹음 중 받아쓰기).
 export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedSection({ setup, connected, onSaved, onStepsSaved }, ref) {
   const toast = useToast()
   const [open, setOpen] = useState(false)
@@ -46,21 +46,24 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
   // 다듬기를 켤 때 고를 모델 (끈 동안에도 마지막으로 고른 모델을 기억)
   const [polishPick, setPolishPick] = useState<string | null>(null)
 
-  const [sttWhileRecording, setSttWhileRecording] = useState<boolean | null>(null)
+  // 실험 기능: 켜고 끄면 바로 저장한다
+  const [exp, setExp] = useState<Pick<Settings, 'sttWhileRecording' | 'chatkhuStt'> | null>(null)
 
   useEffect(() => {
     if (!open) return
     call<Steps>('llm.steps').then(setSteps)
-    call<Settings>('settings.get').then((s) => setSttWhileRecording(s.sttWhileRecording))
+    call<Settings>('settings.get').then((s) => setExp({ sttWhileRecording: s.sttWhileRecording, chatkhuStt: s.chatkhuStt }))
   }, [open])
 
-  async function saveSttWhileRecording(on: boolean): Promise<void> {
-    setSttWhileRecording(on)
+  async function saveExp(key: keyof NonNullable<typeof exp>, on: boolean): Promise<void> {
+    const method = key === 'chatkhuStt' ? 'settings.setChatkhuStt' : 'settings.setSttWhileRecording'
+    setExp((e) => e && { ...e, [key]: on })
     try {
-      setSttWhileRecording(await call<boolean>('settings.setSttWhileRecording', on))
-    } catch (e) {
-      setSttWhileRecording(!on)
-      toast(e instanceof ApiError ? e.message : '저장하지 못했어요.', 'danger')
+      const saved = await call<boolean>(method, on)
+      setExp((e) => e && { ...e, [key]: saved })
+    } catch (err) {
+      setExp((e) => e && { ...e, [key]: !on })
+      toast(err instanceof ApiError ? err.message : '저장하지 못했어요.', 'danger')
     }
   }
 
@@ -131,7 +134,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
         <button className={styles.advHead} aria-expanded={open} onClick={() => setOpen(!open)}>
           <span className={styles.chev} aria-hidden="true" />
           <b>고급</b>
-          <span>받아쓰기 세부설정 · 요약 세부설정 · 녹음 · 로컬 LLM</span>
+          <span>받아쓰기 세부설정 · 요약 세부설정 · 로컬 LLM · 실험 기능</span>
         </button>
         {open && (
           <div className={styles.advBody}>
@@ -269,16 +272,6 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
               )}
             </Block>
 
-            <Block title="녹음" foldable>
-              <Checkbox
-                checked={!!sttWhileRecording}
-                disabled={sttWhileRecording === null}
-                onChange={(on) => void saveSttWhileRecording(on)}
-                label="녹음하는 동안에도 받아쓰기"
-                hint="끄면(기본) 앱에서 녹음하는 동안 앞서 넣은 녹음의 받아쓰기를 멈추고, 녹음이 끝나면 멈춘 곳부터 이어서 해요. 켜면 둘이 함께 돌아 PC가 느려질 수 있어요."
-              />
-            </Block>
-
             <Block title="로컬 LLM (Ollama)" foldable>
               <RadioCardGroup
                 label="로컬 LLM"
@@ -303,6 +296,31 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                 ]}
               />
               <p className={styles.hint}>Ollama를 설치하고 모델을 받아 두면 쓸 수 있게 할 예정이에요.</p>
+            </Block>
+
+            <Block title="실험 기능" foldable>
+              <div className={styles.switches}>
+                <Switch
+                  checked={!!exp?.chatkhuStt}
+                  disabled={!exp || (!connected && !exp.chatkhuStt)}
+                  onChange={(on) => void saveExp('chatkhuStt', on)}
+                  label="받아쓰기(Speech-to-Text)에 ChatKHU Soniox 모델 쓰기"
+                  hint={
+                    <>
+                      이 PC의 whisper 대신 ChatKHU가 받아써요. 전문 용어를 훨씬 정확히 받아쓰지만 오디오 1분에 6크레딧(90분 강의 약 540)이 들고,
+                      녹음이 ChatKHU로 보내져요. 말한 그대로 적어서 "어", "네" 같은 말도 들어가요.
+                      {!connected && ' ChatKHU를 연결하면 켤 수 있어요.'}
+                    </>
+                  }
+                />
+                <Switch
+                  checked={!!exp?.sttWhileRecording}
+                  disabled={!exp}
+                  onChange={(on) => void saveExp('sttWhileRecording', on)}
+                  label="녹음하는 동안에도 받아쓰기"
+                  hint="끄면(기본) 앱에서 녹음하는 동안 앞서 넣은 녹음의 받아쓰기를 멈추고, 녹음이 끝나면 멈춘 곳부터 이어서 해요. 켜면 둘이 함께 돌아 PC가 느려질 수 있어요."
+                />
+              </div>
             </Block>
           </div>
         )}
