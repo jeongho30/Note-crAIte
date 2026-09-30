@@ -78,7 +78,7 @@ test('모델별 90분 요약 크레딧은 기록을 90분으로 환산한 평균
 })
 
 test('단가표로 90분 요약 크레딧을 어림하고, 단가를 모르면 null', () => {
-  assert.equal(estimateCredits90('gemini-3.8-flash'), 12) // 임시 토큰 수를 S2 실측에 맞춤
+  assert.equal(estimateCredits90('gemini-3.8-flash'), 18) // 2차 비교 실측(90분 약 17크레딧)과 비슷
   assert.ok(estimateCredits90('gpt-6-luna')! < estimateCredits90('gemini-3.8-flash')!)
   assert.ok(estimateCredits90('gpt-6-sol')! > estimateCredits90('gemini-3.8-flash')!)
   assert.equal(estimateCredits90('모르는-모델'), null)

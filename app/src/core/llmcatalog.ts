@@ -66,10 +66,10 @@ export const PRICES: Record<string, { input: number; output: number }> = {
 }
 
 /**
- * 90분 강의 요약 1회의 토큰 수(어림). 임시값: S2의 gemini-3.8-flash 실측(90분 약 12크레딧)에 맞췄다.
- * 모델 비교 측정(cli llm bench)의 토큰 수로 바꾼다. 모델마다 출력 길이·추론 토큰이 달라 어림일 뿐이다.
+ * 90분 강의 요약 1회의 토큰 수(어림). 요약 모델 비교 2차(9개 입력, 14개 모델, 62회)의 토큰 수를 90분으로 맞춘 중앙값
+ * (입력 14,835, 출력 1,734)이다. 모델마다 달라 어림일 뿐이다: Claude는 입력이 약 2배, 추론 모델은 출력이 2~5배.
  */
-export const TOKENS_PER_90MIN = { input: 10_000, output: 1_200 }
+export const TOKENS_PER_90MIN = { input: 15_000, output: 1_800 }
 
 /**
  * 응답의 토큰 수 × 단가로 계산한 크레딧. 요약 모델 비교 1차에서 7개 모델 모두 실제 차감과 소수 둘째 자리까지 맞았다.
