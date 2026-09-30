@@ -49,7 +49,7 @@ test('editNote: 과목을 없애면 미분류 폴더로, 같은 이름이 있으
   assert.equal(same.path, moved.path, '바뀐 것이 없으면 이름도 폴더도 그대로')
 })
 
-test('editNote: 앱이 만들지 않은 노트와 잘못된 값은 고치지 않는다', async () => {
+test('editNote: 앱이 만들지 않은 노트와 잘못된 값은 수정하지 않는다', async () => {
   const out = await tempDir()
   await mkdir(join(out, '메모'), { recursive: true })
   const foreign = join(out, '메모', '내 노트.md')

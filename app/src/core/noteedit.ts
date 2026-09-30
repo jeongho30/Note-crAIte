@@ -1,5 +1,5 @@
 // 노트 속성(제목·과목·날짜) 수정: 머리말과 첫 제목 줄, 파일 이름과 폴더를 함께 바꾼다. 본문은 건드리지 않는다.
-// 이 앱이 만든 노트(머리말에 title·date·source·stt가 있는 것)만 고친다: 다른 앱의 노트는 머리말 모양을 알 수 없다.
+// 이 앱이 만든 노트(머리말에 title·date·source·stt가 있는 것)만 수정한다: 다른 앱의 노트는 머리말 모양을 알 수 없다.
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
@@ -53,7 +53,7 @@ export function normalizeProps(p: NoteProps): NoteProps {
   return { title, subject: p.subject?.trim() || null, date }
 }
 
-/** 고친 속성으로 머리말·제목 줄을 바꾸고, 파일 이름·폴더도 맞춰 옮긴다. 새 경로와 저장한 속성을 돌려준다. */
+/** 수정한 속성으로 머리말·제목 줄을 바꾸고, 파일 이름·폴더도 맞춰 옮긴다. 새 경로와 저장한 속성을 돌려준다. */
 export async function editNote(outDir: string, path: string, wanted: NoteProps): Promise<{ path: string; props: NoteProps }> {
   const next = normalizeProps(wanted)
   const text = await readFile(path, 'utf8').catch(() => {
@@ -61,7 +61,7 @@ export async function editNote(outDir: string, path: string, wanted: NoteProps):
   })
   const old = parseNoteProps(text)
   const parts = split(text)
-  if (!old || !parts) throw new EngineError('input', '이 앱이 만든 노트만 고칠 수 있어요.')
+  if (!old || !parts) throw new EngineError('input', '이 앱이 만든 노트만 수정할 수 있어요.')
 
   const { eol, lines, end } = parts
   const fm = lines.slice(1, end)

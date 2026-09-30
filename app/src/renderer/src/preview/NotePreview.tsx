@@ -44,7 +44,7 @@ type Props = {
   onBack: () => void
   /** 키 없이 만든 노트의 [요약 만들기]: 설정의 요약 서비스로 */
   onConnect: () => void
-  /** 정보를 고쳐 파일 이름이나 폴더가 바뀌었을 때: 새 경로로 다시 연다 */
+  /** 정보를 수정해 파일 이름이나 폴더가 바뀌었을 때: 새 경로로 다시 연다 */
   onMoved: (newPath: string) => void
 }
 
@@ -168,7 +168,7 @@ export function NotePreview({ path, jobs, llm, onBack, onConnect, onMoved }: Pro
           )}
           {typeof meta['stt'] === 'string' && (
             <Button size="sm" variant="ghost" disabled={working} onClick={() => setEditing(true)}>
-              정보 고치기
+              정보 수정
             </Button>
           )}
           {hasSummary && canSummarize && (

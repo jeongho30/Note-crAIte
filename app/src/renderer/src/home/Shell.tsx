@@ -49,7 +49,7 @@ export default function Shell({ onRestartWizard }: Props): React.JSX.Element {
   const toast = useToast()
   const seen = useRef<Map<string, string> | null>(null)
   const doneCount = jobs?.filter((j) => j.status === 'done').length ?? 0
-  const [notesVersion, setNotesVersion] = useState(0) // 미리보기에서 노트 정보를 고치면 앞 화면의 노트 목록을 다시 읽는다
+  const [notesVersion, setNotesVersion] = useState(0) // 미리보기에서 노트 정보를 수정하면 앞 화면의 노트 목록을 다시 읽는다
 
   const loadLlm = useCallback(() => {
     call<LlmStatus>('llm.status').then(setLlm, () => setLlm({ provider: null }))

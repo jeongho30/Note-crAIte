@@ -16,7 +16,7 @@ type Props = {
   onSaved: (newPath: string) => void
 }
 
-// 노트의 제목·과목·날짜 고치기. 머리말과 파일 이름·폴더가 함께 바뀌고 본문은 그대로다. 이 앱이 만든 노트만 고칠 수 있다.
+// 노트의 제목·과목·날짜 수정. 머리말과 파일 이름·폴더가 함께 바뀌고 본문은 그대로다. 이 앱이 만든 노트만 수정할 수 있다.
 export function NotePropsDialog({ path, onClose, onSaved }: Props): React.JSX.Element {
   const toast = useToast()
   const [ready, setReady] = useState(false)
@@ -33,7 +33,7 @@ export function NotePropsDialog({ path, onClose, onSaved }: Props): React.JSX.El
     Promise.all([call<Info>('notes.editInfo', path), call<Subjects>('subjects.get')]).then(
       ([info, s]) => {
         if (!info.editable) {
-          toast('이 앱이 만든 노트만 고칠 수 있어요.', 'danger')
+          toast('이 앱이 만든 노트만 수정할 수 있어요.', 'danger')
           onClose()
           return
         }
@@ -60,7 +60,7 @@ export function NotePropsDialog({ path, onClose, onSaved }: Props): React.JSX.El
     setError(null)
     try {
       const next = await call<string>('notes.edit', { path, title, subject, date })
-      toast('노트 정보를 고쳤어요.', 'success')
+      toast('노트 정보를 수정했어요.', 'success')
       onSaved(next)
       onClose()
     } catch (e) {
@@ -73,7 +73,7 @@ export function NotePropsDialog({ path, onClose, onSaved }: Props): React.JSX.El
     <Dialog
       open
       onClose={onClose}
-      title="노트 정보 고치기"
+      title="노트 정보 수정"
       actions={
         <>
           <Button variant="ghost" onClick={onClose}>
@@ -104,7 +104,7 @@ export function NotePropsDialog({ path, onClose, onSaved }: Props): React.JSX.El
             <TextField label="새 과목 이름" placeholder="예: 컴파일러" autoFocus value={newName} onChange={(e) => setNewName(e.target.value)} hint="저장 폴더 안에 이 이름의 폴더가 생겨요." />
           )}
           <TextField label="강의 날짜" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          <p className={styles.muted}>파일 이름과 과목 폴더도 함께 바뀌어요. 노트 본문은 그대로예요. 옵시디언에서 이 노트로 건 링크는 자동으로 고쳐지지 않아요.</p>
+          <p className={styles.muted}>파일 이름과 과목 폴더도 함께 바뀌어요. 노트 본문은 그대로예요. 옵시디언에서 이 노트로 건 링크는 자동으로 수정되지 않아요.</p>
         </div>
       )}
     </Dialog>

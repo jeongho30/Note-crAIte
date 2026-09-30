@@ -790,7 +790,7 @@ const handlers: Record<string, (params: unknown) => unknown> = {
   'notes.edit': async (p) => {
     const { path, title, subject, date } = p as { path: unknown; title: unknown; subject: unknown; date: unknown }
     const checked = await checkNotePath(String(path))
-    if (await runner.noteBusy(checked)) throw new EngineError('input', '요약을 만드는 중이라 끝난 뒤에 고칠 수 있어요.')
+    if (await runner.noteBusy(checked)) throw new EngineError('input', '요약을 만드는 중이라 끝난 뒤에 수정할 수 있어요.')
     const r = await editNote(await outDir(), checked, { title: String(title ?? ''), subject: subject ? String(subject) : null, date: String(date ?? '') })
     await runner.noteEdited(checked, r.path, r.props)
     return r.path

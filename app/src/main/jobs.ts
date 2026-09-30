@@ -378,12 +378,12 @@ export function createJobRunner(d: Deps) {
 
   const samePath = (a: string, b: string): boolean => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b)
 
-  /** 이 노트를 만든 작업이 대기 중이거나 도는 중인가 (요약을 다시 만드는 중에는 노트를 고치지 않는다) */
+  /** 이 노트를 만든 작업이 대기 중이거나 도는 중인가 (요약을 다시 만드는 중에는 노트를 수정하지 않는다) */
   async function noteBusy(path: string): Promise<boolean> {
     return (await listJobs(d.dataDir)).some((j) => (j.status === 'queued' || j.status === 'running') && j.output?.notePath && samePath(j.output.notePath, path))
   }
 
-  /** 노트의 제목·과목·날짜를 고친 뒤: 그 노트를 만든 작업이 새 경로와 고친 값을 쓰게 한다 (요약을 다시 만들어도 고친 값이 유지된다) */
+  /** 노트의 제목·과목·날짜를 수정한 뒤: 그 노트를 만든 작업이 새 경로와 수정한 값을 쓰게 한다 (요약을 다시 만들어도 수정한 값이 유지된다) */
   async function noteEdited(oldPath: string, newPath: string, props: { title: string; subject: string | null; date: string }): Promise<void> {
     for (const job of await listJobs(d.dataDir)) {
       if (!job.output?.notePath || !samePath(job.output.notePath, oldPath)) continue

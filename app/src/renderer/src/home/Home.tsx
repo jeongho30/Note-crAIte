@@ -15,7 +15,7 @@ type Props = {
   onShowJobs: () => void
   /** 최근 노트를 누르면 앱 안에서 미리보기 */
   onPreview: (path: string) => void
-  /** 바뀌면 최근 노트를 다시 읽는다 (노트 정보를 고친 뒤) */
+  /** 바뀌면 최근 노트를 다시 읽는다 (노트 정보를 수정한 뒤) */
   refresh?: number
 }
 

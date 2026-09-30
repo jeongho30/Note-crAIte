@@ -65,7 +65,7 @@ export type Job = {
    */
   cost?: { summaryCredits: number | null; source?: 'tokens' | 'balance'; verifyCredits?: number | null; polishCredits?: number | null }
   output?: { notePath: string }
-  /** 노트 목록에서 고친 제목·날짜. 있으면 요약을 다시 만들어도 이 값을 쓴다 (과목은 input.subject를 고친다) */
+  /** 노트 목록에서 수정한 제목·날짜. 있으면 요약을 다시 만들어도 이 값을 쓴다 (과목은 input.subject를 고친다) */
   edits?: { title: string; date: string }
   error?: { code: string; message: string; stage: StageName }
 }

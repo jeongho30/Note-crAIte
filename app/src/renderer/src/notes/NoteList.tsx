@@ -19,7 +19,7 @@ function toFilter(value: string): SubjectFilter {
 type Props = {
   /** 끝난 작업 수 (바뀌면 다시 읽는다) */
   doneCount: number
-  /** 바뀌면 다시 읽는다 (미리보기에서 노트 정보를 고친 뒤) */
+  /** 바뀌면 다시 읽는다 (미리보기에서 노트 정보를 수정한 뒤) */
   refresh?: number
   onPreview: (path: string) => void
 }
@@ -33,8 +33,8 @@ export function NoteList({ doneCount, refresh, onPreview }: Props): React.JSX.El
   const [subject, setSubject] = useState(ALL)
   const [sort, setSort] = useState<Sort>('modified')
   const [shown, setShown] = useState(PAGE)
-  const [editing, setEditing] = useState<string | null>(null) // 정보를 고치는 노트
-  const [version, setVersion] = useState(0) // 고친 뒤 목록을 다시 읽는다
+  const [editing, setEditing] = useState<string | null>(null) // 정보를 수정하는 노트
+  const [version, setVersion] = useState(0) // 수정한 뒤 목록을 다시 읽는다
 
   useEffect(() => {
     call<RecentNote[]>('notes.list').then(
@@ -115,8 +115,8 @@ export function NoteList({ doneCount, refresh, onPreview }: Props): React.JSX.El
                     </span>
                     <span className={styles.meta}>{n.date}</span>
                   </button>
-                  <Button size="sm" variant="ghost" aria-label={`${n.title} 정보 고치기`} onClick={() => setEditing(n.path)}>
-                    고치기
+                  <Button size="sm" variant="ghost" aria-label={`${n.title} 정보 수정`} onClick={() => setEditing(n.path)}>
+                    수정
                   </Button>
                 </div>
               ))}
