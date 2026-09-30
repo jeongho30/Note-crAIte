@@ -12,6 +12,9 @@ import { ProviderSection } from './ProviderSection'
 import styles from './Settings.module.css'
 
 type Storage = { modelsBytes: number; models: string[]; jobsBytes: number; done: number; stopped: number }
+// 과목 없이 저장한 노트가 가는 폴더 이름 (core/note.ts의 saveNote). 과목 목록에는 폴더로 나온다
+const UNFILED = '미분류'
+
 type Subjects = { subjects: string[]; subjectLanguage: Record<string, Language> }
 
 const LANGS: { value: Language; label: string }[] = [
@@ -232,8 +235,8 @@ export function Settings({ llm, doneCount, openKey, onLlmChange, onRestartWizard
         <SettingsCard>
           {subjects && subjects.subjects.length > 0 ? (
             <>
-              {/* 과목이 3개 이상이면 처음엔 하나만 보이고 [과목 N개 더 보기]로 펼친다(접힘 상태는 저장하지 않음) */}
-              {(subjects.subjects.length >= 3 && !allSubjects ? subjects.subjects.slice(0, 1) : subjects.subjects).map((s) => (
+              {/* 과목이 3개 이상이면 처음엔 하나만 보이고 [과목 N개 더 보기]로 펼친다(접힘 상태는 저장하지 않음). 그 하나는 미분류가 아닌 첫 과목 */}
+              {(subjects.subjects.length >= 3 && !allSubjects ? [subjects.subjects.find((s) => s !== UNFILED) ?? subjects.subjects[0]] : subjects.subjects).map((s) => (
                 <Row
                   key={s}
                   title={s}
