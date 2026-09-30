@@ -120,7 +120,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
         </button>
         {open && (
           <div className={styles.advBody}>
-            <Block title="받아쓰기 세부설정">
+            <Block title="받아쓰기 세부설정" foldable>
               {!opts ? (
                 <p className={styles.hint}>불러오는 중…</p>
               ) : (
@@ -210,7 +210,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
               )}
             </Block>
 
-            <Block title="요약 세부설정">
+            <Block title="요약 세부설정" foldable>
               {!steps ? (
                 <p className={styles.hint}>불러오는 중…</p>
               ) : (
@@ -247,14 +247,14 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                   )}
                   <p className={styles.hint}>
                     다듬기를 켜면 90분 강의에 위 크레딧이 더 들고 1~2분 더 걸려요. 모델이 하지 않은 말을 넣거나 빼는 경우가 있어, 원래 받아쓰기는 노트의 원문 정리본에 그대로
-                    남겨요. 크레딧은 90분 강의 기준(어림)이에요.
+                    남겨요. 크레딧은 90분 강의 기준(어림)이고, 정확하지 않아요.
                     {!connected && ' 요약 서비스를 연결하면 바꿀 수 있어요.'}
                   </p>
                 </>
               )}
             </Block>
 
-            <Block title="로컬 LLM (Ollama)">
+            <Block title="로컬 LLM (Ollama)" foldable>
               <RadioCardGroup
                 label="로컬 LLM"
                 value="off"

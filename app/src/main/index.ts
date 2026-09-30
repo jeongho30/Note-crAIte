@@ -544,7 +544,11 @@ const handlers: Record<string, (params: unknown) => unknown> = {
       language: (i.language === 'en' ? 'en' : 'ko') as Language
     }))
     if (!items.length) throw new EngineError('input', '넣은 녹음이 없어요.')
-    await updateSettings(dataDir, { lastSubject: items[0].subject })
+    // 시작할 때 고른 언어는 그 과목의 강의 언어로 저장한다 (다음에 그 과목을 고르면 먼저 골라져 있게)
+    const { subjectLanguage } = await loadSettings(dataDir)
+    const next: Record<string, Language> = { ...subjectLanguage }
+    for (const i of items) if (i.subject) next[i.subject] = i.language
+    await updateSettings(dataDir, { lastSubject: items[0].subject, subjectLanguage: next })
     await runner.start(items)
   },
   'jobs.retry': (p) => runner.retry(String(p)),

@@ -59,6 +59,7 @@ export function Settings({ llm, doneCount, openKey, onLlmChange, onRestartWizard
   const [storage, setStorage] = useState<Storage | null>(null)
   const [version, setVersion] = useState('')
   const [confirmClear, setConfirmClear] = useState(false)
+  const [allSubjects, setAllSubjects] = useState(false)
   const [licenses, setLicenses] = useState(false)
 
   const fail = useCallback((e: unknown) => toast(e instanceof ApiError ? e.message : '문제가 생겼어요. 다시 시도해 주세요.', 'danger'), [toast])
@@ -226,17 +227,37 @@ export function Settings({ llm, doneCount, openKey, onLlmChange, onRestartWizard
       <Section
         ref={refFor('과목 · 강의 언어')}
         title="과목 · 강의 언어"
-        hint="시작 전 확인에서 이 언어가 먼저 골라져요. 새 과목은 한국어예요. 과목은 저장 폴더의 하위 폴더예요."
+        hint="시작 전 확인에서 이 언어가 먼저 골라져요. 거기서 언어를 바꿔 시작하면 여기에도 저장돼요. 새 과목은 한국어예요. 과목은 저장 폴더의 하위 폴더예요."
       >
         <SettingsCard>
           {subjects && subjects.subjects.length > 0 ? (
-            subjects.subjects.map((s) => (
-              <Row
-                key={s}
-                title={s}
-                ctrl={<SegmentedControl label={`${s} 강의 언어`} value={langOf(s)} options={LANGS} onChange={(l) => void setLanguage(s, l)} />}
-              />
-            ))
+            <>
+              {/* 과목이 3개 이상이면 처음엔 하나만 보이고 [과목 N개 더 보기]로 펼친다(접힘 상태는 저장하지 않음) */}
+              {(subjects.subjects.length >= 3 && !allSubjects ? subjects.subjects.slice(0, 1) : subjects.subjects).map((s) => (
+                <Row
+                  key={s}
+                  title={s}
+                  ctrl={<SegmentedControl label={`${s} 강의 언어`} value={langOf(s)} options={LANGS} onChange={(l) => void setLanguage(s, l)} />}
+                />
+              ))}
+              {subjects.subjects.length >= 3 && (
+                <button
+                  type="button"
+                  className={styles.more}
+                  aria-expanded={allSubjects}
+                  aria-label={allSubjects ? '과목 접기' : undefined}
+                  onClick={() => setAllSubjects(!allSubjects)}
+                >
+                  {allSubjects ? (
+                    <span className={styles.up} aria-hidden="true" />
+                  ) : (
+                    <>
+                      과목 {subjects.subjects.length - 1}개 더 보기<span className={styles.down} aria-hidden="true" />
+                    </>
+                  )}
+                </button>
+              )}
+            </>
           ) : (
             <p className={styles.empty}>아직 과목 폴더가 없어요. 녹음을 넣을 때 새 과목을 만들면 여기에 보여요.</p>
           )}

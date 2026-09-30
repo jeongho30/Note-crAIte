@@ -126,6 +126,24 @@
   font-weight: var(--font-weight-semibold);
 }
 
+/* 접는 제목: 제목 글자는 그대로 두고 앞에 화살표만 붙인다 */
+.blockFold {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.foldOpen .chev::before {
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+
 .hint {
   margin: 0;
   color: var(--color-text-3);
@@ -141,6 +159,28 @@
 .grow {
   flex: 1;
   min-width: 0;
+}
+
+/* 과목이 많을 때 나머지를 펼치고 접는 줄 */
+.more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  background: none;
+  color: var(--color-text-2);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+  cursor: pointer;
+}
+
+.more:hover {
+  color: var(--color-text);
 }
 
 .empty {
@@ -386,4 +426,22 @@
   min-width: 0;
   font-weight: var(--font-weight-semibold);
   overflow-wrap: anywhere;
+}
+
+/* 고급 헤더의 화살표와 같은 모양: 펼치기는 아래(.down), 접기는 위(.up) */
+.up,
+.down {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+}
+
+.up {
+  transform: translateY(2px) rotate(-135deg);
+}
+
+.down {
+  transform: translateY(-2px) rotate(45deg);
 }
