@@ -16,7 +16,7 @@ import type { JobContext, LlmSettings, StageName } from '../core/job.ts'
 import { MODELS } from '../core/models.ts'
 import { defaultDataDir, findFfmpeg, findWhisperCli } from '../core/paths.ts'
 import { writeJsonAtomic } from '../core/files.ts'
-import { estimateSttSeconds, probeDevices } from '../core/probe.ts'
+import { estimateSttSeconds, probeDevices, sttSpeed } from '../core/probe.ts'
 import type { ProbeResult } from '../core/probe.ts'
 import { PRESETS } from '../core/providers.ts'
 import { run as bench } from './bench.ts'
@@ -105,7 +105,7 @@ async function main(argv: string[]): Promise<void> {
     const threads = v.threads ? Number(v.threads) : probed?.threads ?? defaultThreads(await detect())
     const { durationS } = await probeAudio(findFfmpeg(binDir), sub)
     if (probed && durationS && gpuDevice === probed.gpuDevice) {
-      const minutes = Math.ceil(estimateSttSeconds(durationS, probed) / 60)
+      const minutes = Math.ceil(estimateSttSeconds(durationS, sttSpeed(probed, await listJobs(dataDir), null)) / 60)
       console.log(`녹음 ${Math.round(durationS / 60)}분 · ${gpuDevice === null ? 'CPU' : `GPU ${gpuDevice}`} · 예상 전사 시간 약 ${minutes}분`)
     } else if (!probed) {
       console.log('예상 시간은 probe를 한 번 돌리면 보입니다.')
@@ -145,7 +145,7 @@ async function main(argv: string[]): Promise<void> {
       console.log(`  ${t.device === null ? 'CPU' : `GPU ${t.device}`} ${t.name}: ${speed}`)
     }
     const choice = result.gpuDevice === null ? 'CPU' : `GPU ${result.gpuDevice}`
-    console.log(`선택: ${choice} · 90분 강의 예상 전사 시간 약 ${Math.ceil(estimateSttSeconds(5400, result) / 60)}분`)
+    console.log(`선택: ${choice} · 90분 강의 예상 전사 시간 약 ${Math.ceil(estimateSttSeconds(5400, sttSpeed(result, [], null)) / 60)}분`)
     await writeJsonAtomic(join(dataDir, 'probe.json'), result)
   } else if (cmd === 'jobs') {
     for (const j of await listJobs(dataDir)) {

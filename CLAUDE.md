@@ -68,7 +68,7 @@ powershell -File ../scripts/build_whisper.ps1 -SourceDir <whisper.cpp 체크아�
 powershell -File ../scripts/fetch_ffmpeg.ps1
 ```
 
-`npm ci` 뒤에 `npm run dev`가 `Error: Electron uninstall`로 멈추면 Electron 바이너리가 없는 것이다. npm 11이 설치 스크립트를 막아 `node_modules/electron/dist`·`path.txt`가 안 생기므로 `node node_modules/electron/install.js`로 받는다(`npx electron .`은 스스로 받지만 electron-vite는 `path.txt`를 먼저 찾는다).
+npm 11은 의존 패키지의 설치 스크립트를 막아 `npm ci`만으로는 Electron 바이너리(`node_modules/electron/dist`·`path.txt`)가 안 생긴다. 그래서 `package.json`의 `postinstall`이 `node node_modules/electron/install.js`를 돌린다(10/1). 그래도 `npm run dev`가 `Error: Electron uninstall`로 멈추면 그 명령을 직접 돌린다.
 
 `build_whisper.ps1`의 결과는 `.cache/whisper/bin/`에, `fetch_ffmpeg.ps1`(BtbN LGPL 빌드, 고정 태그·sha256)의 결과는 `.cache/ffmpeg/bin/`에 모인다. 개발 중에는 `.cache/whisper/bin`의 `whisper-cli.exe`와 PATH의 `ffmpeg`를 쓴다. 설치본은 둘 다 `resources/bin/`(electron-builder의 `extraResources`)에서 찾는다. 설치 파일은 `dist/installer/`에 생긴다. CI(`.github/workflows/installer.yml`, 수동 실행 또는 `v*` 태그)는 whisper 빌드(캐시) → ffmpeg → 타입 검사·테스트 → 설치 파일을 만들어 아티팩트 `NotecrAIte-windows`로 올린다(Release에는 올리지 않음). vite는 electron-vite 5가 지원하는 7로 고정돼 있다(8로 올리지 않는다).
 
@@ -115,7 +115,8 @@ S3(9/28): 로컬 STT는 whisper.cpp, CPU 기본 `large-v3-turbo-q8_0` + greedy(`
 
 **다음 할 일** (최소 제출선 10/11 = W2 끝, 마감 10/24)
 
-1. 실제 작업의 받아쓰기 시간으로 예상치 보정. 노트북 예상이 90분에 약 74분으로 S3 실측(약 27분)보다 크게 나온다.2. GPU 없는 노트북에서 CI 설치 파일로 완주하는 1차 테스트. 자동 처리의 PC를 켜면 자동 실행 등록은 설치본에서 확인해야 한다.
+1. (10/1 됨) 예상 시간 보정: 같은 모델·장치·스레드·옵션으로 끝낸 최근 작업 5개의 실제 받아쓰기 속도(중앙값)로 예상하고, 기록이 없으면 잰 속도 × 0.65(`core/probe.ts`의 `sttSpeed`). 이어서 한 받아쓰기는 `stages.stt.resumed`로 표시해 뺀다. 설치본에서 화면의 예상 시간은 아직 못 봤다.
+2. GPU 없는 노트북에서 CI 설치 파일로 완주하는 1차 테스트. 자동 처리의 PC를 켜면 자동 실행 등록은 설치본에서 확인해야 한다.
 3. W3: 1차 테스트 수정, ChatKHU STT 선택지, OpenAI·Gemini 프리셋. W4: Ollama(설정의 로컬 LLM), Mac 베타.
 4. 요약 프롬프트 다듬기: 기준·시험 방법·분량 시험용 초안은 `docs/prompt-quality-plan.md`(10/1 세움, 시험 전). 채점 틀 고치기 → 분량 시험 → 한 가지씩 수정 순서이고, 시험은 채점표·판정표가 있는 데스크톱에서 한다.
 5. 받아쓰기 정답 전사: 작성자가 10분 조각을 들으며 고쳐 정답을 만들고 기존 조건들을 다시 채점한다. 설계는 `docs/stt-reference-plan.md`(10/1). 조각 수·적는 규칙·조각 고르기는 아직 안 정했고 데스크톱에서 도구(준비·채점 스크립트)를 만들 때 정한다.

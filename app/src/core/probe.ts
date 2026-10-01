@@ -5,6 +5,7 @@ import { copyFile, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { cer, normalize } from './compare.ts'
 import { EngineError } from './errors.ts'
+import type { Job } from './job.ts'
 import { backendUsed, WhisperCpp } from './stt/whispercpp.ts'
 import { wavDuration } from './wav.ts'
 
@@ -167,8 +168,41 @@ export async function testSample(o: SampleTestOptions): Promise<SampleTest> {
   return result
 }
 
-/** 로컬 STT 예상 시간(초): 처리 속도 × 길이 + 약 10분 조각마다 모델 로드. */
-export function estimateSttSeconds(durationS: number, p: Pick<ProbeResult, 'rtf' | 'loadS'>): number {
+// 속도 재기 샘플은 쉼 없이 읽은 39초라 실제 강의(쉬는 곳을 VAD가 걸러 냄)보다 느리게 나온다.
+// 10/1 노트북 82분 강의: 실제 ÷ 잰 값이 turbo-q8_0 0.62, small-q5_1 0.65
+const SAMPLE_TO_LECTURE = 0.65
+const HISTORY_MIN_S = 300 // 이보다 짧은 녹음은 모델 로드 비중이 커서 뺀다
+const HISTORY_JOBS = 5
+
+export type SttSpeed = Pick<ProbeResult, 'rtf' | 'loadS'>
+
+/**
+ * 예상 시간에 쓸 받아쓰기 속도. 같은 모델·장치·스레드·옵션으로 이 PC에서 끝낸 최근 작업들의 실제 속도(중앙값)를 쓰고,
+ * 그런 작업이 없으면 잰 속도에 보정을 곱한다. 이어서 한 받아쓰기(resumed)는 걸린 시간이 일부라 뺀다.
+ * jobs는 오래된 것부터(listJobs 순서).
+ */
+export function sttSpeed(probe: ProbeResult, jobs: Job[], args: string[] | null): SttSpeed {
+  const sameArgs = JSON.stringify(args ?? null)
+  const rates: number[] = []
+  for (const j of jobs) {
+    const stt = j.stages?.stt
+    const durationS = j.audio?.durationS
+    if (!stt || stt.status !== 'done' || stt.resumed || !stt.startedAt || !stt.endedAt) continue
+    if (!durationS || durationS < HISTORY_MIN_S || j.settings.sttService === 'chatkhu') continue
+    if (j.settings.model !== probe.model || j.settings.gpuDevice !== probe.gpuDevice || j.settings.threads !== probe.threads) continue
+    if (JSON.stringify(j.settings.args ?? null) !== sameArgs) continue
+    const tookS = (Date.parse(stt.endedAt) - Date.parse(stt.startedAt)) / 1000
+    if (tookS > 0) rates.push(tookS / durationS)
+  }
+  if (!rates.length) return { rtf: probe.rtf * SAMPLE_TO_LECTURE, loadS: probe.loadS }
+  const recent = rates.slice(-HISTORY_JOBS).sort((a, b) => a - b)
+  const mid = recent.length >> 1
+  const median = recent.length % 2 ? recent[mid] : (recent[mid - 1] + recent[mid]) / 2
+  return { rtf: median, loadS: 0 } // 실제 기록에는 모델 로드가 들어 있다
+}
+
+/** 로컬 STT 예상 시간(초): 처리 속도 × 길이 + 약 10분 조각마다 모델 로드. p는 sttSpeed()로 얻는다. */
+export function estimateSttSeconds(durationS: number, p: SttSpeed): number {
   return durationS * p.rtf + Math.ceil(durationS / 600) * p.loadS
 }
 
@@ -177,6 +211,6 @@ const PREP_S_PER_AUDIO_S = 1 / 1800
 const SUMMARY_S = 15
 
 /** 작업 하나의 예상 총 소요 시간(초): 오디오 준비 + 받아쓰기 + 요약(할 때만). */
-export function estimateJobSeconds(durationS: number, p: Pick<ProbeResult, 'rtf' | 'loadS'>, withSummary: boolean): number {
+export function estimateJobSeconds(durationS: number, p: SttSpeed, withSummary: boolean): number {
   return durationS * PREP_S_PER_AUDIO_S + estimateSttSeconds(durationS, p) + (withSummary ? SUMMARY_S : 0)
 }

@@ -32,7 +32,13 @@ export const STT_MODEL_CHOICES = [DEFAULT_MODEL, 'large-v3-q5_0', 'small-q5_1'] 
 
 export const STAGES = ['audio', 'stt', 'clean', 'polish', 'summarize', 'note', 'save'] as const
 export type StageName = (typeof STAGES)[number]
-export type StageState = { status: 'pending' | 'running' | 'done' | 'skipped' | 'failed'; startedAt?: string; endedAt?: string }
+export type StageState = {
+  status: 'pending' | 'running' | 'done' | 'skipped' | 'failed'
+  startedAt?: string
+  endedAt?: string
+  /** 앞서 시작했다가 멈춘 단계를 이어서 했다 (startedAt~endedAt이 단계 전체에 걸린 시간이 아님) */
+  resumed?: boolean
+}
 
 export type LlmSettings = { endpoint: string; model: string; creditsUrl?: string }
 
@@ -347,7 +353,7 @@ export async function runJob(jobDir: string, ctx: JobContext): Promise<Job> {
   for (const stage of STAGES) {
     const state = job.stages[stage] ?? { status: 'pending' } // 9/30 전 작업에는 polish 단계가 없다
     if (state.status === 'done' || state.status === 'skipped') continue
-    job.stages[stage] = { status: 'running', startedAt: now() }
+    job.stages[stage] = { status: 'running', startedAt: now(), ...(state.startedAt && { resumed: true }) }
     await saveJob(jobDir, job)
     try {
       if (ctx.signal?.aborted) throw new EngineError('cancelled', '작업을 취소했습니다.')

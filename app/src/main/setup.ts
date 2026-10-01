@@ -9,7 +9,7 @@ import { readJson, writeJsonAtomic } from '../core/files.ts'
 import { defaultThreads, detect } from '../core/hardware.ts'
 import { DEFAULT_BEAM_SIZE, VAD_MODEL } from '../core/job.ts'
 import { MODELS } from '../core/models.ts'
-import { estimateSttSeconds, probeDevices } from '../core/probe.ts'
+import { estimateSttSeconds, probeDevices, sttSpeed } from '../core/probe.ts'
 import type { ProbeResult } from '../core/probe.ts'
 
 export type SetupState = {
@@ -86,7 +86,7 @@ export function createSetup({ dataDir, model, whisperCli, sample, busy, emit, lo
 
   function summarize(p: ProbeResult): SetupState['probe'] {
     const gpuName = p.gpuDevice === null ? null : (p.devices.find((d) => d.index === p.gpuDevice)?.name ?? `GPU ${p.gpuDevice}`)
-    return { state: 'done', gpuName, minutesFor90: Math.ceil(estimateSttSeconds(5400, p) / 60), threads: p.threads, gpuDevice: p.gpuDevice }
+    return { state: 'done', gpuName, minutesFor90: Math.ceil(estimateSttSeconds(5400, sttSpeed(p, [], null)) / 60), threads: p.threads, gpuDevice: p.gpuDevice }
   }
 
   async function runProbe(): Promise<void> {

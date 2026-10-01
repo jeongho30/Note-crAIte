@@ -9,7 +9,8 @@ import { writeJsonAtomic } from '../core/files.ts'
 import { createJob, DEFAULT_BEAM_SIZE, jobsDir, listJobs, loadJob, runJob, STAGES } from '../core/job.ts'
 import type { Job, JobContext, LlmSettings, StageName, StageState } from '../core/job.ts'
 import { MODELS } from '../core/models.ts'
-import { estimateSttSeconds } from '../core/probe.ts'
+import { estimateSttSeconds, sttSpeed } from '../core/probe.ts'
+import type { SttSpeed } from '../core/probe.ts'
 import type { ProbeResult } from '../core/probe.ts'
 import type { Language } from '../core/settings.ts'
 
@@ -92,6 +93,7 @@ export function createJobRunner(d: Deps) {
   let current: { id: string; stage: StageName; frac: number; stageStartedAt: number; cloud: boolean } | null = null
   let lastEmit = 0
   let probeCache: ProbeResult | null = null
+  let speed: SttSpeed | null = null // 지금 도는 작업의 예상 시간에 쓸 속도
   let last: JobView[] = [] // 마지막으로 보낸 목록 (트레이·창 닫기 판단용)
   let loopDone: Promise<void> = Promise.resolve()
   let controller: AbortController | null = null
@@ -138,7 +140,7 @@ export function createJobRunner(d: Deps) {
       const elapsedS = (Date.now() - live.stageStartedAt) / 1000
       // 처음엔 이 PC에서 잰 속도로, 어느 정도 진행되면 실제 속도로 남은 시간을 계산한다
       if (live.frac >= 0.05) etaS = (elapsedS / live.frac) * (1 - live.frac)
-      else if (probeCache && !cloudStt(job)) etaS = estimateSttSeconds(durationS, probeCache) - elapsedS
+      else if (speed && !cloudStt(job)) etaS = estimateSttSeconds(durationS, speed) - elapsedS
       if (etaS !== null) etaS = Math.max(0, Math.round(etaS))
     }
     return {
@@ -223,6 +225,7 @@ export function createJobRunner(d: Deps) {
           }
           await writeJsonAtomic(join(jobDir, 'job.json'), job)
         }
+        speed = probeCache ? sttSpeed(probeCache, await listJobs(d.dataDir), job.settings.args ?? null) : null
         if (stopping) break
         current = { id: job.id, stage: 'audio', frac: 0, stageStartedAt: Date.now(), cloud: cloudStt(job) }
         controller = new AbortController()

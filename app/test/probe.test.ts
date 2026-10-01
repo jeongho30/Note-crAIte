@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { EngineError } from '../src/core/errors.ts'
-import { choose, estimateJobSeconds, estimateSttSeconds, parseTimings, parseVulkanDevices } from '../src/core/probe.ts'
+import type { Job } from '../src/core/job.ts'
+import { choose, estimateJobSeconds, estimateSttSeconds, parseTimings, parseVulkanDevices, sttSpeed } from '../src/core/probe.ts'
+import type { ProbeResult } from '../src/core/probe.ts'
 import type { Trial } from '../src/core/probe.ts'
 
 // 데스크톱(외장 RX 9070 XT + 내장 Radeon)의 실제 whisper-cli 로그 형식
@@ -50,4 +52,39 @@ test('estimateJobSeconds는 받아쓰기에 오디오 준비와 요약(할 때�
   const stt = estimateSttSeconds(5400, p)
   assert.equal(estimateJobSeconds(5400, p, false), stt + 3) // 90분 오디오 준비 3초
   assert.equal(estimateJobSeconds(5400, p, true), stt + 3 + 15)
+})
+
+test('sttSpeed는 같은 설정으로 끝낸 작업의 실제 속도를 쓰고, 없으면 잰 속도를 낮춰 쓴다', () => {
+  const probe = { model: 'm', gpuDevice: null, threads: 6, rtf: 0.6, loadS: 2 } as ProbeResult
+  const job = (tookS: number, durationS: number, over: Record<string, unknown> = {}, stage: Record<string, unknown> = {}): Job =>
+    ({
+      settings: { model: 'm', gpuDevice: null, threads: 6, args: null, ...over },
+      audio: { durationS },
+      stages: { stt: { status: 'done', startedAt: new Date(0).toISOString(), endedAt: new Date(tookS * 1000).toISOString(), ...stage } }
+    }) as unknown as Job
+
+  // 기록이 없으면 잰 값 × 0.65, 모델 로드는 그대로
+  assert.deepEqual(sttSpeed(probe, [], null), { rtf: 0.6 * 0.65, loadS: 2 })
+
+  // 기록이 있으면 중앙값, 모델 로드는 기록에 들어 있어 0
+  assert.deepEqual(sttSpeed(probe, [job(1000, 5000), job(2000, 5000), job(1500, 5000)], null), { rtf: 0.3, loadS: 0 })
+  assert.equal(sttSpeed(probe, [job(1000, 4000), job(3000, 4000)], null).rtf, 0.5)
+
+  // 최근 5개만
+  const old = [job(4000, 5000), job(4000, 5000)]
+  assert.equal(sttSpeed(probe, [...old, ...Array.from({ length: 5 }, () => job(1000, 5000))], null).rtf, 0.2)
+
+  // 다른 모델·장치·스레드·옵션, 이어서 한 것, 짧은 녹음, ChatKHU 받아쓰기, 끝나지 않은 것은 뺀다
+  const skipped = [
+    job(100, 5000, { model: 'other' }),
+    job(100, 5000, { gpuDevice: 0 }),
+    job(100, 5000, { threads: 4 }),
+    job(100, 5000, { args: ['-bs', '5'] }),
+    job(100, 5000, {}, { resumed: true }),
+    job(10, 120),
+    job(100, 5000, { sttService: 'chatkhu' }),
+    job(100, 5000, {}, { status: 'failed' })
+  ]
+  assert.deepEqual(sttSpeed(probe, skipped, null), { rtf: 0.6 * 0.65, loadS: 2 })
+  assert.equal(sttSpeed(probe, skipped, ['-bs', '5']).rtf, 0.02)
 })

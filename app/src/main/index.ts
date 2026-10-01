@@ -13,7 +13,7 @@ import { DEFAULT_BEAM_SIZE, DEFAULT_MODEL, jobsDir, listJobs, STT_MODEL_CHOICES,
 import type { LlmSettings } from '../core/job.ts'
 import { MODELS } from '../core/models.ts'
 import { defaultDataDir, findFfmpeg, findWhisperCli } from '../core/paths.ts'
-import { estimateJobSeconds, estimateSttSeconds, testSample } from '../core/probe.ts'
+import { estimateJobSeconds, estimateSttSeconds, sttSpeed, testSample } from '../core/probe.ts'
 import type { ProbeResult } from '../core/probe.ts'
 import { DEFAULT_STEP_MODEL, estimateCredits90, estimateStepCredits90, POLISH_RECOMMENDED, RANKED, RECOMMENDED_COUNT } from '../core/llmcatalog.ts'
 import type { ModelItem } from '../core/llmcatalog.ts'
@@ -383,6 +383,8 @@ async function prepare(paths: string[]): Promise<Prepared> {
   }))
   const [probe, settings, per90, stt] = await Promise.all([loadProbe(), loadSettings(dataDir), jobCredits90(), sttService()])
   const cloud = stt === 'chatkhu'
+  // 이 PC에서 끝낸 작업이 있으면 그 실제 속도로 예상한다
+  const speed = probe && !cloud ? sttSpeed(probe, await listJobs(dataDir), settings.sttArgs ? parseArgs(settings.sttArgs) : null) : null
   const ffmpeg = findFfmpeg(binDir)
   const out: Prepared['recordings'] = []
   for (const r of recordings) {
@@ -398,8 +400,8 @@ async function prepare(paths: string[]): Promise<Prepared> {
         notesName: r.notes ? basename(r.notes) : null,
         durationS: info.durationS,
         recordedAt,
-        sttS: probe && info.durationS && !cloud ? Math.round(estimateSttSeconds(info.durationS, probe)) : null,
-        totalS: probe && info.durationS && !cloud ? Math.round(estimateJobSeconds(info.durationS, probe, settings.provider !== null)) : null,
+        sttS: speed && info.durationS ? Math.round(estimateSttSeconds(info.durationS, speed)) : null,
+        totalS: speed && info.durationS ? Math.round(estimateJobSeconds(info.durationS, speed, settings.provider !== null)) : null,
         credits: settings.provider === 'chatkhu' && info.durationS ? Math.max(1, Math.round((info.durationS / 5400) * per90)) : null,
         sttCredits: cloud && info.durationS ? chatkhuSttCredits(info.durationS) : null
       })
