@@ -165,7 +165,7 @@ export function Home({ jobs, llm, onConnect, onShowJobs, onPreview, refresh }: P
         </Banner>
       ) : (
         llm &&
-        !llm.provider && (
+        !llm.summary && (
           <Banner
             tone="info"
             title="요약 서비스를 연결하면"

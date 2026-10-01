@@ -6,7 +6,7 @@ import { rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { EngineError } from '../core/errors.ts'
 import { writeJsonAtomic } from '../core/files.ts'
-import { createJob, DEFAULT_BEAM_SIZE, jobsDir, listJobs, loadJob, runJob, STAGES } from '../core/job.ts'
+import { createJob, DEFAULT_BEAM_SIZE, jobsDir, listJobs, loadJob, polishTarget, runJob, STAGES } from '../core/job.ts'
 import type { Job, JobContext, LlmSettings, StageName, StageState } from '../core/job.ts'
 import { MODELS } from '../core/models.ts'
 import { estimateSttSeconds, sttSpeed } from '../core/probe.ts'
@@ -61,10 +61,8 @@ type Deps = {
   defaultThreads: () => Promise<number>
   /** 지금 설정의 받아쓰기 모델과 고친 옵션 (없으면 null = 앱 기본) */
   stt: () => Promise<{ model: string; args: string[] | null }>
-  /** 작업을 만들 때의 요약 설정과, 실행할 때의 API 키 */
-  llm: () => Promise<LlmSettings | null>
-  /** 지금 설정의 전사문 다듬기 모델 (꺼져 있으면 null) */
-  steps: () => Promise<{ polishModel: string | null }>
+  /** 지금 설정에서 요약과 전사문 다듬기가 부를 서비스·모델 (안 하면 null), 실행할 때의 API 키 */
+  llm: () => Promise<{ summary: LlmSettings | null; polish: LlmSettings | null }>
   apiKey: () => Promise<string | null>
   outDir: () => Promise<string>
   emit: (jobs: JobView[]) => void
@@ -117,7 +115,7 @@ export function createJobRunner(d: Deps) {
 
   function stageViews(job: Job): StageView[] {
     // 전사문 다듬기는 켠 작업만 보인다 (꺼져 있으면 모든 작업에 "건너뜀"이 붙어 번거롭다)
-    const shown = STAGES.filter((name) => name !== 'polish' || (job.stages.polish && job.stages.polish.status !== 'skipped' && job.settings.polishModel))
+    const shown = STAGES.filter((name) => name !== 'polish' || (job.stages.polish && job.stages.polish.status !== 'skipped' && polishTarget(job.settings)))
     return shown.map((name) => {
       const s = job.stages[name]
       const ms = s.startedAt && s.endedAt ? new Date(s.endedAt).getTime() - new Date(s.startedAt).getTime() : null
@@ -128,7 +126,7 @@ export function createJobRunner(d: Deps) {
   /** ChatKHU 받아쓰기·요약·교정 검증·전사문 다듬기 크레딧의 합. 요약 크레딧도 받아쓰기 크레딧도 모르면 null */
   function totalCredits(job: Job): number | null {
     const c = job.cost
-    if (c?.summaryCredits == null && c?.sttCredits == null) return null
+    if (c?.summaryCredits == null && c?.sttCredits == null && c?.polishCredits == null) return null
     return Math.round(((c.summaryCredits ?? 0) + (c.sttCredits ?? 0) + (c.verifyCredits ?? 0) + (c.polishCredits ?? 0)) * 100) / 100
   }
 
@@ -238,9 +236,10 @@ export function createJobRunner(d: Deps) {
           signal: controller.signal,
           onProgress: (stage, frac) => {
             if (!current) return
-            if (stage !== current.stage) current = { ...current, stage, frac: 0, stageStartedAt: Date.now() }
+            const changed = stage !== current.stage
+            if (changed) current = { ...current, stage, frac: 0, stageStartedAt: Date.now() }
             current.frac = frac
-            if (Date.now() - lastEmit >= EMIT_INTERVAL_MS || frac >= 1) void emitNow()
+            if (changed || Date.now() - lastEmit >= EMIT_INTERVAL_MS || frac >= 1) void emitNow()
           }
         }
         try {
@@ -278,7 +277,7 @@ export function createJobRunner(d: Deps) {
   /** 작업을 만들고 돌리기 시작한다. 만든 작업 id를 넣은 순서대로 돌려준다. */
   async function start(inputs: JobInput[]): Promise<string[]> {
     const probe = await d.probe()
-    const [llm, outDir, stt, steps, sttService] = await Promise.all([d.llm(), d.outDir(), d.stt(), d.steps(), d.sttService()])
+    const [llm, outDir, stt, sttService] = await Promise.all([d.llm(), d.outDir(), d.stt(), d.sttService()])
     const ids: string[] = []
     for (const input of inputs) {
       const jobDir = await createJob(d.dataDir, input.audio, input.notes, input.subject, {
@@ -289,8 +288,8 @@ export function createJobRunner(d: Deps) {
         threads: probe?.threads ?? (await d.defaultThreads()),
         args: stt.args,
         outDir,
-        llm,
-        ...steps,
+        llm: llm.summary,
+        polishLlm: llm.polish,
         ...(sttService === 'chatkhu' ? { sttService } : {})
       }, input.from)
       ids.push(basename(jobDir))
@@ -313,10 +312,15 @@ export function createJobRunner(d: Deps) {
     const job = await loadJob(dirOf(id))
     if (job.status !== 'failed' && job.status !== 'cancelled') return
     const stage = job.error?.stage
-    if ((stage === 'polish' || stage === 'summarize') && job.settings.llm) {
-      job.settings.llm = (await d.llm()) ?? job.settings.llm
+    if (stage === 'polish' || stage === 'summarize') {
+      const llm = await d.llm()
+      if (job.settings.llm) job.settings.llm = llm.summary ?? job.settings.llm
       job.settings.verifyModel = null // 앱은 교정 검증을 하지 않는다 (검증을 켜고 만든 이전 작업도)
-      if (stage === 'polish') job.settings.polishModel = (await d.steps()).polishModel // 다듬기에서 멈췄으면 지금 설정대로(끄면 건너뜀)
+      // 다듬기에서 멈췄으면 지금 설정대로(끄면 건너뜀)
+      if (stage === 'polish') {
+        job.settings.polishLlm = llm.polish
+        delete job.settings.polishModel
+      }
     }
     job.status = 'queued'
     delete job.error
@@ -329,7 +333,7 @@ export function createJobRunner(d: Deps) {
   async function resummarize(id: string): Promise<void> {
     const job = await loadJob(dirOf(id))
     if (job.status !== 'done' || job.stages.clean.status !== 'done') throw new EngineError('input', '이 노트는 요약을 다시 만들 수 없어요.')
-    const llm = await d.llm()
+    const llm = (await d.llm()).summary
     if (!llm) throw new EngineError('auth', '요약 서비스를 먼저 연결해 주세요.')
     job.settings.llm = llm
     job.settings.verifyModel = null
@@ -378,7 +382,7 @@ export function createJobRunner(d: Deps) {
   /** 도는 작업은 받아쓰기를 멈추고(끝난 조각은 남김), 대기 중인 작업은 바로 취소한다. */
   async function cancel(id: string): Promise<void> {
     if (current?.id === id) {
-      controller?.abort() // runJob이 취소됨으로 남긴다. 요약 요청 중이면 그 요청이 끝난 뒤 멈춘다
+      controller?.abort() // runJob이 취소됨으로 남긴다. 요약 서비스에 요청 중이면 그 요청이 끝난 뒤 멈춘다 (로컬 LLM은 바로 끊는다)
       return
     }
     const job = await loadJob(dirOf(id))

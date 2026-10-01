@@ -17,7 +17,8 @@ import { estimateJobSeconds, estimateSttSeconds, sttSpeed, testSample } from '..
 import type { ProbeResult } from '../core/probe.ts'
 import { DEFAULT_STEP_MODEL, estimateCredits90, estimateStepCredits90, POLISH_RECOMMENDED, RANKED, RECOMMENDED_COUNT } from '../core/llmcatalog.ts'
 import type { ModelItem } from '../core/llmcatalog.ts'
-import { CHATKHU_BASE, CREDITS_PER_90MIN_SUMMARY, creditsPer90ByModel, listModels, PRESETS, PROVIDERS, verifyKey } from '../core/providers.ts'
+import * as ollama from '../core/ollama.ts'
+import { CHATKHU_BASE, CREDITS_PER_90MIN_SUMMARY, creditsPer90ByModel, listModels, OLLAMA_NAME, PRESETS, PROVIDERS, resolveSteps, verifyKey } from '../core/providers.ts'
 import { chatkhuSttCredits } from '../core/stt/chatkhu.ts'
 import type { ProviderId } from '../core/providers.ts'
 import { listNotes, recentNotes } from '../core/recent.ts'
@@ -111,16 +112,7 @@ const runner = createJobRunner({
     const { sttArgs } = await loadSettings(dataDir)
     return { model: setup.model(), args: sttArgs ? parseArgs(sttArgs) : null }
   },
-  llm: async (): Promise<LlmSettings | null> => {
-    const { provider, summaryModel } = await loadSettings(dataDir)
-    if (provider !== 'chatkhu' || !(await readKey(dataDir, provider))) return null
-    const p = PRESETS['chatkhu']
-    return { endpoint: p.endpoint, model: summaryModel ?? p.model, creditsUrl: p.credits }
-  },
-  steps: async () => {
-    const { polishModel } = await loadSettings(dataDir)
-    return { polishModel }
-  },
+  llm: () => llmSteps(),
   apiKey: async () => {
     const { provider } = await loadSettings(dataDir)
     return provider ? readKey(dataDir, provider) : null
@@ -136,6 +128,12 @@ const runner = createJobRunner({
   sttService: () => sttService(),
   chatkhuBase: CHATKHU_BASE
 })
+
+/** 지금 설정에서 요약과 전사문 다듬기가 부를 서비스·모델 (요약 서비스 또는 로컬 LLM, 안 하면 null) */
+async function llmSteps(): Promise<{ summary: LlmSettings | null; polish: LlmSettings | null }> {
+  const s = await loadSettings(dataDir)
+  return resolveSteps(s, !!(s.provider && (await readKey(dataDir, s.provider))))
+}
 
 /** 새 작업의 받아쓰기 방식: 설정 > 고급 > 실험 기능에서 켜고 ChatKHU가 연결돼 있을 때만 ChatKHU 받아쓰기 */
 async function sttService(): Promise<'whisper' | 'chatkhu'> {
@@ -349,29 +347,27 @@ type Prepared = {
   stt: 'whisper' | 'chatkhu'
 }
 
-/** 지금 고른 요약 모델의 90분 요약 크레딧. 써 본 적 없는 모델이면 null */
-async function selectedModelCredits90(): Promise<number | null> {
-  const { summaryModel } = await loadSettings(dataDir)
-  const model = summaryModel ?? PRESETS['chatkhu'].model
-  return creditsPer90ByModel(await listJobs(dataDir))[model] ?? estimateCredits90(model)
-}
-
 /**
- * 90분 강의 한 개의 크레딧: 요약 + 전사문 다듬기(켠 경우).
+ * 90분 강의 한 개의 크레딧: 요약 + 전사문 다듬기(켠 경우). 로컬 LLM으로 하는 단계는 들지 않고, 크레딧이 드는 단계가 없으면 null.
  * polish: false면 다듬기를 빼고 센다 ([요약 다시 만들기]는 다시 다듬지 않는다)
  */
-async function jobCredits90({ polish = true } = {}): Promise<number> {
-  const { polishModel } = await loadSettings(dataDir)
-  const summary = (await selectedModelCredits90()) ?? CREDITS_PER_90MIN_SUMMARY
-  const polished = polish && !!polishModel
-  const polishCredits = polished ? (estimateStepCredits90('polish', polishModel!) ?? 0) : 0
-  return summary + polishCredits
+async function jobCredits90({ polish = true } = {}): Promise<number | null> {
+  const steps = await llmSteps()
+  const billed = (s: LlmSettings | null): s is LlmSettings => !!s && !s.ollama
+  // 요약: 써 본 기록, 없으면 단가표 어림, 그것도 없으면 기본값
+  const summary = billed(steps.summary)
+    ? (creditsPer90ByModel(await listJobs(dataDir))[steps.summary.model] ?? estimateCredits90(steps.summary.model) ?? CREDITS_PER_90MIN_SUMMARY)
+    : null
+  const polishCredits = polish && billed(steps.polish) ? (estimateStepCredits90('polish', steps.polish.model) ?? 0) : null
+  return summary === null && polishCredits === null ? null : (summary ?? 0) + (polishCredits ?? 0)
 }
 
-/** 남은 크레딧으로 90분 강의를 몇 개 더 요약할 수 있는지 */
+/** 남은 크레딧으로 90분 강의를 몇 개 더 요약할 수 있는지. 요약을 요약 서비스로 하지 않으면 null */
 async function summariesLeft(credits: number | null): Promise<number | null> {
-  if (credits == null) return null
-  return Math.floor(credits / (await jobCredits90()))
+  const { summary } = await llmSteps()
+  const per90 = await jobCredits90()
+  if (credits == null || !summary || summary.ollama || !per90) return null
+  return Math.floor(credits / per90)
 }
 
 /** 시작 전 확인에 보여 줄 것: 녹음마다 길이·녹음 시각·예상 시간·예상 크레딧, 넣을 수 없는 파일과 이유. */
@@ -381,7 +377,7 @@ async function prepare(paths: string[]): Promise<Prepared> {
     name: basename(p),
     reason: NOTE_EXTS.some((e) => p.toLowerCase().endsWith('.' + e)) ? '같은 이름의 녹음이 없는 필기예요' : '녹음 파일이 아니에요'
   }))
-  const [probe, settings, per90, stt] = await Promise.all([loadProbe(), loadSettings(dataDir), jobCredits90(), sttService()])
+  const [probe, settings, per90, stt, steps] = await Promise.all([loadProbe(), loadSettings(dataDir), jobCredits90(), sttService(), llmSteps()])
   const cloud = stt === 'chatkhu'
   // 이 PC에서 끝낸 작업이 있으면 그 실제 속도로 예상한다
   const speed = probe && !cloud ? sttSpeed(probe, await listJobs(dataDir), settings.sttArgs ? parseArgs(settings.sttArgs) : null) : null
@@ -401,8 +397,8 @@ async function prepare(paths: string[]): Promise<Prepared> {
         durationS: info.durationS,
         recordedAt,
         sttS: speed && info.durationS ? Math.round(estimateSttSeconds(info.durationS, speed)) : null,
-        totalS: speed && info.durationS ? Math.round(estimateJobSeconds(info.durationS, speed, settings.provider !== null)) : null,
-        credits: settings.provider === 'chatkhu' && info.durationS ? Math.max(1, Math.round((info.durationS / 5400) * per90)) : null,
+        totalS: speed && info.durationS ? Math.round(estimateJobSeconds(info.durationS, speed, steps.summary !== null)) : null,
+        credits: per90 !== null && info.durationS ? Math.max(1, Math.round((info.durationS / 5400) * per90)) : null,
         sttCredits: cloud && info.durationS ? chatkhuSttCredits(info.durationS) : null
       })
     } catch {
@@ -447,7 +443,7 @@ async function readNote(path: string) {
       durationS,
       // 받아쓰기·정리까지 끝난 작업이면 요약부터 다시 할 수 있다
       canSummarize: job.stages.clean.status === 'done',
-      credits: durationS ? Math.max(1, Math.round((durationS / 5400) * per90)) : null
+      credits: durationS && per90 !== null ? Math.max(1, Math.round((durationS / 5400) * per90)) : null
     }
   }
 }
@@ -458,10 +454,24 @@ function providerOf(id: unknown): ProviderId {
   return p.id
 }
 
-async function llmStatus(): Promise<{ provider: ProviderId | null; name?: string; keyHint?: string; credits?: number | null; summariesLeft?: number | null }> {
+/** 화면에 보일 단계별 서비스: 이름, 모델, 로컬인지 */
+type StepView = { service: string; name: string; model: string; local: boolean }
+function stepView(s: LlmSettings | null): StepView | null {
+  if (!s) return null
+  const name = s.ollama ? OLLAMA_NAME : (PROVIDERS.find((x) => x.id === s.service)?.name ?? s.service ?? '')
+  return { service: s.service ?? '', name, model: s.model, local: !!s.ollama }
+}
+
+/** 연결된 요약 서비스(키·잔액)와, 요약·전사문 다듬기를 무엇으로 하는지. 화면은 요약을 할 수 있는지를 summary로 본다 */
+async function llmStatus(): Promise<{
+  provider: ProviderId | null; name?: string; keyHint?: string; credits?: number | null; summariesLeft?: number | null
+  summary: StepView | null; polish: StepView | null
+}> {
   const { provider } = await loadSettings(dataDir)
   const key = provider ? await readKey(dataDir, provider) : null
-  if (!provider || !key) return { provider: null }
+  const steps = await llmSteps()
+  const views = { summary: stepView(steps.summary), polish: stepView(steps.polish) }
+  if (!provider || !key) return { provider: null, ...views }
   // 잔액은 참고용이라 못 불러와도(오프라인) 연결 상태는 그대로 보인다.
   const credits = await verifyKey(provider, key).then((r) => r.credits, () => null)
   return {
@@ -469,7 +479,36 @@ async function llmStatus(): Promise<{ provider: ProviderId | null; name?: string
     name: PROVIDERS.find((x) => x.id === provider)?.name,
     keyHint: keyHint(key),
     credits,
-    summariesLeft: await summariesLeft(credits)
+    summariesLeft: await summariesLeft(credits),
+    ...views
+  }
+}
+
+/** 로컬 LLM 블록: Ollama가 켜져 있는지, 설치된 모델, 단계별로 고른 모델과 요청 옵션 */
+async function ollamaState() {
+  const local = (await loadSettings(dataDir)).ollama
+  let running = true
+  let version: string | null = null
+  let models: ollama.OllamaModel[] = []
+  try {
+    version = await ollama.version()
+    models = await ollama.listModels()
+  } catch {
+    running = false
+  }
+  const step = (name: 'summary' | 'polish') => {
+    const defaultRequest = ollama.requestText(ollama.DEFAULT_REQUEST[name])
+    return { model: local[`${name}Model`], request: local[`${name}Request`] ?? defaultRequest, defaultRequest }
+  }
+  return {
+    running,
+    version,
+    endpoint: `${ollama.OLLAMA_BASE}/api/chat`,
+    models,
+    summary: step('summary'),
+    polish: step('polish'),
+    // num_ctx "auto"가 90분 강의(약 27,000자)에서 잡는 값
+    autoCtx90: ollama.autoNumCtx(27_000 + 3000, 8192)
   }
 }
 
@@ -717,7 +756,7 @@ const handlers: Record<string, (params: unknown) => unknown> = {
   },
   // 설정 > 고급 > 요약 세부설정: 전사문 다듬기 모델. llm.models와 같은 형식으로, 다듬기 추천 모델을 앞에 두고 나머지는 요약 추천 순서
   'llm.steps': async () => {
-    const { provider, polishModel } = await loadSettings(dataDir)
+    const { provider, polishModel, ollama: local } = await loadSettings(dataDir)
     const key = provider ? await readKey(dataDir, provider) : null
     let items: ModelItem[] = []
     let failed = false
@@ -728,6 +767,8 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     const ids = [...new Set([...order, ...(polishModel ? [polishModel] : [])])]
     return {
       polishModel,
+      // 단계를 로컬 LLM으로 하는지와, 로컬에서 고른 모델 (없으면 로컬을 고를 수 없다)
+      local: { summary: local.summary, polish: local.polish, summaryModel: local.summaryModel, polishModel: local.polishModel },
       defaultModel: DEFAULT_STEP_MODEL,
       failed,
       available: [...available],
@@ -747,14 +788,62 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     }
   },
   'llm.setSteps': async (p) => {
-    const { polishModel } = (p ?? {}) as { polishModel?: unknown }
+    const { polishModel, summaryLocal, polishLocal } = (p ?? {}) as { polishModel?: unknown; summaryLocal?: unknown; polishLocal?: unknown }
     const patch: Partial<Settings> = {}
+    // 단계를 로컬 LLM으로 돌리기: 로컬 모델을 골라 둔 단계만 켤 수 있다
+    if (summaryLocal !== undefined || polishLocal !== undefined) {
+      const local = { ...(await loadSettings(dataDir)).ollama }
+      if (summaryLocal !== undefined) local.summary = summaryLocal === true
+      if (polishLocal !== undefined) local.polish = polishLocal === true
+      if ((local.summary && !local.summaryModel) || (local.polish && !local.polishModel)) {
+        throw new EngineError('input', '아래 로컬 LLM (Ollama)에서 모델을 먼저 골라 주세요.')
+      }
+      patch.ollama = local
+    }
     if (polishModel !== undefined) {
       if (polishModel !== null && (typeof polishModel !== 'string' || !polishModel.trim())) throw new EngineError('input', '다듬기 모델을 골라 주세요.')
       patch.polishModel = polishModel === null ? null : polishModel.trim()
     }
     await updateSettings(dataDir, patch)
     log.write(`요약 세부설정: ${JSON.stringify(patch)}`)
+  },
+
+  // ── 설정 > 고급 > 로컬 LLM (Ollama) ──
+  'ollama.get': () => ollamaState(),
+  // 모델과 요청 옵션을 저장한다. 기본 옵션과 같으면 기본으로 둔다
+  'ollama.save': async (p) => {
+    const o = (p ?? {}) as Record<string, unknown>
+    const local = { ...(await loadSettings(dataDir)).ollama }
+    for (const step of ['summary', 'polish'] as const) {
+      const model = o[`${step}Model`]
+      if (typeof model === 'string' && model.trim()) local[`${step}Model`] = model.trim()
+      const request = o[`${step}Request`]
+      if (typeof request === 'string') {
+        const text = ollama.requestText(ollama.parseRequest(request))
+        local[`${step}Request`] = text === ollama.requestText(ollama.DEFAULT_REQUEST[step]) ? null : text
+      }
+    }
+    await updateSettings(dataDir, { ollama: local })
+    log.write(`로컬 LLM 설정: ${JSON.stringify(local)}`)
+    return ollamaState()
+  },
+  // 고친 옵션으로 짧게 한 번 불러 본다 (저장하지 않음)
+  'ollama.test': async (p) => {
+    const { step, model, request } = (p ?? {}) as { step?: unknown; model?: unknown; request?: unknown }
+    if (typeof model !== 'string' || !model) throw new EngineError('input', '모델을 골라 주세요.')
+    const req = ollama.parseRequest(String(request ?? ''))
+    const [text, usage] = await ollama.chat(`${ollama.OLLAMA_BASE}/api/chat`, model, [{ role: 'user', content: '컴파일러가 무엇인지 한 문장으로 설명해 줘.' }], {
+      request: req, maxTokens: 128, firstMs: 5 * 60_000, idleMs: 60_000
+    })
+    const n = (k: string): number => (typeof usage[k] === 'number' ? (usage[k] as number) : 0)
+    const result = {
+      chars: text.length,
+      loadS: n('load_duration') / 1e9,
+      tokensPerS: n('eval_duration') ? n('completion_tokens') / (n('eval_duration') / 1e9) : null,
+      numCtx: n('num_ctx') || null
+    }
+    log.write(`로컬 LLM 시험(${step === 'summary' ? '요약' : '다듬기'}): ${model} · ${ollama.requestText(req)} · 올리기 ${result.loadS.toFixed(1)}초 · ${result.tokensPerS?.toFixed(1) ?? '?'}토큰/초`)
+    return result
   },
 
   'setup.reprobe': () => {

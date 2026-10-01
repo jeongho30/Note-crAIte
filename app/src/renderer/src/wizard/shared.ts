@@ -9,7 +9,19 @@ export type StepProps = {
   headingRef: RefObject<HTMLHeadingElement | null>
 }
 
-export type LlmStatus = { provider: string | null; name?: string; keyHint?: string; credits?: number | null; summariesLeft?: number | null }
+/** 한 단계(요약·전사문 다듬기)를 무엇으로 하는지: 요약 서비스 또는 로컬 LLM */
+export type LlmStep = { service: string; name: string; model: string; local: boolean }
+
+/** provider는 키로 연결한 요약 서비스. 요약을 만들 수 있는지는 summary로 본다 (로컬 LLM이면 키가 없어도 된다) */
+export type LlmStatus = {
+  provider: string | null
+  name?: string
+  keyHint?: string
+  credits?: number | null
+  summariesLeft?: number | null
+  summary?: LlmStep | null
+  polish?: LlmStep | null
+}
 
 /** 모델 받기·속도 재기 상태. 메인이 바뀔 때마다 보내 준다. */
 export function useSetup(): SetupState | null {

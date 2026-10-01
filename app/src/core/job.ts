@@ -15,6 +15,8 @@ import { readJson, writeJsonAtomic } from './files.ts'
 import { readNotes } from './inputs.ts'
 import { creditsFromTokens, PRICES } from './llmcatalog.ts'
 import { renderNote, saveNote } from './note.ts'
+import { unload } from './ollama.ts'
+import type { OllamaRequest } from './ollama.ts'
 import { transcribeChunks } from './stt/base.ts'
 import type { Segment, SttEngine } from './stt/base.ts'
 import { chargedCredits, ChatkhuStt } from './stt/chatkhu.ts'
@@ -40,7 +42,16 @@ export type StageState = {
   resumed?: boolean
 }
 
-export type LlmSettings = { endpoint: string; model: string; creditsUrl?: string }
+/** 한 단계(다듬기·요약)가 부를 서비스와 모델 */
+export type LlmSettings = {
+  endpoint: string
+  model: string
+  creditsUrl?: string
+  /** 서비스 id (chatkhu, ollama …). 10/2 전 작업에는 없다(ChatKHU) */
+  service?: string
+  /** 있으면 로컬 LLM(Ollama): 고친 요청 옵션. API 키가 필요 없고 크레딧이 들지 않는다 */
+  ollama?: OllamaRequest
+}
 
 export type JobSettings = {
   language: string // whisper-cli -l (과목별 강의 언어)
@@ -50,10 +61,12 @@ export type JobSettings = {
   threads: number
   args?: string[] | null // 설정 > 고급에서 고친 whisper-cli 옵션. 있으면 threads·beamSize·gpuDevice 대신 쓴다
   outDir: string
-  llm: LlmSettings | null // null이면 요약 없이 전사만 담은 노트
+  llm: LlmSettings | null // 요약. null이면 요약 없이 전사만 담은 노트
   /** 요약 뒤 교정 검증 모델(요약 서비스는 llm과 같음). null이거나 없으면 검증하지 않는다(9/30 전 작업) */
   verifyModel?: string | null
-  /** 전사문 다듬기 모델. null이거나 없으면 다듬지 않는다 */
+  /** 전사문 다듬기. null이면 다듬지 않는다. 없으면 10/2 전 작업이라 polishModel을 본다 */
+  polishLlm?: LlmSettings | null
+  /** 10/2 전 작업의 전사문 다듬기 모델 (서비스는 llm과 같음) */
   polishModel?: string | null
   /** 받아쓰기 방식. chatkhu면 ChatKHU 받아쓰기(Soniox, 크레딧 사용), 없으면 이 PC의 whisper (설정 > 고급 > 실험 기능) */
   sttService?: 'whisper' | 'chatkhu'
@@ -70,9 +83,9 @@ export type Job = {
   audio?: { durationS: number | null; recordedAt: string; chunks: Chunk[] }
   /**
    * source: tokens는 응답의 토큰 수 × 단가, balance는 요약 전후 잔액 차이(단가표에 없는 모델만).
-   * source가 없는 것은 9/29 전 기록(잔액 차이)이다. 잔액 차이는 실패한 호출의 늦은 차감이나 다른 사용이 섞일 수 있다.
+   * local은 로컬 LLM으로 요약해 크레딧이 들지 않은 것. source가 없는 것은 9/29 전 기록(잔액 차이)이다. 잔액 차이는 실패한 호출의 늦은 차감이나 다른 사용이 섞일 수 있다.
    */
-  cost?: { summaryCredits: number | null; source?: 'tokens' | 'balance'; verifyCredits?: number | null; polishCredits?: number | null; sttCredits?: number | null }
+  cost?: { summaryCredits: number | null; source?: 'tokens' | 'balance' | 'local'; verifyCredits?: number | null; polishCredits?: number | null; sttCredits?: number | null }
   output?: { notePath: string }
   /** 노트 목록에서 수정한 제목·날짜. 있으면 요약을 다시 만들어도 이 값을 쓴다 (과목은 input.subject를 고친다) */
   edits?: { title: string; date: string }
@@ -87,6 +100,8 @@ type SummaryFile = {
   parseFailed: boolean
   /** 검증에서 버린 교정. 검증하지 않았거나 검증 호출이 실패했으면 없음 */
   rejected?: Correction[]
+  /** 로컬 LLM으로 요약했을 때 실제로 쓴 컨텍스트 길이와 토큰 수 (num_ctx가 auto면 계산한 값) */
+  local?: { numCtx: unknown; inputTokens: unknown; outputTokens: unknown }
 }
 
 type PolishedFile = { model: string; paragraphs: Paragraph[]; fallbackChunks: number; chunks: number }
@@ -104,7 +119,7 @@ export type JobContext = {
   ffmpeg: string
   whisperCli: string[] // 실행 명령 (테스트에서는 node + 가짜 스크립트)
   modelPath: (kind: 'whisper' | 'vad', name: string) => Promise<string> // 없으면 받아 온다
-  apiKey: string | null // job.json에는 저장하지 않는다
+  apiKey: string | null // 연결된 요약 서비스의 키. job.json에는 저장하지 않는다
   /** ChatKHU 게이트웨이 주소 (ChatKHU 받아쓰기를 쓰는 작업만) */
   chatkhuBase?: string
   onProgress?: (stage: StageName, frac: number) => void
@@ -189,6 +204,22 @@ function stem(path: string): string {
   return basename(path).slice(0, basename(path).length - extname(path).length)
 }
 
+/** 이 작업의 전사문 다듬기 대상 (없으면 다듬지 않는다) */
+export function polishTarget(s: JobSettings): LlmSettings | null {
+  if (s.polishLlm !== undefined) return s.polishLlm
+  return s.llm && s.polishModel ? { ...s.llm, model: s.polishModel } : null
+}
+
+/** 로컬 LLM 호출이 실패·취소로 끝나면 모델이 메모리에 남으니 내려 둔다 */
+async function unloadOnError<T>(llm: LlmSettings, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run()
+  } catch (e) {
+    if (llm.ollama) await unload(llm.endpoint, llm.model)
+    throw e
+  }
+}
+
 type Runner = (job: Job, jobDir: string, ctx: JobContext) => Promise<'done' | 'skipped'>
 
 const RUNNERS: Record<StageName, Runner> = {
@@ -237,14 +268,19 @@ const RUNNERS: Record<StageName, Runner> = {
   },
 
   async polish(job, jobDir, ctx) {
-    const llm = job.settings.llm
-    const model = job.settings.polishModel
-    if (!llm || !model) return 'skipped'
-    if (!ctx.apiKey) throw new EngineError('auth', 'API 키가 없어요. 설정에서 키를 넣어 주세요.')
+    const llm = polishTarget(job.settings)
+    if (!llm) return 'skipped'
+    const model = llm.model
+    if (!llm.ollama && !ctx.apiKey) throw new EngineError('auth', 'API 키가 없어요. 설정에서 키를 넣어 주세요.')
     const cleaned = await readJson<Cleaned>(join(jobDir, 'cleaned.json'))
     const notes = job.input.notes ? await readNotes(join(jobDir, job.input.notes)) : ''
-    const r = await polishParagraphs(cleaned.paragraphs, notes, { endpoint: llm.endpoint, apiKey: ctx.apiKey, model })
-    job.cost = { ...job.cost, summaryCredits: job.cost?.summaryCredits ?? null, polishCredits: creditsFromTokens(model, r.inputTokens, r.outputTokens) }
+    // 요약도 같은 로컬 모델이면 올려 둔 채 넘기고, 아니면 마지막 조각 뒤에 내린다
+    const summary = job.settings.llm
+    const unloadAfter = !(summary?.ollama && summary.endpoint === llm.endpoint && summary.model === model)
+    const r = await unloadOnError(llm, () => polishParagraphs(cleaned.paragraphs, notes, {
+      endpoint: llm.endpoint, apiKey: ctx.apiKey, model, ollama: llm.ollama, signal: ctx.signal, unloadAfter
+    }))
+    if (!llm.ollama) job.cost = { ...job.cost, summaryCredits: job.cost?.summaryCredits ?? null, polishCredits: creditsFromTokens(model, r.inputTokens, r.outputTokens) }
     const file: PolishedFile = { model, paragraphs: r.paragraphs, fallbackChunks: r.fallbackChunks, chunks: r.chunks }
     await writeJsonAtomic(join(jobDir, 'polished.json'), file)
     return 'done'
@@ -253,26 +289,29 @@ const RUNNERS: Record<StageName, Runner> = {
   async summarize(job, jobDir, ctx) {
     const llm = job.settings.llm
     if (!llm) return 'skipped'
-    if (!ctx.apiKey) throw new EngineError('auth', 'API 키가 없어요. 설정에서 키를 넣어 주세요.')
+    if (!llm.ollama && !ctx.apiKey) throw new EngineError('auth', 'API 키가 없어요. 설정에서 키를 넣어 주세요.')
     // 다듬은 전사가 있으면 그것을 요약한다. 이미 다듬었으니 교정 목록은 쓰지 않는다
     const { paragraphs, polished } = await transcriptParagraphs(job, jobDir)
     const text = transcriptText({ paragraphs, stats: { segmentsIn: 0, loopsCollapsed: 0, hallucinationsRemoved: 0, repeatsRemoved: 0 } })
     const notes = job.input.notes ? await readNotes(join(jobDir, job.input.notes)) : ''
     // 단가를 아는 모델은 응답의 토큰 수로 크레딧을 계산하고, 모르는 모델만 요약 전후 잔액 차이로 잰다
     const priced = llm.model in PRICES
-    const before = !priced && llm.creditsUrl ? await creditsRemaining(llm.creditsUrl, ctx.apiKey) : null
-    const result = await summarize(text, notes, job.input.subject, {
-      endpoint: llm.endpoint, apiKey: ctx.apiKey, model: llm.model, fallbackTitle: stem(job.input.audio)
-    })
+    const before = !llm.ollama && !priced && llm.creditsUrl ? await creditsRemaining(llm.creditsUrl, ctx.apiKey!) : null
+    const result = await unloadOnError(llm, () => summarize(text, notes, job.input.subject, {
+      endpoint: llm.endpoint, apiKey: ctx.apiKey, model: llm.model, fallbackTitle: stem(job.input.audio), ollama: llm.ollama, signal: ctx.signal
+    }))
     // 앞 단계(다듬기·ChatKHU 받아쓰기)의 크레딧은 그대로 둔다
     const polish = {
       ...(job.cost?.polishCredits !== undefined ? { polishCredits: job.cost.polishCredits } : {}),
       ...(job.cost?.sttCredits != null ? { sttCredits: job.cost.sttCredits } : {})
     }
-    if (priced) {
+    if (llm.ollama) {
+      // 크레딧이 들지 않는다. 앞 단계에서 쓴 크레딧이 있을 때만 남긴다
+      job.cost = Object.keys(polish).length ? { summaryCredits: null, source: 'local', ...polish } : undefined
+    } else if (priced) {
       job.cost = { summaryCredits: creditsFromTokens(llm.model, result.usage?.prompt_tokens, result.usage?.completion_tokens), source: 'tokens', ...polish }
     } else {
-      const after = before !== null ? await creditsRemaining(llm.creditsUrl!, ctx.apiKey) : null
+      const after = before !== null ? await creditsRemaining(llm.creditsUrl!, ctx.apiKey!) : null
       job.cost = { summaryCredits: before !== null && after !== null ? Math.round((before - after) * 100) / 100 : null, source: 'balance', ...polish }
     }
     const file: SummaryFile = {
@@ -280,7 +319,8 @@ const RUNNERS: Record<StageName, Runner> = {
       summary: result.summary,
       keywords: result.keywords,
       corrections: polished ? [] : corrections.select(result.corrections, text),
-      parseFailed: result.parseFailed
+      parseFailed: result.parseFailed,
+      ...(llm.ollama ? { local: { numCtx: result.usage?.['num_ctx'], inputTokens: result.usage?.prompt_tokens, outputTokens: result.usage?.completion_tokens } } : {})
     }
     // 교정 검증(앱은 쓰지 않음, CLI --verify-model 실험용): 실제로 바꿀 곳이 있는 교정만 보낸다. 검증 호출이 실패하면 검증 없이 쓴다(요약까지 실패로 두지 않는다)
     const verifyModel = job.settings.verifyModel
@@ -290,7 +330,7 @@ const RUNNERS: Record<StageName, Runner> = {
         const v = await verifyCorrections(text, toVerify, job.input.subject, { endpoint: llm.endpoint, apiKey: ctx.apiKey, model: verifyModel })
         file.corrections = v.kept
         file.rejected = v.rejected
-        job.cost.verifyCredits = creditsFromTokens(verifyModel, v.usage?.prompt_tokens, v.usage?.completion_tokens)
+        if (job.cost) job.cost.verifyCredits = creditsFromTokens(verifyModel, v.usage?.prompt_tokens, v.usage?.completion_tokens)
       } catch (e) {
         if (e instanceof EngineError && e.code === 'cancelled') throw e
       }
@@ -357,6 +397,7 @@ export async function runJob(jobDir: string, ctx: JobContext): Promise<Job> {
     await saveJob(jobDir, job)
     try {
       if (ctx.signal?.aborted) throw new EngineError('cancelled', '작업을 취소했습니다.')
+      ctx.onProgress?.(stage, 0) // 화면이 지금 단계를 알게 (로컬 LLM 다듬기·요약은 몇 분씩 걸린다)
       const result = await RUNNERS[stage](job, jobDir, ctx)
       job.stages[stage] = { ...job.stages[stage], status: result, endedAt: now() }
       ctx.onProgress?.(stage, 1)

@@ -3,6 +3,7 @@
 // 90분에 약 20크레딧(gpt-6-luna)이 들고, 말하지 않은 내용을 넣거나 빼는 경우가 있다. 그래서 원문 정리본을 노트에 함께 남긴다.
 import type { Paragraph } from './clean.ts'
 import { chat } from './llm.ts'
+import type { OllamaRequest } from './ollama.ts'
 import { POLISH_TRANSCRIPT } from './prompts.ts'
 
 const CHUNK_CHARS = 2000 // 예전 파이프라인의 chunk_size_chars
@@ -12,7 +13,16 @@ const CONCURRENCY = 4
 const MIN_RATIO = 0.85
 const MAX_RATIO = 1.2
 
-export type PolishOptions = { endpoint: string; apiKey: string | null; model: string }
+export type PolishOptions = {
+  endpoint: string
+  apiKey: string | null
+  model: string
+  /** 있으면 로컬 LLM(Ollama)으로 다듬는다. 한 번에 한 조각씩 보낸다 (동시에 보내면 Ollama가 줄을 세우거나 컨텍스트 메모리를 배로 쓴다) */
+  ollama?: OllamaRequest
+  signal?: AbortSignal
+  /** 마지막 조각 뒤 로컬 모델을 메모리에서 내린다 */
+  unloadAfter?: boolean
+}
 export type PolishResult = {
   paragraphs: Paragraph[]
   /** 검사에 걸려 원문을 쓴 조각 수 / 전체 조각 수 */
@@ -61,17 +71,19 @@ export async function polishParagraphs(paras: Paragraph[], notes: string, o: Pol
       if (notes) system += `\n\n[필기노트 용어집]\n${notes}`
       if (i > 0) system += `\n\n[이전 청크 마지막 부분 - 참고용, 다시 출력하지 말 것]\n${chunks[i - 1].map((p) => p.text).join('\n\n').slice(-PREV_TAIL_CHARS)}`
       const [content, usage] = await chat(o.endpoint, o.apiKey, o.model,
-        [{ role: 'system', content: system }, { role: 'user', content: chunks[i].map((p) => p.text).join('\n\n') }], { maxTokens: 16_000 })
+        [{ role: 'system', content: system }, { role: 'user', content: chunks[i].map((p) => p.text).join('\n\n') }],
+        // 로컬은 출력 상한을 조각 길이에 맞춘다 (num_ctx 16K 안에 입력과 함께 들어가야 한다)
+        { maxTokens: o.ollama ? 4096 : 16_000, ollama: o.ollama, signal: o.signal, unloadAfter: o.unloadAfter && i === chunks.length - 1 })
       inputTokens += typeof usage?.prompt_tokens === 'number' ? usage.prompt_tokens : 0
       outputTokens += typeof usage?.completion_tokens === 'number' ? usage.completion_tokens : 0
       const parts = content.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean)
-      if (acceptable(chunks[i], parts)) out[i] = chunks[i].map((p, k) => ({ ...p, text: parts[k] }))
+      if (usage?.['done_reason'] !== 'length' && acceptable(chunks[i], parts)) out[i] = chunks[i].map((p, k) => ({ ...p, text: parts[k] }))
       else {
         out[i] = chunks[i]
         fallbackChunks++
       }
     }
   }
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, chunks.length) }, worker))
+  await Promise.all(Array.from({ length: Math.min(o.ollama ? 1 : CONCURRENCY, chunks.length) }, worker))
   return { paragraphs: out.flat(), fallbackChunks, chunks: chunks.length, inputTokens, outputTokens }
 }

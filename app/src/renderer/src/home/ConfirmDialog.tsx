@@ -332,11 +332,12 @@ export function ConfirmDialog({ paths, llm, onClose }: Props): React.JSX.Element
                   </dd>
                   <dt>요약</dt>
                   <dd>
-                    {llm?.provider
+                    {llm?.summary
                       ? [
-                          llm.name,
+                          llm.summary.local ? `${llm.summary.name}(${llm.summary.model})` : llm.summary.name,
+                          llm.polish?.local && !llm.summary.local ? `다듬기는 ${llm.polish.name}` : null,
                           creditTotal !== null ? `약 ${creditTotal}크레딧 소모 예상` : null,
-                          llm.credits != null ? `남은 크레딧 ${llm.credits.toLocaleString()}` : null
+                          creditTotal !== null && llm.credits != null ? `남은 크레딧 ${llm.credits.toLocaleString()}` : null
                         ]
                           .filter(Boolean)
                           .join(' · ')

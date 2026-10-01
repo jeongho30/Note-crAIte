@@ -207,6 +207,7 @@ export const ProviderSection = forwardRef<HTMLElement, Props>(function ProviderS
             failed={!!models?.failed}
             onPick={(id) => void pickModel(id)}
           />
+          {llm?.summary?.local && <p className={styles.hint}>지금은 요약을 로컬 LLM({llm.summary.model})으로 해요. 고급 &gt; 요약 세부설정에서 바꿀 수 있어요.</p>}
         </Block>
       </SettingsCard>
 

@@ -4,6 +4,7 @@ import { Button, RadioCardGroup, Switch, TextField, useToast } from '../componen
 import type { Settings } from '../../../core/settings'
 import { cx } from '../components/cx'
 import { ModelPicker, type ModelOption } from './ModelPicker'
+import { OllamaBlock } from './OllamaBlock'
 import type { SetupState } from '../../../main/setup'
 import { Block, Section, sizeLabel } from './parts'
 import styles from './Settings.module.css'
@@ -31,14 +32,24 @@ type Props = {
   onStepsSaved: () => void
 }
 
-type Steps = { polishModel: string | null; defaultModel: string; failed: boolean; available: string[]; models: ModelOption[] }
+type Steps = {
+  polishModel: string | null
+  /** 단계를 로컬 LLM으로 하는지와, 로컬 LLM 블록에서 고른 모델 */
+  local: { summary: boolean; polish: boolean; summaryModel: string | null; polishModel: string | null }
+  defaultModel: string
+  failed: boolean
+  available: string[]
+  models: ModelOption[]
+}
+
+const LOCAL_PICK_FIRST = '아래 로컬 LLM에서 모델을 먼저 골라요'
 
 /** "약 0.4크레딧", 모르면 "크레딧 모름" */
 function creditsLabel(v: number | null): string {
   return v == null ? '크레딧 모름' : `약 ${v < 10 ? Math.round(v * 10) / 10 : Math.round(v)}크레딧`
 }
 
-// 고급(기본은 접힘): 받아쓰기 세부설정(모델, 실제 명령, 고칠 수 있는 옵션, 샘플로 시험), 요약 세부설정(전사문 다듬기), 로컬 LLM(곧 지원), 실험 기능(ChatKHU 받아쓰기, 녹음 중 받아쓰기).
+// 고급(기본은 접힘): 받아쓰기 세부설정(모델, 실제 명령, 고칠 수 있는 옵션, 샘플로 시험), 요약 세부설정(요약·전사문 다듬기를 요약 서비스로 할지 로컬 LLM으로 할지), 로컬 LLM(OllamaBlock), 실험 기능(ChatKHU 받아쓰기, 녹음 중 받아쓰기).
 export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedSection({ setup, connected, onSaved, onStepsSaved }, ref) {
   const toast = useToast()
   const [open, setOpen] = useState(false)
@@ -67,7 +78,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
     }
   }
 
-  async function saveSteps(patch: { polishModel?: string | null }): Promise<void> {
+  async function saveSteps(patch: { polishModel?: string | null; summaryLocal?: boolean; polishLocal?: boolean }): Promise<void> {
     try {
       await call('llm.setSteps', patch)
       setSteps(await call<Steps>('llm.steps'))
@@ -78,6 +89,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
   }
 
   const polishModel = steps?.polishModel ?? polishPick ?? steps?.defaultModel ?? ''
+  const polishVia = steps?.local.polish ? 'local' : steps?.polishModel ? 'api' : 'off'
   const polish90 = steps?.models.find((m) => m.id === polishModel)?.credits90 ?? null
   const [opts, setOpts] = useState<Options | null>(null)
   const [model, setModel] = useState('')
@@ -234,11 +246,33 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
               ) : (
                 <>
                   <RadioCardGroup
-                    label="전사문 다듬기"
-                    value={steps.polishModel ? 'api' : 'off'}
-                    onChange={(v) => void saveSteps({ polishModel: v === 'api' ? polishModel : null })}
+                    label="요약"
+                    value={steps.local.summary ? 'local' : 'api'}
+                    onChange={(v) => void saveSteps({ summaryLocal: v === 'local' })}
                     options={[
-                      { value: 'off', title: '사용 안 함', description: '받아쓴 전사에 요약이 찾은 교정만 적용해요.', disabled: !connected },
+                      {
+                        value: 'api',
+                        title: '요약 서비스로 요약',
+                        description: '연결한 요약 서비스가 요약해요. 모델은 위의 요약 서비스에서 골라요.',
+                        meta: connected ? undefined : '연결 안 됨 · 요약 없이 전사문만'
+                      },
+                      {
+                        value: 'local',
+                        title: '로컬 LLM으로 요약',
+                        description: 'Ollama가 이 PC에서 요약해요. 키가 없어도 되고 크레딧이 들지 않아요.',
+                        meta: steps.local.summaryModel ?? LOCAL_PICK_FIRST,
+                        disabled: !steps.local.summaryModel
+                      }
+                    ]}
+                  />
+                  <RadioCardGroup
+                    label="전사문 다듬기"
+                    value={polishVia}
+                    onChange={(v) =>
+                      void saveSteps(v === 'local' ? { polishLocal: true } : { polishModel: v === 'api' ? polishModel : null, polishLocal: false })
+                    }
+                    options={[
+                      { value: 'off', title: '전사문 다듬기 안 함', description: '받아쓴 전사에 요약이 찾은 교정만 적용해요.' },
                       {
                         value: 'api',
                         title: '요약 서비스로 다듬기',
@@ -246,10 +280,16 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                         meta: creditsLabel(polish90),
                         disabled: !connected
                       },
-                      { value: 'local', title: '로컬 LLM으로 다듬기', description: 'Ollama가 이 PC에서 다듬어요. 크레딧이 들지 않아요.', meta: '곧 지원', disabled: true }
+                      {
+                        value: 'local',
+                        title: '로컬 LLM으로 다듬기',
+                        description: 'Ollama가 이 PC에서 다듬어요. 크레딧이 들지 않아요.',
+                        meta: steps.local.polishModel ?? LOCAL_PICK_FIRST,
+                        disabled: !steps.local.polishModel
+                      }
                     ]}
                   />
-                  {steps.polishModel && (
+                  {polishVia === 'api' && steps.polishModel && (
                     <ModelPicker
                       kind="polish"
                       models={steps.models}
@@ -264,39 +304,20 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                     />
                   )}
                   <p className={styles.hint}>
-                    다듬기를 켜면 90분 강의에 위 크레딧이 더 들고 1~2분 더 걸려요. 모델이 하지 않은 말을 넣거나 빼는 경우가 있어, 원래 받아쓰기는 노트의 원문 정리본에 그대로
-                    남겨요. 크레딧은 90분 강의 기준(어림)이고, 정확하지 않아요.
-                    {!connected && ' 요약 서비스를 연결하면 바꿀 수 있어요.'}
+                    요약 서비스로 다듬으면 90분 강의에 위 크레딧이 더 들고 1~2분 더 걸려요. 모델이 하지 않은 말을 넣거나 빼는 경우가 있어, 원래 받아쓰기는 노트의 원문 정리본에
+                    그대로 남겨요. 크레딧은 90분 강의 기준(어림)이고, 정확하지 않아요.
+                    {!connected && ' 요약 서비스로 다듬기는 요약 서비스를 연결하면 고를 수 있어요.'}
                   </p>
                 </>
               )}
             </Block>
 
-            <Block title="로컬 LLM (Ollama)" foldable>
-              <RadioCardGroup
-                label="로컬 LLM"
-                value="off"
-                onChange={() => {}}
-                options={[
-                  { value: 'off', title: '사용 안 함', description: '요약은 요약 서비스(ChatKHU)가 해요.' },
-                  {
-                    value: 'pre',
-                    title: '로컬 전처리',
-                    description: '받아쓴 전사를 Ollama가 먼저 교정하고, 요약은 요약 서비스가 해요.',
-                    meta: '곧 지원',
-                    disabled: true
-                  },
-                  {
-                    value: 'local',
-                    title: '완전 로컬',
-                    description: '교정과 요약 모두 Ollama가 해요. 키가 없어도 되고 녹음 내용이 PC 밖으로 나가지 않아요.',
-                    meta: '곧 지원',
-                    disabled: true
-                  }
-                ]}
-              />
-              <p className={styles.hint}>Ollama를 설치하고 모델을 받아 두면 쓸 수 있게 할 예정이에요.</p>
-            </Block>
+            <OllamaBlock
+              onSaved={() => {
+                call<Steps>('llm.steps').then(setSteps)
+                onStepsSaved()
+              }}
+            />
 
             <Block title="실험 기능" foldable>
               <div className={styles.switches}>

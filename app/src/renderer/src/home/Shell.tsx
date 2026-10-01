@@ -129,7 +129,13 @@ export default function Shell({ onRestartWizard }: Props): React.JSX.Element {
             </>
           )}
           {llm?.provider && llm.credits == null && <b>{llm.name}와 연동됨</b>}
-          {llm && !llm.provider && (
+          {llm && !llm.provider && llm.summary && (
+            <>
+              <b>{llm.summary.name}으로 요약</b>
+              <span>{llm.summary.model}</span>
+            </>
+          )}
+          {llm && !llm.provider && !llm.summary && (
             <>
               <b>요약 서비스 없음</b>
               <span>전사문만 담은 노트를 만들어요</span>

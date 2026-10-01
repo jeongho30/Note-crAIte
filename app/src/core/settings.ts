@@ -33,6 +33,19 @@ export type Settings = {
   sttWhileRecording: boolean
   /** 받아쓰기를 이 PC의 whisper 대신 ChatKHU 받아쓰기(Soniox)로. ChatKHU가 연결돼 있을 때만 쓰인다. 설정 > 고급 > 실험 기능 */
   chatkhuStt: boolean
+  /** 로컬 LLM(Ollama). 설정 > 고급 */
+  ollama: OllamaSettings
+}
+
+export type OllamaSettings = {
+  /** 요약·전사문 다듬기를 요약 서비스 대신 로컬 LLM으로 한다 (모델을 골라야 쓰인다) */
+  summary: boolean
+  polish: boolean
+  summaryModel: string | null
+  polishModel: string | null
+  /** 고친 요청 옵션(JSON). null이면 앱 기본 (core/ollama.ts의 DEFAULT_REQUEST) */
+  summaryRequest: string | null
+  polishRequest: string | null
 }
 
 export type Theme = 'system' | 'light' | 'dark'
@@ -42,7 +55,8 @@ export type Language = 'ko' | 'en'
 export const DEFAULT_SETTINGS: Settings = {
   wizardStep: 0, wizardDone: false, outDir: null, provider: null, lastSubject: null, subjectLanguage: {},
   summaryModel: null, polishModel: null, sttModel: DEFAULT_MODEL, sttArgs: null, theme: 'system',
-  watch: { enabled: false, folder: null, paused: false }, sttWhileRecording: false, chatkhuStt: false
+  watch: { enabled: false, folder: null, paused: false }, sttWhileRecording: false, chatkhuStt: false,
+  ollama: { summary: false, polish: false, summaryModel: null, polishModel: null, summaryRequest: null, polishRequest: null }
 }
 
 function settingsPath(dataDir: string): string {

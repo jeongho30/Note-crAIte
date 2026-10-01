@@ -1,11 +1,13 @@
 // 요약 공급자 프리셋. 엔드포인트는 전체 URL로 둔다 (ChatKHU는 문서대로 끝에 /를 붙인다).
-// OpenAI·Gemini는 W3, Ollama(네이티브 /api/chat)는 W4에 붙인다.
+// OpenAI·Gemini는 W3에 붙인다. 로컬 LLM(Ollama)은 키로 연결하는 서비스가 아니라 단계마다 고르는 것이다(resolveSteps).
 import * as credits from './credits.ts'
 import { EngineError } from './errors.ts'
-import type { Job } from './job.ts'
+import type { Job, LlmSettings } from './job.ts'
 import { headers, raiseForStatus, request } from './llm.ts'
 import { parseModelList } from './llmcatalog.ts'
 import type { ModelItem } from './llmcatalog.ts'
+import { DEFAULT_REQUEST, OLLAMA_BASE, parseRequest } from './ollama.ts'
+import type { Settings } from './settings.ts'
 
 export const CHATKHU_BASE = 'https://factchat-cloud.mindlogic.ai/v1/gateway'
 
@@ -84,5 +86,26 @@ export const PRESETS: Record<string, Preset> = {
     credits: `${CHATKHU_BASE}/credits/`,
     models: `${CHATKHU_BASE}/models/`,
     model: 'gpt-6-luna'
+  }
+}
+
+export const OLLAMA_NAME = '로컬 LLM'
+
+/**
+ * 지금 설정에서 단계마다(요약·전사문 다듬기) 부를 서비스와 모델. 화면 표시와 작업 만들기가 모두 이것을 본다.
+ * connected는 요약 서비스(settings.provider)의 키가 있는지. 로컬 LLM은 모델을 골랐으면 쓴다(켜져 있는지는 부를 때 안다).
+ */
+export function resolveSteps(s: Settings, connected: boolean): { summary: LlmSettings | null; polish: LlmSettings | null } {
+  const preset = connected && s.provider ? PRESETS[s.provider] : undefined
+  const service = (model: string | null | undefined): LlmSettings | null =>
+    preset && model ? { service: s.provider!, endpoint: preset.endpoint, model, creditsUrl: preset.credits } : null
+  const local = (step: 'summary' | 'polish'): LlmSettings | null => {
+    const model = s.ollama[`${step}Model`]
+    const request = s.ollama[`${step}Request`]
+    return model ? { service: 'ollama', endpoint: `${OLLAMA_BASE}/api/chat`, model, ollama: request ? parseRequest(request) : DEFAULT_REQUEST[step] } : null
+  }
+  return {
+    summary: s.ollama.summary ? local('summary') : service(s.summaryModel ?? preset?.model),
+    polish: s.ollama.polish ? local('polish') : service(s.polishModel)
   }
 }

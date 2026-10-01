@@ -139,7 +139,7 @@ export function NotePreview({ path, jobs, llm, onBack, onConnect, onMoved, onDel
   const title = parsed.title ?? (typeof meta['title'] === 'string' ? meta['title'] : null) ?? path.split(/[\\/]/).pop()!.replace(/\.md$/i, '')
   const hasSummary = typeof meta['llm'] === 'string'
   const canSummarize = !!note.job?.canSummarize
-  const connected = !!llm?.provider
+  const connected = !!llm?.summary
   const metaLine = [
     typeof meta['subject'] === 'string' ? meta['subject'] : null,
     typeof meta['date'] === 'string' ? meta['date'] : null,
@@ -234,7 +234,7 @@ export function NotePreview({ path, jobs, llm, onBack, onConnect, onMoved, onDel
       >
         <p className={styles.dialogText}>
           받아쓰기는 다시 하지 않아요. 지금 노트 파일을 덮어쓰니, 노트를 직접 고쳤다면 그 내용은 사라져요.
-          {llm?.provider === 'chatkhu' && note.job?.credits != null && ` 약 ${note.job.credits}크레딧을 써요.`}
+          {note.job?.credits != null && ` 약 ${note.job.credits}크레딧을 써요.`}
         </p>
       </Dialog>
     </article>

@@ -1,7 +1,9 @@
 // 요약 호출 한 번으로 제목·요약·키워드·교정 목록을 받는다 (API 통합 모드).
 // 응답 파싱과 폴백은 pipeline/process_lecture.py의 generate_note()를 옮겨 온 것이다.
+import { EngineError } from './errors.ts'
 import { chat } from './llm.ts'
 import type { Message, Usage } from './llm.ts'
+import type { OllamaRequest } from './ollama.ts'
 import { SUMMARY_UNIFIED } from './prompts.ts'
 
 export const SCHEMA = {
@@ -73,6 +75,9 @@ export type SummarizeOptions = {
   fallbackTitle: string
   useSchema?: boolean
   maxTokens?: number
+  /** 있으면 로컬 LLM(Ollama)으로 요약한다. 요약이 작업의 마지막 호출이라 끝나면 모델을 내린다 */
+  ollama?: OllamaRequest
+  signal?: AbortSignal
 }
 
 export async function summarize(transcript: string, notes: string, subject: string | null,
@@ -81,6 +86,9 @@ export async function summarize(transcript: string, notes: string, subject: stri
     ? undefined
     : { type: 'json_schema', json_schema: { name: 'lecture_note', strict: true, schema: SCHEMA } }
   const [content, usage] = await chat(o.endpoint, o.apiKey, o.model, buildMessages(transcript, notes, subject),
-                                      { maxTokens: o.maxTokens, responseFormat })
+                                      { maxTokens: o.maxTokens, responseFormat, ollama: o.ollama, signal: o.signal, unloadAfter: true })
+  if (usage?.['done_reason'] === 'length') {
+    throw new EngineError('llm', '요약이 출력 상한에 걸려 끊겼어요. 설정 > 고급 > 로컬 LLM의 요약 요청 옵션에 num_predict를 넣어 늘려 주세요.')
+  }
   return { ...parseResponse(content, o.fallbackTitle), usage }
 }

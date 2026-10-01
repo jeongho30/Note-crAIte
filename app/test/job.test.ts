@@ -140,6 +140,40 @@ test('전사문 다듬기: 다듬은 전사를 요약하고 노트의 전사문�
   assert.doesNotMatch(md, /교정 내역/)
 })
 
+test('로컬 LLM: 다듬기는 로컬, 요약은 요약 서비스로 하고, 키가 없어도 둘 다 로컬이면 끝까지 한다', { skip }, async () => {
+  const dir = await tempDir()
+  const local = { service: 'ollama', endpoint: 'http://127.0.0.1:11434/api/chat', model: 'gemma', ollama: { think: false, options: { num_ctx: 16384 } } }
+  const summaryJson = JSON.stringify({ title: '인사', summary: '인사를 했다.', keywords: [], corrections: [] })
+  const calls: { url: string; body: Record<string, any> }[] = []
+  mock.method(globalThis, 'fetch', async (url: string, init: RequestInit) => {
+    const body = JSON.parse(String(init.body))
+    calls.push({ url, body })
+    if (!url.endsWith('/api/chat')) {
+      return new Response(JSON.stringify({ choices: [{ message: { content: summaryJson } }], usage: { prompt_tokens: 1000, completion_tokens: 1000 } }), { status: 200 })
+    }
+    const content = body.format ? summaryJson : '안녕하십니까 강의를 시작합니다'
+    return new Response(JSON.stringify({ message: { content }, done: true, done_reason: 'stop', prompt_eval_count: 50, eval_count: 20 }) + '\n', { status: 200 })
+  })
+
+  const mixedDir = await createJob(join(dir, 'data'), await recording(dir), null, null, { ...settings(join(dir, 'out'), true), polishLlm: local })
+  const mixed = await runJob(mixedDir, context(dir, 'key'))
+  assert.deepEqual(calls.map((c) => c.url), [local.endpoint, 'https://llm.test/chat/completions/'])
+  assert.equal(calls[0].body.keep_alive, 0, '요약이 로컬이 아니니 다듬기 뒤 모델을 내린다')
+  assert.match(calls[1].body.messages[1].content, /안녕하십니까/, '로컬로 다듬은 전사를 요약 서비스가 요약한다')
+  assert.equal(mixed.cost?.polishCredits, undefined, '로컬 다듬기는 크레딧이 들지 않는다')
+  assert.match(await readFile(mixed.output!.notePath, 'utf8'), /polish: "gemma"/)
+
+  calls.length = 0
+  const allDir = await createJob(join(dir, 'data'), await recording(dir), null, null,
+                                 { ...settings(join(dir, 'out2'), false), llm: { ...local, ollama: { options: { num_ctx: 'auto' } } }, polishLlm: local })
+  const all = await runJob(allDir, context(dir, null))
+  assert.equal(all.status, 'done')
+  assert.deepEqual(calls.map((c) => c.body.keep_alive), [undefined, 0], '같은 모델로 요약까지 하니 요약 뒤에 내린다')
+  assert.equal(calls[1].body.options.num_ctx, 12288)
+  assert.equal(all.cost, undefined)
+  assert.match(await readFile(all.output!.notePath, 'utf8'), /## 요약/)
+})
+
 test('취소하면 cancelled로 남고, 재개하면 그 단계부터 다시 한다', { skip }, async () => {
   const dir = await tempDir()
   const jobDir = await createJob(join(dir, 'data'), await recording(dir), null, null, settings(join(dir, 'out'), false))
