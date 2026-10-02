@@ -2,7 +2,7 @@
 
 **강의 녹음을 노트로.** 녹음 파일을 끌어 놓으면 요약, 주요 키워드, 전사문이 담긴 마크다운 노트가 과목 폴더에 저장되는 Windows 앱입니다. 받아쓰기는 내 PC에서 하고 요약만 ChatKHU에 맡겨서, 90분 강의 한 개에 약 4크레딧이 듭니다.
 
-읽는 법은 "노트크리에이트"이고, ChatKHU 공모전 출품작입니다.
+읽는 법은 "노트크리에이트"이고, ChatKHU 공모전 출품작입니다. 화면과 측정 결과를 한 장에 모은 [소개 페이지](https://claude.ai/artifact/GRgkqguRfzixiHgLh1PZ7j)가 있습니다.
 
 <img src="docs/images/preview-light.png" alt="노트 미리보기 화면" width="760">
 
