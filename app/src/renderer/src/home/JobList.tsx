@@ -190,7 +190,7 @@ function JobRow({ job: j, now, open, onToggle, act, onConnect, onSettings, onPre
       j.recordedAt ? localDate(j.recordedAt) : null,
       j.durationS ? lengthMinutes(j.durationS) : null,
       j.language === 'en' ? '영어 강의' : null,
-      summarySkipped ? '요약 없음' : j.credits != null ? `${j.credits}크레딧` : null
+      summarySkipped ? '요약 없음' : j.credits != null ? `${j.credits}크레딧` : j.tokens ? `${j.tokens.toLocaleString()}토큰` : null
     ]
       .filter(Boolean)
       .join(' · ')

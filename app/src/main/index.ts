@@ -18,7 +18,7 @@ import type { ProbeResult } from '../core/probe.ts'
 import { DEFAULT_STEP_MODEL, estimateCredits90, estimateStepCredits90, POLISH_RECOMMENDED, RANKED, RECOMMENDED_COUNT } from '../core/llmcatalog.ts'
 import type { ModelItem } from '../core/llmcatalog.ts'
 import * as ollama from '../core/ollama.ts'
-import { CHATKHU_BASE, CREDITS_PER_90MIN_SUMMARY, creditsPer90ByModel, listModels, OLLAMA_NAME, PRESETS, PROVIDERS, resolveSteps, verifyKey } from '../core/providers.ts'
+import { CHATKHU_BASE, CREDITS_PER_90MIN_SUMMARY, creditsPer90ByModel, listModels, OLLAMA_NAME, PRESETS, PROVIDERS, resolveSteps, usesCredits, verifyKey } from '../core/providers.ts'
 import { chatkhuSttCredits } from '../core/stt/chatkhu.ts'
 import type { ProviderId } from '../core/providers.ts'
 import { listNotes, recentNotes } from '../core/recent.ts'
@@ -348,12 +348,12 @@ type Prepared = {
 }
 
 /**
- * 90분 강의 한 개의 크레딧: 요약 + 전사문 다듬기(켠 경우). 로컬 LLM으로 하는 단계는 들지 않고, 크레딧이 드는 단계가 없으면 null.
+ * 90분 강의 한 개의 크레딧: 요약 + 전사문 다듬기(켠 경우). 로컬 LLM이나 크레딧을 쓰지 않는 서비스로 하는 단계는 들지 않고, 크레딧이 드는 단계가 없으면 null.
  * polish: false면 다듬기를 빼고 센다 ([요약 다시 만들기]는 다시 다듬지 않는다)
  */
 async function jobCredits90({ polish = true } = {}): Promise<number | null> {
   const steps = await llmSteps()
-  const billed = (s: LlmSettings | null): s is LlmSettings => !!s && !s.ollama
+  const billed = (s: LlmSettings | null): s is LlmSettings => !!s && !s.ollama && usesCredits(s.service)
   // 요약: 써 본 기록, 없으면 단가표 어림, 그것도 없으면 기본값
   const summary = billed(steps.summary)
     ? (creditsPer90ByModel(await listJobs(dataDir))[steps.summary.model] ?? estimateCredits90(steps.summary.model) ?? CREDITS_PER_90MIN_SUMMARY)
@@ -366,7 +366,7 @@ async function jobCredits90({ polish = true } = {}): Promise<number | null> {
 async function summariesLeft(credits: number | null): Promise<number | null> {
   const { summary } = await llmSteps()
   const per90 = await jobCredits90()
-  if (credits == null || !summary || summary.ollama || !per90) return null
+  if (credits == null || !summary || summary.ollama || !usesCredits(summary.service) || !per90) return null
   return Math.floor(credits / per90)
 }
 
@@ -448,6 +448,23 @@ async function readNote(path: string) {
   }
 }
 
+/**
+ * 크레딧을 쓰지 않는 서비스(OpenAI·Claude·Gemini)의 모델 선택지: 추천 순서가 없어 서비스의 글 모델 목록을 그대로 보인다.
+ * 기본 모델만 "추천"으로 선택 칸에 바로 보이고 나머지는 [전체 모델 보기]에 있다.
+ */
+function plainModels(provider: ProviderId, items: ModelItem[], failed: boolean, selected: string, recommended: string) {
+  const ids = [...new Set([...(items.some((m) => m.id === recommended) || !items.length ? [recommended] : []), ...items.map((m) => m.id), selected])]
+  return {
+    service: PROVIDERS.find((x) => x.id === provider)!.name,
+    credits: false,
+    selected,
+    recommended,
+    failed,
+    available: items.map((m) => m.id),
+    models: ids.map((id, i) => ({ id, owner: null, rank: i + 1, recommended: id === recommended, note: null, credits90: null, source: null }))
+  }
+}
+
 function providerOf(id: unknown): ProviderId {
   const p = PROVIDERS.find((x) => x.id === id && x.available)
   if (!p) throw new EngineError('input', '아직 지원하지 않는 요약 서비스예요.')
@@ -473,7 +490,8 @@ async function llmStatus(): Promise<{
   const views = { summary: stepView(steps.summary), polish: stepView(steps.polish) }
   if (!provider || !key) return { provider: null, ...views }
   // 잔액은 참고용이라 못 불러와도(오프라인) 연결 상태는 그대로 보인다.
-  const credits = await verifyKey(provider, key).then((r) => r.credits, () => null)
+  // 잔액을 볼 수 있는 서비스(ChatKHU)만 물어본다
+  const credits = usesCredits(provider) ? await verifyKey(provider, key).then((r) => r.credits, () => null) : null
   return {
     provider,
     name: PROVIDERS.find((x) => x.id === provider)?.name,
@@ -601,17 +619,28 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     return setup.get()
   },
 
-  'llm.providers': () => PROVIDERS.map(({ id, name, available }) => ({ id, name, available })),
+  // hasKey: 전에 넣은 키가 남아 있어 키를 다시 붙이지 않고 연결할 수 있다
+  'llm.providers': async () => Promise.all(PROVIDERS.map(async ({ id, name, available }) => ({ id, name, available, hasKey: !!(await readKey(dataDir, id)) }))),
   'llm.status': () => llmStatus(),
   // 키를 확인하고, 맞으면 암호화해 저장한 뒤 이 서비스를 연결한다.
   'llm.connect': async (p) => {
     const { provider, key } = p as { provider: unknown; key: unknown }
     const id = providerOf(provider)
-    const apiKey = String(key ?? '').trim()
+    // 키를 비워 보내면 이 서비스에 저장해 둔 키로 다시 연결한다 (서비스를 바꿔 쓸 때)
+    const apiKey = String(key ?? '').trim() || (await readKey(dataDir, id)) || ''
     if (!apiKey) throw new EngineError('auth', '키를 붙여 넣어 주세요.')
     const { credits } = await verifyKey(id, apiKey)
     await saveKey(dataDir, id, apiKey)
-    await updateSettings(dataDir, { provider: id })
+    const before = await loadSettings(dataDir)
+    if (before.provider === id) await updateSettings(dataDir, { provider: id })
+    else {
+      // 서비스가 바뀌면 고른 모델 이름이 맞지 않는다: 요약은 새 서비스의 기본 모델로, 다듬기는 끈다.
+      // 기본 모델이 목록에 없으면(이름이 바뀜) 목록의 첫 모델을 쓴다
+      const items = usesCredits(id) ? [] : await listModels(id, apiKey).catch(() => [])
+      const fallback = items.length && !items.some((m) => m.id === PRESETS[id].model) ? items[0].id : null
+      await updateSettings(dataDir, { provider: id, summaryModel: fallback, polishModel: null })
+      log.write(`요약 서비스: ${id}${fallback ? ` · 요약 모델 ${fallback}` : ''}`)
+    }
     return { provider: id, keyHint: keyHint(apiKey), credits, summariesLeft: await summariesLeft(credits) }
   },
   'llm.openKeyGuide': (p) => {
@@ -716,12 +745,13 @@ const handlers: Record<string, (params: unknown) => unknown> = {
   // 보이는 것은 추천 순서(RANKED)의 모델과 고른 모델뿐이다. available은 [직접 모델 입력]의 확인용(서비스의 글 모델 전체).
   'llm.models': async () => {
     const { provider, summaryModel } = await loadSettings(dataDir)
-    const recommended = PRESETS['chatkhu'].model
+    const recommended = PRESETS[provider ?? 'chatkhu'].model
     const selected = summaryModel ?? recommended
     const key = provider ? await readKey(dataDir, provider) : null
     let items: ModelItem[] = []
     let failed = false
     if (provider && key) items = await listModels(provider, key).catch(() => ((failed = true), []))
+    if (provider && !usesCredits(provider)) return plainModels(provider, items, failed, selected, recommended)
     const measured = creditsPer90ByModel(await listJobs(dataDir))
     const owners = new Map(items.map((m) => [m.id, m.owner]))
     const available = new Set(items.map((m) => m.id))
@@ -729,6 +759,8 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     const ranked = RANKED.filter((r) => failed || !items.length || available.has(r.id))
     const ids = [...new Set([...ranked.map((r) => r.id), selected])]
     return {
+      service: PROVIDERS.find((x) => x.id === (provider ?? 'chatkhu'))!.name,
+      credits: true,
       selected,
       recommended,
       failed,
@@ -751,7 +783,8 @@ const handlers: Record<string, (params: unknown) => unknown> = {
   'llm.setModel': async (p) => {
     const model = String(p ?? '').trim()
     if (!model) throw new EngineError('input', '모델을 골라 주세요.')
-    await updateSettings(dataDir, { summaryModel: model === PRESETS['chatkhu'].model ? null : model })
+    const { provider } = await loadSettings(dataDir)
+    await updateSettings(dataDir, { summaryModel: model === PRESETS[provider ?? 'chatkhu'].model ? null : model })
     log.write(`요약 모델: ${model}`)
   },
   // 설정 > 고급 > 요약 세부설정: 전사문 다듬기 모델. llm.models와 같은 형식으로, 다듬기 추천 모델을 앞에 두고 나머지는 요약 추천 순서
@@ -761,6 +794,11 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     let items: ModelItem[] = []
     let failed = false
     if (provider && key) items = await listModels(provider, key).catch(() => ((failed = true), []))
+    const localSteps = { summary: local.summary, polish: local.polish, summaryModel: local.summaryModel, polishModel: local.polishModel }
+    if (provider && !usesCredits(provider)) {
+      const { selected: _s, recommended, ...rest } = plainModels(provider, items, failed, polishModel ?? PRESETS[provider].model, PRESETS[provider].model)
+      return { polishModel, local: localSteps, defaultModel: recommended, ...rest }
+    }
     const owners = new Map(items.map((m) => [m.id, m.owner]))
     const available = new Set(items.map((m) => m.id))
     const order = [...new Set([...POLISH_RECOMMENDED, ...RANKED.map((r) => r.id)])].filter((id) => failed || !items.length || available.has(id))
@@ -768,7 +806,9 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     return {
       polishModel,
       // 단계를 로컬 LLM으로 하는지와, 로컬에서 고른 모델 (없으면 로컬을 고를 수 없다)
-      local: { summary: local.summary, polish: local.polish, summaryModel: local.summaryModel, polishModel: local.polishModel },
+      local: localSteps,
+      service: PROVIDERS.find((x) => x.id === (provider ?? 'chatkhu'))!.name,
+      credits: true,
       defaultModel: DEFAULT_STEP_MODEL,
       failed,
       available: [...available],

@@ -9,7 +9,12 @@ type Provider = { id: string; name: string; available: boolean }
 type Connected = { keyHint: string; credits: number | null; summariesLeft: number | null }
 type Check = { state: 'idle' | 'checking' } | { state: 'ok'; result: Connected } | { state: 'error'; message: string }
 
-const DESCRIPTIONS: Record<string, string> = { chatkhu: '경희대 ChatKHU 크레딧으로 요약해요.' }
+const DESCRIPTIONS: Record<string, string> = {
+  chatkhu: '경희대 ChatKHU 크레딧으로 요약해요.',
+  openai: 'OpenAI API 키로 요약해요. 쓴 만큼 OpenAI에 요금을 내요.',
+  claude: 'Claude API 키로 요약해요. 쓴 만큼 Anthropic에 요금을 내요.',
+  gemini: 'Gemini API 키로 요약해요. 무료 등급은 보낸 내용이 모델 개선에 쓰일 수 있어요.'
+}
 
 function errorMessage(e: unknown): string {
   const code = e instanceof ApiError ? e.code : 'unknown'

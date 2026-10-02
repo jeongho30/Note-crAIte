@@ -15,6 +15,7 @@ import { readJson, writeJsonAtomic } from './files.ts'
 import { readNotes } from './inputs.ts'
 import { creditsFromTokens, PRICES } from './llmcatalog.ts'
 import { renderNote, saveNote } from './note.ts'
+import { usesCredits } from './providers.ts'
 import { unload } from './ollama.ts'
 import type { OllamaRequest } from './ollama.ts'
 import { transcribeChunks } from './stt/base.ts'
@@ -86,11 +87,20 @@ export type Job = {
    * local은 로컬 LLM으로 요약해 크레딧이 들지 않은 것. source가 없는 것은 9/29 전 기록(잔액 차이)이다. 잔액 차이는 실패한 호출의 늦은 차감이나 다른 사용이 섞일 수 있다.
    */
   cost?: { summaryCredits: number | null; source?: 'tokens' | 'balance' | 'local'; verifyCredits?: number | null; polishCredits?: number | null; sttCredits?: number | null }
+  /** 다듬기·요약 호출의 토큰 수 (크레딧을 쓰지 않는 서비스는 이것만 보인다) */
+  usage?: { polish?: TokenCount; summary?: TokenCount }
   output?: { notePath: string }
   /** 노트 목록에서 수정한 제목·날짜. 있으면 요약을 다시 만들어도 이 값을 쓴다 (과목은 input.subject를 고친다) */
   edits?: { title: string; date: string }
   error?: { code: string; message: string; stage: StageName }
 }
+
+export type TokenCount = { input: number; output: number }
+
+const tokenCount = (input: unknown, output: unknown): TokenCount => ({ input: typeof input === 'number' ? input : 0, output: typeof output === 'number' ? output : 0 })
+
+/** 크레딧으로 쓰는 호출인가: 로컬 LLM이 아니고 서비스가 ChatKHU */
+const credited = (llm: LlmSettings): boolean => !llm.ollama && usesCredits(llm.service)
 
 type SummaryFile = {
   title: string
@@ -278,9 +288,10 @@ const RUNNERS: Record<StageName, Runner> = {
     const summary = job.settings.llm
     const unloadAfter = !(summary?.ollama && summary.endpoint === llm.endpoint && summary.model === model)
     const r = await unloadOnError(llm, () => polishParagraphs(cleaned.paragraphs, notes, {
-      endpoint: llm.endpoint, apiKey: ctx.apiKey, model, ollama: llm.ollama, signal: ctx.signal, unloadAfter
+      endpoint: llm.endpoint, apiKey: ctx.apiKey, model, service: llm.service, ollama: llm.ollama, signal: ctx.signal, unloadAfter
     }))
-    if (!llm.ollama) job.cost = { ...job.cost, summaryCredits: job.cost?.summaryCredits ?? null, polishCredits: creditsFromTokens(model, r.inputTokens, r.outputTokens) }
+    job.usage = { ...job.usage, polish: tokenCount(r.inputTokens, r.outputTokens) }
+    if (credited(llm)) job.cost = { ...job.cost, summaryCredits: job.cost?.summaryCredits ?? null, polishCredits: creditsFromTokens(model, r.inputTokens, r.outputTokens) }
     const file: PolishedFile = { model, paragraphs: r.paragraphs, fallbackChunks: r.fallbackChunks, chunks: r.chunks }
     await writeJsonAtomic(join(jobDir, 'polished.json'), file)
     return 'done'
@@ -296,18 +307,19 @@ const RUNNERS: Record<StageName, Runner> = {
     const notes = job.input.notes ? await readNotes(join(jobDir, job.input.notes)) : ''
     // 단가를 아는 모델은 응답의 토큰 수로 크레딧을 계산하고, 모르는 모델만 요약 전후 잔액 차이로 잰다
     const priced = llm.model in PRICES
-    const before = !llm.ollama && !priced && llm.creditsUrl ? await creditsRemaining(llm.creditsUrl, ctx.apiKey!) : null
+    const before = credited(llm) && !priced && llm.creditsUrl ? await creditsRemaining(llm.creditsUrl, ctx.apiKey!) : null
     const result = await unloadOnError(llm, () => summarize(text, notes, job.input.subject, {
-      endpoint: llm.endpoint, apiKey: ctx.apiKey, model: llm.model, fallbackTitle: stem(job.input.audio), ollama: llm.ollama, signal: ctx.signal
+      endpoint: llm.endpoint, apiKey: ctx.apiKey, model: llm.model, fallbackTitle: stem(job.input.audio), service: llm.service, ollama: llm.ollama, signal: ctx.signal
     }))
+    job.usage = { ...job.usage, summary: tokenCount(result.usage?.prompt_tokens, result.usage?.completion_tokens) }
     // 앞 단계(다듬기·ChatKHU 받아쓰기)의 크레딧은 그대로 둔다
     const polish = {
       ...(job.cost?.polishCredits !== undefined ? { polishCredits: job.cost.polishCredits } : {}),
       ...(job.cost?.sttCredits != null ? { sttCredits: job.cost.sttCredits } : {})
     }
-    if (llm.ollama) {
-      // 크레딧이 들지 않는다. 앞 단계에서 쓴 크레딧이 있을 때만 남긴다
-      job.cost = Object.keys(polish).length ? { summaryCredits: null, source: 'local', ...polish } : undefined
+    if (!credited(llm)) {
+      // 크레딧이 들지 않는다(로컬 LLM, 크레딧을 쓰지 않는 서비스). 앞 단계에서 쓴 크레딧이 있을 때만 남긴다
+      job.cost = Object.keys(polish).length ? { summaryCredits: null, ...(llm.ollama ? { source: 'local' as const } : {}), ...polish } : undefined
     } else if (priced) {
       job.cost = { summaryCredits: creditsFromTokens(llm.model, result.usage?.prompt_tokens, result.usage?.completion_tokens), source: 'tokens', ...polish }
     } else {

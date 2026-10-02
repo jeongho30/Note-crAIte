@@ -42,6 +42,8 @@ export type JobView = {
   stages: StageView[]
   /** 요약에 쓴 크레딧 (잔액 차이로 잰 값) */
   credits: number | null
+  /** 다듬기·요약에 쓴 토큰 수 (크레딧을 쓰지 않는 서비스나 로컬 LLM으로 한 작업에 보인다). 기록이 없으면 null */
+  tokens: number | null
   /** 받아쓰기 조각 진행 (받아쓰기를 끝내지 못한 작업만) */
   sttChunks: { done: number; total: number } | null
   /** 요청이 몰려(429) 저절로 다시 시도할 시각 (ms). 없으면 null */
@@ -163,6 +165,7 @@ export function createJobRunner(d: Deps) {
       hasNotes: job.input.notes !== null,
       stages: stageViews(job),
       credits: totalCredits(job),
+      tokens: job.usage ? Object.values(job.usage).reduce((n, u) => n + u.input + u.output, 0) : null,
       sttChunks: job.status === 'done' ? null : sttChunks(job),
       autoRetryAt: autoRetryAt.get(job.id) ?? null,
       sttService: cloudStt(job) ? 'chatkhu' : 'whisper'

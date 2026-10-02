@@ -36,6 +36,9 @@ type Steps = {
   polishModel: string | null
   /** 단계를 로컬 LLM으로 하는지와, 로컬 LLM 블록에서 고른 모델 */
   local: { summary: boolean; polish: boolean; summaryModel: string | null; polishModel: string | null }
+  /** 연결된 요약 서비스 이름과, 크레딧으로 쓰는 서비스인지 */
+  service: string
+  credits: boolean
   defaultModel: string
   failed: boolean
   available: string[]
@@ -277,7 +280,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                         value: 'api',
                         title: '요약 서비스로 다듬기',
                         description: '요약 서비스가 전사 전체를 읽고 잘못 받아쓴 말을 고쳐 다시 써요.',
-                        meta: creditsLabel(polish90),
+                        meta: steps.credits ? creditsLabel(polish90) : undefined,
                         disabled: !connected
                       },
                       {
@@ -292,6 +295,8 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                   {polishVia === 'api' && steps.polishModel && (
                     <ModelPicker
                       kind="polish"
+                      service={steps.service}
+                      credits={steps.credits}
                       models={steps.models}
                       selected={steps.polishModel}
                       available={steps.available}
@@ -304,7 +309,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                     />
                   )}
                   <p className={styles.hint}>
-                    전사문의 잘못 받아쓴 말, 특히 전문용어를 고쳐서 읽기 좋게 해요. 요약은 거의 달라지지 않아요. 요약 서비스로 다듬으면 90분 강의에 위 크레딧이 더 들고 1~2분 더 걸려요. 모델이 하지 않은 말을 넣거나 빼는 경우가 있어, 원래 받아쓰기는 노트의 원문 정리본에
+                    전사문의 잘못 받아쓴 말, 특히 전문용어를 고쳐서 읽기 좋게 해요. 요약은 거의 달라지지 않아요. 요약 서비스로 다듬으면 90분 강의에 {steps.credits ? '위 크레딧이' : '요약의 몇 배만큼 토큰이'} 더 들고 1~2분 더 걸려요. 모델이 하지 않은 말을 넣거나 빼는 경우가 있어, 원래 받아쓰기는 노트의 원문 정리본에
                     그대로 남겨요. 크레딧은 90분 강의 기준(어림)이고, 정확하지 않아요.
                     {!connected && ' 요약 서비스로 다듬기는 요약 서비스를 연결하면 고를 수 있어요.'}
                   </p>

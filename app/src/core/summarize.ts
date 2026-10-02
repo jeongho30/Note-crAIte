@@ -116,6 +116,8 @@ export type SummarizeOptions = {
   fallbackTitle: string
   useSchema?: boolean
   maxTokens?: number
+  /** 서비스 id (호출 형식이 서비스마다 다르다, llm.ts의 chat) */
+  service?: string
   /** 있으면 로컬 LLM(Ollama)으로 요약한다. 요약이 작업의 마지막 호출이라 끝나면 모델을 내린다 */
   ollama?: OllamaRequest
   signal?: AbortSignal
@@ -127,9 +129,11 @@ export async function summarize(transcript: string, notes: string, subject: stri
     ? undefined
     : { type: 'json_schema', json_schema: { name: 'lecture_note', strict: true, schema: SCHEMA } }
   const [content, usage] = await chat(o.endpoint, o.apiKey, o.model, buildMessages(transcript, notes, subject),
-                                      { maxTokens: o.maxTokens ?? (o.ollama ? undefined : SUMMARY_MAX_TOKENS), responseFormat, ollama: o.ollama, signal: o.signal, unloadAfter: true })
+                                      { maxTokens: o.maxTokens ?? (o.ollama ? undefined : SUMMARY_MAX_TOKENS), responseFormat, service: o.service, ollama: o.ollama, signal: o.signal, unloadAfter: true })
   if (usage?.['done_reason'] === 'length') {
-    throw new EngineError('llm', '요약이 출력 상한에 걸려 끊겼어요. 설정 > 고급 > 로컬 LLM의 요약 요청 옵션에 num_predict를 넣어 늘려 주세요.')
+    throw new EngineError('llm', o.ollama
+      ? '요약이 출력 상한에 걸려 끊겼어요. 설정 > 고급 > 로컬 LLM의 요약 요청 옵션에 num_predict를 넣어 늘려 주세요.'
+      : '요약이 출력 상한에 걸려 끊겼어요. 다른 요약 모델로 다시 시도해 주세요.')
   }
   return { ...parseResponse(content, o.fallbackTitle), usage }
 }

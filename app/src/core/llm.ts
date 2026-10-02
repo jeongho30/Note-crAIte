@@ -1,6 +1,7 @@
 // OpenAI 호환 chat completions 호출. pipeline/process_lecture.py의 generate_note() 호출부를 옮겨 온 것이다.
 // API 키는 요청 헤더에만 쓰고 로그·예외 메시지에 넣지 않는다.
 import { EngineError } from './errors.ts'
+import * as anthropic from './anthropic.ts'
 import * as ollama from './ollama.ts'
 import type { OllamaRequest } from './ollama.ts'
 
@@ -23,6 +24,20 @@ export type Usage = { prompt_tokens?: number; completion_tokens?: number; [k: st
 
 export async function raiseForStatus(resp: Response, what: string): Promise<void> {
   if (resp.status === 200) return
+  // 400·429는 본문을 봐야 갈린다: 결제 한도 소진(OpenAI는 429 insufficient_quota)은 기다려도 안 풀리고, 컨텍스트 초과는 서비스마다 400이다
+  if (resp.status === 400 || resp.status === 429) {
+    const text = (await resp.text()).slice(0, 2000)
+    // OpenAI: error.type insufficient_quota, code credit_balance_exhausted·*_spend_limit_exceeded·organization_usage_limit_exceeded (오류 코드 문서, 10/2)
+    if (/insufficient_quota|credit[ _]balance|spend_limit|usage_limit_exceeded|billing/i.test(text)) {
+      throw new EngineError('credits', '이 키의 사용 한도나 결제 잔액이 모자라요. 서비스의 결제 설정을 확인해 주세요.')
+    }
+    if (resp.status === 400) {
+      if (/context_length_exceeded|maximum context length|prompt is too long|input token count|exceeds the maximum number of tokens/i.test(text)) {
+        throw new EngineError('too_large', STATUS_ERRORS[413][1])
+      }
+      throw new EngineError('llm', `${what} 오류 (400): ${text.slice(0, 500)}`)
+    }
+  }
   const known = STATUS_ERRORS[resp.status]
   if (known) throw new EngineError(known[0], known[1])
   if (resp.status >= 500) throw new EngineError('network', `${what} 서버 오류(${resp.status})예요. 잠시 후 다시 시도해 주세요.`)
@@ -52,6 +67,8 @@ export type ChatOptions = {
   maxTokens?: number
   responseFormat?: object
   timeoutMs?: number
+  /** 서비스 id. claude면 네이티브 Messages API로 보내고, openai면 출력 상한 이름이 다르다 */
+  service?: string
   /** 있으면 로컬 LLM(Ollama)으로 보낸다: 고친 요청 옵션. 아래 둘은 로컬에서만 쓰인다 */
   ollama?: OllamaRequest
   signal?: AbortSignal
@@ -96,13 +113,19 @@ async function readStream(resp: Response): Promise<[string, Usage | null]> {
  * 게이트웨이가 약 100초에 끊지(524) 않는다(9/30 qwen3.7-plus 110·142초 확인). 서버가 스트리밍을 무시하면 한 번에 받은 JSON을 읽는다.
  */
 export async function chat(endpoint: string, apiKey: string | null, model: string, messages: Message[],
-                           { maxTokens = 8192, responseFormat, timeoutMs = 300_000, ollama: local, signal, unloadAfter }: ChatOptions = {}): Promise<[string, Usage | null]> {
+                           { maxTokens = 8192, responseFormat, timeoutMs = 300_000, service, ollama: local, signal, unloadAfter }: ChatOptions = {}): Promise<[string, Usage | null]> {
   if (local) {
     // 로컬은 json_schema 봉투 없이 스키마만 받는다
     const format = (responseFormat as { json_schema?: { schema?: object } } | undefined)?.json_schema?.schema
     return ollama.chat(endpoint, model, messages, { request: local, maxTokens, format, signal, unloadAfter })
   }
-  const body: Record<string, unknown> = { model, messages, max_tokens: maxTokens, stream: true, stream_options: { include_usage: true } }
+  if (service === 'claude') {
+    const schema = (responseFormat as { json_schema?: { schema?: object } } | undefined)?.json_schema?.schema
+    return anthropic.chat(endpoint, apiKey, model, messages, { maxTokens, schema, timeoutMs })
+  }
+  // OpenAI의 최신·추론 모델은 max_tokens를 받지 않는다
+  const limit = service === 'openai' ? 'max_completion_tokens' : 'max_tokens'
+  const body: Record<string, unknown> = { model, messages, [limit]: maxTokens, stream: true, stream_options: { include_usage: true } }
   if (responseFormat) body['response_format'] = responseFormat
   const resp = await request(endpoint, { method: 'POST', headers: headers(apiKey), body: JSON.stringify(body) }, timeoutMs, '요약')
   await raiseForStatus(resp, '요약')

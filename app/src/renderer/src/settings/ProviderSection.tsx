@@ -6,10 +6,15 @@ import { ModelPicker, type ModelOption } from './ModelPicker'
 import { Block, Row, Section, SettingsCard } from './parts'
 import styles from './Settings.module.css'
 
-type Provider = { id: string; name: string; available: boolean }
-type Models = { selected: string; recommended: string; failed: boolean; available: string[]; models: ModelOption[] }
+type Provider = { id: string; name: string; available: boolean; hasKey: boolean }
+type Models = { service: string; credits: boolean; selected: string; recommended: string; failed: boolean; available: string[]; models: ModelOption[] }
 
-const DESCRIPTIONS: Record<string, string> = { chatkhu: '경희대 ChatKHU 크레딧으로 요약해요.' }
+const DESCRIPTIONS: Record<string, string> = {
+  chatkhu: '경희대 ChatKHU 크레딧으로 요약해요.',
+  openai: 'OpenAI API 키로 요약해요. 쓴 만큼 OpenAI에 요금을 내요.',
+  claude: 'Claude API 키로 요약해요. 쓴 만큼 Anthropic에 요금을 내요.',
+  gemini: 'Gemini API 키로 요약해요. 무료 등급은 보낸 내용이 모델 개선에 쓰일 수 있어요.'
+}
 
 function keyError(e: unknown): string {
   const code = e instanceof ApiError ? e.code : 'unknown'
@@ -26,7 +31,7 @@ type Props = {
   onChange: () => void
 }
 
-// 요약 서비스: 연결 상태, [키 바꾸기] [연결 끊기], 서비스 목록(ChatKHU 외에는 곧 지원), 요약 모델.
+// 요약 서비스: 연결 상태, [키 바꾸기] [연결 끊기], 서비스 목록(한 번에 하나만 연결), 요약 모델.
 export const ProviderSection = forwardRef<HTMLElement, Props>(function ProviderSection({ llm, openKey, onChange }, ref) {
   const toast = useToast()
   const [providers, setProviders] = useState<Provider[]>([])
@@ -42,16 +47,23 @@ export const ProviderSection = forwardRef<HTMLElement, Props>(function ProviderS
   const connected = !!llm?.provider
   const formOpen = editing || (llm !== null && !connected)
   const name = providers.find((p) => p.id === selected)?.name ?? ''
+  // 전에 넣은 키가 남아 있는 서비스는 키를 다시 붙이지 않고 연결할 수 있다
+  const savedKey = !!providers.find((p) => p.id === selected)?.hasKey
 
   useEffect(() => {
     call<Provider[]>('llm.providers').then(setProviders)
-  }, [])
+  }, [llm?.provider])
 
   // 연결이 바뀌면 모델 목록을 다시 불러온다
   useEffect(() => {
     if (connected) call<Models>('llm.models').then(setModels, () => setModels(null))
     else setModels(null)
   }, [connected, llm?.keyHint])
+
+  // 서비스·키를 바꿀 때 지금 연결된 서비스가 먼저 골라져 있게
+  useEffect(() => {
+    if (llm?.provider) setSelected(llm.provider)
+  }, [llm?.provider])
 
   const wantFocus = useRef(false)
   useEffect(() => {
@@ -75,7 +87,7 @@ export const ProviderSection = forwardRef<HTMLElement, Props>(function ProviderS
 
   async function connect(e: FormEvent): Promise<void> {
     e.preventDefault()
-    if (!key.trim()) return
+    if (!key.trim() && !savedKey) return
     setChecking(true)
     setError(null)
     try {
@@ -132,7 +144,7 @@ export const ProviderSection = forwardRef<HTMLElement, Props>(function ProviderS
               !editing && (
                 <>
                   <Button size="sm" onClick={() => setEditing(true)}>
-                    키 바꾸기
+                    서비스·키 바꾸기
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => setConfirmOff(true)}>
                     연결 끊기
@@ -171,7 +183,7 @@ export const ProviderSection = forwardRef<HTMLElement, Props>(function ProviderS
                   type="password"
                   autoComplete="off"
                   spellCheck={false}
-                  placeholder="키를 붙여 넣어 주세요"
+                  placeholder={savedKey ? '저장된 키로 연결 (바꾸려면 새 키를 붙여 넣어 주세요)' : '키를 붙여 넣어 주세요'}
                   value={key}
                   error={error ?? undefined}
                   onChange={(e) => {
@@ -180,7 +192,7 @@ export const ProviderSection = forwardRef<HTMLElement, Props>(function ProviderS
                   }}
                 />
               </div>
-              <Button type="submit" disabled={!key.trim() || checking}>
+              <Button type="submit" disabled={(!key.trim() && !savedKey) || checking}>
                 {checking ? '확인 중…' : '확인'}
               </Button>
               {connected && (
@@ -190,7 +202,8 @@ export const ProviderSection = forwardRef<HTMLElement, Props>(function ProviderS
               )}
             </form>
             <p className={styles.hint}>
-              키는 이 PC에만 암호화해서 저장돼요.{' '}
+              키는 이 PC에만 암호화해서 저장돼요. 요약할 때 전사문과 필기가 고른 서비스로 보내져요. 서비스를 바꾸면 요약 모델은 그 서비스의 기본 모델이 되고 전사문
+              다듬기는 꺼져요.{' '}
               <Button variant="link" onClick={() => void call('llm.openKeyGuide', selected)}>
                 키 발급 방법 보기
               </Button>
@@ -200,6 +213,8 @@ export const ProviderSection = forwardRef<HTMLElement, Props>(function ProviderS
 
         <Block>
           <ModelPicker
+            service={models?.service}
+            credits={models?.credits}
             models={connected ? (models?.models ?? null) : null}
             selected={models?.selected ?? null}
             available={models?.available ?? []}

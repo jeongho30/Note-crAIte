@@ -77,5 +77,5 @@ test('verifyKey: ChatKHU는 크레딧 잔액을 돌려주고, 401은 auth 오류
   mock.restoreAll()
   t.mock.method(globalThis, 'fetch', async () => new Response('', { status: 401 }))
   await assert.rejects(verifyKey('chatkhu', 'bad'), (e: EngineError) => e.code === 'auth')
-  await assert.rejects(verifyKey('openai', 'k'), (e: EngineError) => e.code === 'input', '아직 없는 서비스')
+  await assert.rejects(verifyKey('nope' as 'openai', 'k'), (e: EngineError) => e.code === 'input', '없는 서비스')
 })

@@ -1,8 +1,9 @@
 // 요약 공급자 프리셋. 엔드포인트는 전체 URL로 둔다 (ChatKHU는 문서대로 끝에 /를 붙인다).
-// OpenAI·Gemini는 W3에 붙인다. 로컬 LLM(Ollama)은 키로 연결하는 서비스가 아니라 단계마다 고르는 것이다(resolveSteps).
+// OpenAI·Gemini는 OpenAI 호환 주소로, Claude는 네이티브 /v1/messages(anthropic.ts)로 부른다. 로컬 LLM(Ollama)은 키로 연결하는 서비스가 아니라 단계마다 고르는 것이다(resolveSteps).
 import * as credits from './credits.ts'
 import { EngineError } from './errors.ts'
 import type { Job, LlmSettings } from './job.ts'
+import { anthropicHeaders } from './anthropic.ts'
 import { headers, raiseForStatus, request } from './llm.ts'
 import { parseModelList } from './llmcatalog.ts'
 import type { ModelItem } from './llmcatalog.ts'
@@ -16,10 +17,26 @@ export type ProviderId = 'chatkhu' | 'openai' | 'claude' | 'gemini'
 /** 화면에 보이는 요약 서비스 목록. available이 false면 "곧 지원"으로 흐리게 보인다. */
 export const PROVIDERS: { id: ProviderId; name: string; available: boolean; keyGuideUrl?: string }[] = [
   { id: 'chatkhu', name: 'ChatKHU', available: true, keyGuideUrl: 'https://chat.khu.ac.kr/' },
-  { id: 'openai', name: 'OpenAI', available: false },
-  { id: 'claude', name: 'Claude', available: false },
-  { id: 'gemini', name: 'Gemini', available: false }
+  { id: 'openai', name: 'OpenAI', available: true, keyGuideUrl: 'https://platform.openai.com/api-keys' },
+  { id: 'claude', name: 'Claude', available: true, keyGuideUrl: 'https://platform.claude.com/settings/keys' },
+  { id: 'gemini', name: 'Gemini', available: true, keyGuideUrl: 'https://aistudio.google.com/apikey' }
 ]
+
+/** 크레딧으로 쓰는 서비스인가 (잔액·예상 크레딧·남은 요약 횟수를 보인다). 나머지는 작업의 토큰 수만 남긴다. 10/2 전 작업은 service가 없다(ChatKHU) */
+export function usesCredits(service: string | null | undefined): boolean {
+  return (service ?? 'chatkhu') === 'chatkhu'
+}
+
+/** 서비스별 인증 헤더: Claude만 x-api-key, 나머지는 Bearer */
+export function authHeaders(id: string, apiKey: string): Record<string, string> {
+  return id === 'claude' ? anthropicHeaders(apiKey) : headers(apiKey)
+}
+
+// 모델 목록에서 글 모델만 남긴다 (OpenAI·Gemini 목록에는 임베딩·음성·이미지 모델이 섞여 있다)
+const TEXT_MODEL: Record<string, (id: string) => boolean> = {
+  openai: (id) => /^(gpt-|o\d|chatgpt-)/.test(id) && !/audio|realtime|tts|transcribe|image|embedding|search|moderation|instruct/.test(id),
+  gemini: (id) => /^gemini-/.test(id) && !/embedding|image|tts|audio|live/.test(id)
+}
 
 /** 90분 강의 요약 1회의 크레딧. S2 실측(63분, turbo 전사 7.3~9.3크레딧)을 90분으로 환산했다. */
 export const CREDITS_PER_90MIN_SUMMARY = 12
@@ -69,15 +86,24 @@ export function creditsPer90ByModel(jobs: Job[]): Record<string, number> {
 export async function listModels(id: ProviderId, apiKey: string): Promise<ModelItem[]> {
   const url = PRESETS[id]?.models
   if (!url) return PRESETS[id] ? [{ id: PRESETS[id].model, owner: null }] : []
-  const resp = await request(url, { headers: headers(apiKey) }, 15_000, '모델 목록')
+  const resp = await request(url, { headers: authHeaders(id, apiKey) }, 15_000, '모델 목록')
   await raiseForStatus(resp, '모델 목록')
-  return parseModelList(await resp.json())
+  const data = await resp.json()
+  if (id === 'chatkhu') return parseModelList(data)
+  // OpenAI 형식 { data: [{ id }] } (Claude도 같다). Gemini는 이름 앞에 models/가 붙어 오기도 한다
+  const items = (data as { data?: { id?: unknown }[] })?.data ?? []
+  const keep = TEXT_MODEL[id] ?? (() => true)
+  const ids = items.map((m) => (typeof m?.id === 'string' ? m.id.replace(/^models\//, '') : '')).filter((m) => m && keep(m))
+  return [...new Set(ids)].map((m) => ({ id: m, owner: null }))
 }
 
 /** 키를 확인한다. 잔액을 볼 수 있는 서비스(ChatKHU)는 남은 크레딧을 돌려준다. 요금이 드는 호출은 하지 않는다. */
 export async function verifyKey(id: ProviderId, apiKey: string): Promise<{ credits: number | null }> {
   if (id === 'chatkhu') return { credits: credits.remaining(await credits.get(PRESETS['chatkhu'].credits!, apiKey)) }
-  throw new EngineError('input', '아직 지원하지 않는 요약 서비스예요.')
+  if (!PRESETS[id]) throw new EngineError('input', '아직 지원하지 않는 요약 서비스예요.')
+  // 잔액을 볼 수 없는 서비스는 모델 목록을 받아 키만 확인한다
+  await listModels(id, apiKey)
+  return { credits: null }
 }
 
 export type Preset = { endpoint: string; credits?: string; models?: string; model: string }
@@ -88,6 +114,14 @@ export const PRESETS: Record<string, Preset> = {
     credits: `${CHATKHU_BASE}/credits/`,
     models: `${CHATKHU_BASE}/models/`,
     model: 'gpt-6-luna'
+  },
+  // 아래 셋의 기본 모델은 서비스마다 빠르고 싼 등급이다. 연결할 때 목록에 없으면 목록의 첫 모델을 쓴다(main의 llm.connect)
+  openai: { endpoint: 'https://api.openai.com/v1/chat/completions', models: 'https://api.openai.com/v1/models', model: 'gpt-6-luna' },
+  claude: { endpoint: 'https://api.anthropic.com/v1/messages', models: 'https://api.anthropic.com/v1/models?limit=1000', model: 'claude-haiku-4-5' },
+  gemini: {
+    endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+    models: 'https://generativelanguage.googleapis.com/v1beta/openai/models',
+    model: 'gemini-3.8-flash'
   }
 }
 

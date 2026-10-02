@@ -163,8 +163,16 @@ test('로컬 LLM: 다듬기는 로컬, 요약은 요약 서비스로 하고, 키
   assert.equal(mixed.cost?.polishCredits, undefined, '로컬 다듬기는 크레딧이 들지 않는다')
   assert.match(await readFile(mixed.output!.notePath, 'utf8'), /polish: "gemma"/)
 
+  // 크레딧을 쓰지 않는 서비스(OpenAI 등)로 요약하면 크레딧은 적지 않고 토큰 수만 남긴다 (모델 이름이 ChatKHU 단가표에 있어도)
+  const openaiDir = await createJob(join(dir, 'data'), await recording(dir), null, null,
+                                    { ...settings(join(dir, 'out3'), true), llm: { service: 'openai', endpoint: 'https://api.openai.test/chat/completions', model: 'gpt-6-luna' } })
+  const viaOpenai = await runJob(openaiDir, context(dir, 'key'))
+  assert.equal(viaOpenai.cost, undefined)
+  assert.deepEqual(viaOpenai.usage, { summary: { input: 1000, output: 1000 } })
+  assert.equal(calls.at(-1)!.body.max_completion_tokens, 16_000)
+
   calls.length = 0
-  const allDir = await createJob(join(dir, 'data'), await recording(dir), null, null,
+  const allDir =await createJob(join(dir, 'data'), await recording(dir), null, null,
                                  { ...settings(join(dir, 'out2'), false), llm: { ...local, ollama: { options: { num_ctx: 'auto' } } }, polishLlm: local })
   const all = await runJob(allDir, context(dir, null))
   assert.equal(all.status, 'done')

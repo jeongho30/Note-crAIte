@@ -2,7 +2,9 @@
 // 예전 파이프라인의 로컬 LLM 교정 단계를 옮긴 것이다. 9/30 실험(docs/decisions.md): 교정 목록보다 훨씬 많이 고치지만
 // 90분에 약 20크레딧(gpt-6-luna)이 들고, 말하지 않은 내용을 넣거나 빼는 경우가 있다. 그래서 원문 정리본을 노트에 함께 남긴다.
 import type { Paragraph } from './clean.ts'
+import { EngineError } from './errors.ts'
 import { chat } from './llm.ts'
+import type { ChatOptions, Message, Usage } from './llm.ts'
 import type { OllamaRequest } from './ollama.ts'
 import { POLISH_TRANSCRIPT } from './prompts.ts'
 
@@ -12,16 +14,33 @@ const CONCURRENCY = 4
 // 조각의 문단 수가 달라지거나 길이가 이 범위를 벗어나면 그 조각은 다듬지 않은 원문을 쓴다 (내용을 빼거나 지어낸 것으로 본다)
 const MIN_RATIO = 0.85
 const MAX_RATIO = 1.2
+// 조각을 동시에 보내다 분당 한도(429)에 걸리면 그 조각만 기다렸다 다시 보낸다 (낮은 등급 키는 한도가 작다)
+const RATE_LIMIT_WAITS_MS = [5000, 20_000]
+
+async function chatWithRetry(o: PolishOptions, messages: Message[], options: ChatOptions, waits = RATE_LIMIT_WAITS_MS): Promise<[string, Usage | null]> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await chat(o.endpoint, o.apiKey, o.model, messages, options)
+    } catch (e) {
+      if (!(e instanceof EngineError) || e.code !== 'rate_limit' || attempt >= waits.length) throw e
+      await new Promise((r) => setTimeout(r, waits[attempt]))
+    }
+  }
+}
 
 export type PolishOptions = {
   endpoint: string
   apiKey: string | null
   model: string
+  /** 서비스 id (호출 형식이 서비스마다 다르다, llm.ts의 chat) */
+  service?: string
   /** 있으면 로컬 LLM(Ollama)으로 다듬는다. 한 번에 한 조각씩 보낸다 (동시에 보내면 Ollama가 줄을 세우거나 컨텍스트 메모리를 배로 쓴다) */
   ollama?: OllamaRequest
   signal?: AbortSignal
   /** 마지막 조각 뒤 로컬 모델을 메모리에서 내린다 */
   unloadAfter?: boolean
+  /** 요청 몰림(429) 때 조각을 다시 보내기 전에 기다릴 시간들 (테스트용) */
+  rateLimitWaitsMs?: number[]
 }
 export type PolishResult = {
   paragraphs: Paragraph[]
@@ -70,10 +89,11 @@ export async function polishParagraphs(paras: Paragraph[], notes: string, o: Pol
       let system = POLISH_TRANSCRIPT
       if (notes) system += `\n\n[필기노트 용어집]\n${notes}`
       if (i > 0) system += `\n\n[이전 청크 마지막 부분 - 참고용, 다시 출력하지 말 것]\n${chunks[i - 1].map((p) => p.text).join('\n\n').slice(-PREV_TAIL_CHARS)}`
-      const [content, usage] = await chat(o.endpoint, o.apiKey, o.model,
+      const [content, usage] = await chatWithRetry(o,
         [{ role: 'system', content: system }, { role: 'user', content: chunks[i].map((p) => p.text).join('\n\n') }],
         // 로컬은 출력 상한을 조각 길이에 맞춘다 (num_ctx 16K 안에 입력과 함께 들어가야 한다)
-        { maxTokens: o.ollama ? 4096 : 16_000, ollama: o.ollama, signal: o.signal, unloadAfter: o.unloadAfter && i === chunks.length - 1 })
+        { maxTokens: o.ollama ? 4096 : 16_000, service: o.service, ollama: o.ollama, signal: o.signal, unloadAfter: o.unloadAfter && i === chunks.length - 1 },
+        o.rateLimitWaitsMs)
       inputTokens += typeof usage?.prompt_tokens === 'number' ? usage.prompt_tokens : 0
       outputTokens += typeof usage?.completion_tokens === 'number' ? usage.completion_tokens : 0
       const parts = content.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean)

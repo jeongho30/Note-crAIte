@@ -55,10 +55,14 @@ type Props = {
   /** 목록을 불러오지 못함 (인터넷 연결 등) */
   failed: boolean
   onPick: (id: string) => void
+  /** 연결된 서비스 이름 (기본 ChatKHU) */
+  service?: string
+  /** 크레딧으로 쓰는 서비스인가. 아니면 추천 순서·크레딧 없이 서비스의 글 모델 목록만 보인다 (기본 true) */
+  credits?: boolean
 }
 
 // 요약·다듬기 모델: 추천 모델 목록을 먼저 보이고, [전체 모델 보기] 창에서 추천 순서대로 고르거나, [직접 모델 입력]으로 이름을 넣는다.
-export function ModelPicker({ kind = 'summary', models, selected, available, disabled, failed, onPick }: Props): React.JSX.Element {
+export function ModelPicker({ kind = 'summary', models, selected, available, disabled, failed, onPick, service = 'ChatKHU', credits: billed = true }: Props): React.JSX.Element {
   const text = TEXT[kind]
   const [open, setOpen] = useState<'all' | 'custom' | null>(null)
   const [name, setName] = useState('')
@@ -71,7 +75,10 @@ export function ModelPicker({ kind = 'summary', models, selected, available, dis
     ? '요약 서비스를 연결하면 고를 수 있어요.'
     : failed
       ? '모델 목록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.'
-      : [current?.note, text.credits].filter(Boolean).join(' · ')
+      : billed
+        ? [current?.note, text.credits].filter(Boolean).join(' · ')
+        : `${service}가 제공하는 글 모델이에요. 요금은 ${service}의 단가를 따르고, 작업 목록에는 쓴 토큰 수만 보여요.`
+  const label = (m: ModelOption): string => (billed ? `${m.id} · ${credits(m)}` : m.id)
 
   function openCustom(): void {
     setName('')
@@ -84,7 +91,7 @@ export function ModelPicker({ kind = 'summary', models, selected, available, dis
     const id = name.trim()
     if (!id) return
     if (available.length && !available.includes(id)) {
-      setError('ChatKHU의 글 모델 목록에 없는 이름이에요. 대소문자까지 그대로 넣어 주세요.')
+      setError(`${service}의 글 모델 목록에 없는 이름이에요. 대소문자까지 그대로 넣어 주세요.`)
       return
     }
     onPick(id)
@@ -106,19 +113,17 @@ export function ModelPicker({ kind = 'summary', models, selected, available, dis
       >
         {!models && <option value="">{disabled ? '연결된 서비스 없음' : '불러오는 중…'}</option>}
         {recommended.length > 0 && (
-          <optgroup label="추천 모델 목록">
+          <optgroup label={billed ? '추천 모델 목록' : '기본 모델'}>
             {recommended.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.id} · {credits(m)}
+                {label(m)}
               </option>
             ))}
           </optgroup>
         )}
         {current && !current.recommended && (
           <optgroup label="고른 모델">
-            <option value={current.id}>
-              {current.id} · {credits(current)}
-            </option>
+            <option value={current.id}>{label(current)}</option>
           </optgroup>
         )}
         {ranked.length > recommended.length && <option value={ALL}>전체 모델 보기… ({ranked.length}개)</option>}
@@ -141,7 +146,7 @@ export function ModelPicker({ kind = 'summary', models, selected, available, dis
         }
       >
         <div className={styles.modelDialog}>
-          <p className={styles.hint}>{text.intro}</p>
+          <p className={styles.hint}>{billed ? text.intro : `${service}가 제공하는 글 모델 목록이에요. 강의 녹음으로 비교해 본 순서가 아니에요.`}</p>
           <div className={styles.modelList}>
             {ranked.map((m) => (
               <button
@@ -153,13 +158,13 @@ export function ModelPicker({ kind = 'summary', models, selected, available, dis
                   setOpen(null)
                 }}
               >
-                <span className={styles.modelRank}>{m.rank}</span>
+                {billed && <span className={styles.modelRank}>{m.rank}</span>}
                 <span className={styles.modelName}>
                   {m.id}
-                  {m.recommended && <span className={styles.modelTag}>추천</span>}
+                  {m.recommended && <span className={styles.modelTag}>{billed ? '추천' : '기본'}</span>}
                   {m.note && <span className={styles.modelNote}>{m.note}</span>}
                 </span>
-                <span className={styles.modelCredits}>{credits(m)}</span>
+                {billed && <span className={styles.modelCredits}>{credits(m)}</span>}
               </button>
             ))}
           </div>
@@ -183,7 +188,7 @@ export function ModelPicker({ kind = 'summary', models, selected, available, dis
           <TextField
             label="모델 이름"
             spellCheck={false}
-            placeholder="예: gpt-6-luna"
+            placeholder={billed ? '예: gpt-6-luna' : undefined}
             value={name}
             error={error ?? undefined}
             onChange={(e) => {
@@ -191,7 +196,9 @@ export function ModelPicker({ kind = 'summary', models, selected, available, dis
               setError(null)
             }}
           />
-          <p className={styles.hint}>ChatKHU가 제공하는 글 모델 이름을 그대로 넣어 주세요. {text.custom}</p>
+          <p className={styles.hint}>
+            {service}가 제공하는 글 모델 이름을 그대로 넣어 주세요. {billed && text.custom}
+          </p>
         </form>
       </Dialog>
     </>
