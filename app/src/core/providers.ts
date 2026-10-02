@@ -25,21 +25,23 @@ export const PROVIDERS: { id: ProviderId; name: string; available: boolean; keyG
 export const CREDITS_PER_90MIN_SUMMARY = 12
 
 /**
- * 써 보기 전에도 알고 있는 모델별 90분 요약 크레딧: 요약 모델 비교 2차(9/29, 강의 2~4개의 토큰 × 단가를 90분으로 환산한 평균).
+ * 써 보기 전에도 알고 있는 모델별 90분 요약 크레딧: 강의 2~4개의 토큰 × 단가를 90분으로 환산한 평균.
+ * luna·flash·sol·grok·deepseek·gemma는 주제별 틀로 바꾼 뒤(10/2), 나머지는 그 전(9/29 2차 비교)에 잰 값이라 조금 낮게 본다.
  * 나머지는 써 본 기록, 그것도 없으면 단가표로 어림한다(llmcatalog.ts).
  */
 const KNOWN_CREDITS_PER_90MIN: Record<string, number> = {
-  'gpt-6-luna': 2.9,
-  'gemini-3.8-flash': 15.5,
+  'gpt-6-luna': 3.9,
+  'gemini-3.8-flash': 17.4,
+  'gpt-6.1-sol': 65,
   'gpt-6-sol': 49,
   'claude-sonnet-5-5': 88,
-  'grok-4-1-fast': 3.5,
+  'grok-4-1-fast': 3.9,
   'solar-pro4': 5.9,
-  'deepseek-v4-flash': 5.4,
+  'deepseek-v4-flash': 6.8,
   'claude-haiku-4-5-20251001': 38,
   'gemini-3.1-pro-preview': 44,
   'seed-2-0-lite-260428': 10.7,
-  'google/gemma-4-31B-it': 2.4,
+  'google/gemma-4-31B-it': 2.7,
   'gemini-3.5-flash-lite': 7.5
 }
 

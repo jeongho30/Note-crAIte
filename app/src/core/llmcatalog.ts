@@ -1,5 +1,5 @@
 // ChatKHU 요약 모델 목록: 글 모델만 거르고, 단가표로 90분 강의 요약 1회의 크레딧을 어림하고, 추천 목록을 정한다.
-// 단가: https://docs.mindlogic.ai/docs/khu/baze/product/model-credits (2026-09-16 기준, 크레딧 / 1K 토큰)
+// 단가: https://docs.mindlogic.ai/docs/khu/baze/product/model-credits (2026-09-16 기준, 크레딧 / 1K 토큰. gpt-6.1-sol만 2026-09-30 기준 문서에서 더함)
 
 export type ModelItem = { id: string; owner: string | null }
 
@@ -24,6 +24,7 @@ export function parseModelList(data: unknown): ModelItem[] {
 
 /** 모델별 단가 (크레딧 / 1K 토큰). 목록에 있어도 여기 없으면 예상 크레딧을 모른다. */
 export const PRICES: Record<string, { input: number; output: number }> = {
+  'gpt-6.1-sol': { input: 2, output: 10 },
   'gpt-6-sol': { input: 2, output: 10 },
   'gpt-6-luna': { input: 0.1, output: 0.5 },
   'gpt-5.6-sol': { input: 4, output: 20 },
@@ -66,10 +67,11 @@ export const PRICES: Record<string, { input: number; output: number }> = {
 }
 
 /**
- * 90분 강의 요약 1회의 토큰 수(어림). 요약 모델 비교 2차(9개 입력, 14개 모델, 62회)의 토큰 수를 90분으로 맞춘 중앙값
- * (입력 14,835, 출력 1,734)이다. 모델마다 달라 어림일 뿐이다: Claude는 입력이 약 2배, 추론 모델은 출력이 2~5배.
+ * 90분 강의 요약 1회의 토큰 수(어림). 주제별 틀로 바꾼 뒤의 10/2 비교(강의 4개, 6개 모델, 44회)를 90분으로 맞춘 중앙값
+ * (입력 17,076, 출력 2,282)이다. 모델마다 달라 어림일 뿐이다: 출력은 grok 760부터 추론이 긴 deepseek 6,000까지,
+ * Claude는 입력이 약 2배(9/29). 틀을 바꾸기 전(9/29, 62회)의 중앙값은 입력 14,835, 출력 1,734였다.
  */
-export const TOKENS_PER_90MIN = { input: 15_000, output: 1_800 }
+export const TOKENS_PER_90MIN = { input: 17_000, output: 2_300 }
 
 /**
  * 응답의 토큰 수 × 단가로 계산한 크레딧. 요약 모델 비교 1차에서 7개 모델 모두 실제 차감과 소수 둘째 자리까지 맞았다.
@@ -84,8 +86,11 @@ export function creditsFromTokens(id: string, inputTokens: unknown, outputTokens
 /** 요약 뒤 교정 검증과 전사문 다듬기의 기본 모델 (9/30 실험: 싸고, 교정 판정이 정확했다) */
 export const DEFAULT_STEP_MODEL = 'gpt-6-luna'
 
-/** 전사문 다듬기 추천 모델: 90분 약 20크레딧 안팎인 모델 (다듬기 품질을 재 본 것은 gpt-6-luna뿐, 9/30 작성자 결정) */
-export const POLISH_RECOMMENDED = ['gpt-6-luna', 'google/gemma-4-31B-it', 'grok-4-1-fast', 'deepseek-v4-flash']
+/**
+ * 전사문 다듬기 추천 모델: 90분 약 20크레딧 안팎인 모델. 10/2 작성자 결정으로 grok-4-1-fast와 deepseek-v4-flash를 뺐다
+ * ([전체 모델 보기]에서는 고를 수 있다). 다듬기 품질을 재 본 것은 gpt-6-luna와 로컬 gemma 12B뿐이다(docs/decisions.md).
+ */
+export const POLISH_RECOMMENDED = ['gpt-6-luna', 'google/gemma-4-31B-it']
 
 /**
  * 90분 강의 1회의 토큰 수: 9/30 gpt-6-luna 실측을 90분으로 환산. 다듬기는 전사 전체를 다시 써서 출력이 길다(추론 포함).
@@ -110,22 +115,25 @@ export function estimateCredits90(id: string): number | null {
 }
 
 /**
- * 요약 모델 추천 순서 (9/29 2차 비교, docs/decisions.md). 앞의 RECOMMENDED_COUNT개가 설정의 "추천 모델 목록",
+ * 요약 모델 추천 순서 (9/29 2차 비교와 10/2 다시 비교, docs/decisions.md). 앞의 RECOMMENDED_COUNT개가 설정의 "추천 모델 목록",
  * 전체가 [전체 모델 보기]. 여기 없는 모델(시간 초과가 잦은 모델 등)은 [직접 모델 입력]으로만 고른다.
+ * 10/2: gpt-6-sol 자리에 gpt-6.1-sol(잰 것 중 요약이 가장 빠짐없고 교정을 하나도 망가뜨리지 않음). deepseek-v4-flash(틀린 서술이 가장 많고
+ * 출력이 길어 상한에 걸림)와 gemma(수식이 깨지고 교정을 자주 망가뜨림)는 맨 뒤로 내렸다. grok-4-1-fast는 요약이 가장 짧고 담는 내용이
+ * 가장 적어 추천에서 뺐다(추천은 4개). 10/2에 다시 잰 것은 luna·flash·sol·grok·deepseek·gemma뿐이다.
  */
 export const RANKED: { id: string; note: string }[] = [
   { id: 'gpt-6-luna', note: '요약이 자세하고 크레딧이 적게 들어요' },
   { id: 'gemini-3.8-flash', note: '받아쓰기 오류를 많이 고쳐요' },
-  { id: 'gpt-6-sol', note: '요약·교정이 정확하지만 크레딧이 많이 들어요' },
+  { id: 'gpt-6.1-sol', note: '요약이 가장 빠짐없고 교정이 정확하지만 크레딧이 많이 들어요' },
   { id: 'claude-sonnet-5-5', note: '요약이 자세하지만 크레딧이 많이 들어요' },
   { id: 'grok-4-1-fast', note: '빠르고 크레딧이 적게 들어요' },
   { id: 'solar-pro4', note: '' },
-  { id: 'deepseek-v4-flash', note: '' },
   { id: 'claude-haiku-4-5-20251001', note: '' },
   { id: 'gemini-3.1-pro-preview', note: '' },
   { id: 'seed-2-0-lite-260428', note: '' },
-  { id: 'google/gemma-4-31B-it', note: '' },
-  { id: 'gemini-3.5-flash-lite', note: '' }
+  { id: 'gemini-3.5-flash-lite', note: '' },
+  { id: 'deepseek-v4-flash', note: '' },
+  { id: 'google/gemma-4-31B-it', note: '' }
 ]
 
-export const RECOMMENDED_COUNT = 5
+export const RECOMMENDED_COUNT = 4

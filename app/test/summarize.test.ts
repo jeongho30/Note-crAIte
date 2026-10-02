@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { afterEach, mock, test } from 'node:test'
 import { EngineError } from '../src/core/errors.ts'
 import { chat } from '../src/core/llm.ts'
-import { buildMessages, parseResponse, summarize } from '../src/core/summarize.ts'
+import { buildMessages, parseResponse, restoreLatex, summarize, SUMMARY_MAX_TOKENS } from '../src/core/summarize.ts'
 
 const GOOD = { title: '렉시컬 분석', summary: '요약', keywords: ['Token', ' '], corrections: [{ wrong: 'a', right: 'b' }] }
 
@@ -39,6 +39,30 @@ test('parseResponse는 JSON이 아니면 원문을 요약에 넣는다', () => {
   }
 })
 
+test('restoreLatex는 JSON.parse가 제어 문자로 푼 LaTeX 명령을 되살린다', () => {
+  // 모델이 JSON 문자열 안에 \theta를 역슬래시 하나로 쓰면 JSON.parse가 탭 + heta로 읽는다
+  const broken = JSON.parse(String.raw`{"s": "각 $\theta$, $\frac{1}{2}$, SYN $\rightarrow$ ACK, $\beta$"}`).s as string
+  assert.ok(broken.includes('\t') && broken.includes('\f') && broken.includes('\r') && broken.includes('\b'))
+  assert.equal(restoreLatex(broken), String.raw`각 $\theta$, $\frac{1}{2}$, SYN $\rightarrow$ ACK, $\beta$`)
+})
+
+test('restoreLatex는 수식 밖의 탭과 줄바꿈을 건드리지 않는다', () => {
+  for (const s of ['- 항목\n\tsub item', '첫 줄\r\nsecond line', '탭\tx와 달러 $5', '**파싱**(Parsing)은']) assert.equal(restoreLatex(s), s)
+})
+
+test('parseResponse는 요약·키워드·교정의 깨진 수식을 되살리고, JSON에 없는 이스케이프도 읽는다', () => {
+  // \alpha는 JSON에 없는 이스케이프라 그대로는 파싱이 실패한다
+  const raw = String.raw`{"title": "삼각함수", "summary": "$\theta$와 $\alpha$", "keywords": ["$\beta$"], "corrections": [{"wrong": "에스 화살표", "right": "S $\to$ S"}]}`
+  const parsed = parseResponse(raw, 't')
+  assert.equal(parsed.parseFailed, false)
+  assert.equal(parsed.summary, String.raw`$\theta$와 $\alpha$`)
+  assert.deepEqual(parsed.keywords, [String.raw`$\beta$`])
+  assert.deepEqual(parsed.corrections, [{ wrong: '에스 화살표', right: String.raw`S $\to$ S` }])
+  // 이미 겹쳐 쓴 역슬래시는 그대로 둔다
+  const escaped = String.raw`{"title": "t", "summary": "$\\theta$ $\alpha$", "keywords": [], "corrections": []}`
+  assert.equal(parseResponse(escaped, 't').summary, String.raw`$\theta$ $\alpha$`)
+})
+
 test('buildMessages는 빠진 입력을 표시한다', () => {
   const user = buildMessages('전사', '', null)[1].content
   assert.ok(user.includes('[과목]\n(미지정)') && user.includes('[필기노트]\n(없음)') && user.endsWith('[전사]\n전사'))
@@ -51,6 +75,7 @@ test('summarize는 json_schema를 보내고 usage를 돌려준다', async () => 
   })
   const body = JSON.parse(calls[0].init.body as string)
   assert.equal(body.response_format.json_schema.strict, true)
+  assert.equal(body.max_tokens, SUMMARY_MAX_TOKENS) // 주제별 틀 + 추론 토큰이 chat()의 기본 8192를 넘는 모델이 있다
   assert.equal((calls[0].init.headers as Record<string, string>)['Authorization'], 'Bearer secret')
   assert.equal(result.title, '렉시컬 분석')
   assert.equal(result.usage?.completion_tokens, 5)

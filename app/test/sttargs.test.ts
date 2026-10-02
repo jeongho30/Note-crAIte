@@ -74,11 +74,11 @@ test('모델별 90분 요약 크레딧은 기록을 90분으로 환산한 평균
   assert.equal(r['m2'], undefined) // 크레딧 기록 없음
   assert.equal(r['m3'], undefined) // 너무 짧은 녹음은 뺀다
   assert.equal(r['m4'], undefined) // 9/29 전 기록(잔액 차이, source 없음)은 쓰지 않는다
-  assert.equal(r['gpt-6-luna'], 2.9) // 요약 모델 비교 2차 실측
+  assert.equal(r['gpt-6-luna'], 3.9) // 10/2 비교 실측(주제별 틀)
 })
 
 test('단가표로 90분 요약 크레딧을 어림하고, 단가를 모르면 null', () => {
-  assert.equal(estimateCredits90('gemini-3.8-flash'), 18) // 2차 비교 실측(90분 약 17크레딧)과 비슷
+  assert.equal(estimateCredits90('gemini-3.8-flash'), 21.4) // 실측은 17.4: 어림은 모델들의 중앙값 토큰이라 출력이 짧은 flash를 높게 본다
   assert.ok(estimateCredits90('gpt-6-luna')! < estimateCredits90('gemini-3.8-flash')!)
   assert.ok(estimateCredits90('gpt-6-sol')! > estimateCredits90('gemini-3.8-flash')!)
   assert.equal(estimateCredits90('모르는-모델'), null)
