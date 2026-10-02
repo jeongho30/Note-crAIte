@@ -48,7 +48,7 @@ const probeSample = app.isPackaged ? join(process.resourcesPath, 'probe-ko.wav')
 // LN_DATA_DIR: 개발 중 첫 실행 상태를 따로 시험할 때만 쓴다 (CLI의 --data-dir과 같은 역할)
 const dataDir = process.env['LN_DATA_DIR'] || defaultDataDir()
 const log = createLog(join(dataDir, 'logs'))
-const RELEASES_URL = 'https://github.com/jeongho30/lecture-notes/releases'
+const RELEASES_URL = 'https://github.com/jeongho30/Note-crAIte/releases'
 
 // 앱은 하나만 띄운다: 두 번째로 실행하면 이미 떠 있는 창을 앞으로 가져온다 (같은 설정·작업 파일을 두 곳에서 쓰지 않게)
 const primary = app.requestSingleInstanceLock()

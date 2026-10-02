@@ -60,8 +60,8 @@ Windows 64비트용입니다. 설치 파일은 GitHub Actions(`.github/workflows
 필요한 것: Node 24 이상, PATH의 ffmpeg, [whisper.cpp](https://github.com/ggml-org/whisper.cpp)를 빌드할 도구(Visual Studio C++, CMake, Vulkan SDK). 빌드 스크립트가 고정한 커밋의 소스를 직접 받고, `-NoVulkan`을 붙이면 Vulkan 없이 빌드합니다.
 
 ```bash
-git clone https://github.com/jeongho30/lecture-notes
-cd lecture-notes
+git clone https://github.com/jeongho30/Note-crAIte
+cd Note-crAIte
 powershell -File scripts/build_whisper.ps1
 cd app
 npm ci
