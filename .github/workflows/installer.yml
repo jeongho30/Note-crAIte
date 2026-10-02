@@ -1,5 +1,5 @@
 # Windows 설치 파일: whisper.cpp 빌드(Vulkan) → ffmpeg(LGPL) 받기 → 테스트 → electron-builder.
-# 결과는 워크플로 실행의 아티팩트(NotecrAIte-windows)로 받는다. GitHub Release에 올리지는 않는다.
+# 결과는 워크플로 실행의 아티팩트(Note-crAIte-windows)로 받는다. GitHub Release에 올리지는 않는다.
 name: installer
 
 on:
@@ -71,7 +71,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: NotecrAIte-windows
+          name: Note-crAIte-windows
           path: dist/installer/*.exe
           if-no-files-found: error
           retention-days: 30

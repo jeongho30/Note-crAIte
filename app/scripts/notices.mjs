@@ -38,7 +38,7 @@ for (const r of ROOTS) walk(r, APP)
 const read = (p) => readFileSync(p, 'utf8').trim()
 const rule = '='.repeat(72)
 const parts = [
-  `NotecrAIte 오픈소스 고지 (Third-party notices)
+  `Note-crAIte 오픈소스 고지 (Third-party notices)
 
 이 프로그램은 아래 오픈소스 소프트웨어를 포함하거나 실행 중에 내려받는다. 각 항목의 라이선스를 따른다.
 Electron과 Chromium의 고지는 설치 폴더의 LICENSE.electron.txt, LICENSES.chromium.html에 있다.`
