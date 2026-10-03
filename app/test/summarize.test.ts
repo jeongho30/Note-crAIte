@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { afterEach, mock, test } from 'node:test'
 import { EngineError } from '../src/core/errors.ts'
 import { chat } from '../src/core/llm.ts'
-import { buildMessages, parseResponse, restoreLatex, summarize, SUMMARY_MAX_TOKENS } from '../src/core/summarize.ts'
+import { buildMessages, dropEchoedGloss, parseResponse, restoreLatex, summarize, SUMMARY_MAX_TOKENS } from '../src/core/summarize.ts'
 
 const GOOD = { title: '렉시컬 분석', summary: '요약', keywords: ['Token', ' '], corrections: [{ wrong: 'a', right: 'b' }] }
 
@@ -44,6 +44,34 @@ test('restoreLatex는 JSON.parse가 제어 문자로 푼 LaTeX 명령을 되살�
   const broken = JSON.parse(String.raw`{"s": "각 $\theta$, $\frac{1}{2}$, SYN $\rightarrow$ ACK, $\beta$"}`).s as string
   assert.ok(broken.includes('\t') && broken.includes('\f') && broken.includes('\r') && broken.includes('\b'))
   assert.equal(restoreLatex(broken), String.raw`각 $\theta$, $\frac{1}{2}$, SYN $\rightarrow$ ACK, $\beta$`)
+})
+
+test('dropEchoedGloss는 앞 말을 그대로 되풀이한 괄호만 지운다', () => {
+  const fixed: [string, string][] = [
+    ['- **Closure**(Closure): 점 바로 뒤에', '- **Closure**: 점 바로 뒤에'],
+    ['- **LR(k)**(LR(k)): 입력을', '- **LR(k)**: 입력을'],
+    ['**GoTo**(GoTo)와 **Reduce**(Reduce)', '**GoTo**와 **Reduce**'],
+    ['DFA(dfa)를 만든다', 'DFA를 만든다'],
+    ['Go To(GoTo)로 간다', 'Go To로 간다'],
+    ['Closure (Closure)는 반복한다', 'Closure는 반복한다']
+  ]
+  for (const [from, to] of fixed) assert.equal(dropEchoedGloss(from), to)
+  const kept = [
+    '**지연된 결정**(Delayed Decision): LL 파싱처럼',
+    '**LR(0) 아이템**(LR(0) Item): 생산 규칙에',
+    '**Shift-Reduce 파싱**(Shift-Reduce Parsing): Shift는',
+    '**클로저**(Closure)와 **Closure**(클로저)',
+    'Preclosure(Closure)는 다른 말',
+    'S(S)는 문법 기호',
+    '수식 $f(x)(x)$와 코드 `run(run)`',
+    '닫지 않은 괄호 Closure(Closure\n다음 줄)'
+  ]
+  for (const s of kept) assert.equal(dropEchoedGloss(s), s)
+  // 요약에만 적용하고 제목·키워드는 그대로 둔다
+  const parsed = parseResponse(JSON.stringify({ ...GOOD, title: 'Closure(Closure)', summary: '**Closure**(Closure): 설명', keywords: ['GoTo(GoTo)'] }), 'x')
+  assert.equal(parsed.summary, '**Closure**: 설명')
+  assert.equal(parsed.title, 'Closure(Closure)')
+  assert.deepEqual(parsed.keywords, ['GoTo(GoTo)'])
 })
 
 test('restoreLatex는 수식 밖의 탭과 줄바꿈을 건드리지 않는다', () => {

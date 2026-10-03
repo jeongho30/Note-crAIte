@@ -68,6 +68,57 @@ export function restoreLatex(s: string): string {
     .replace(/\$[^$\n]*\$/g, (math) => math.replace(/[\t\r](?=[A-Za-z])/g, (c) => UNESCAPED[c]))
 }
 
+/** before의 끝이 word와 같은 말로 끝나는지 (대소문자·공백 차이는 무시, 더 긴 낱말의 일부면 아니다) */
+function endsWithWord(before: string, word: string): boolean {
+  let b = before.length - 1
+  for (let w = word.length - 1; w >= 0; w--) {
+    if (/\s/.test(word[w])) continue
+    while (b >= 0 && /\s/.test(before[b])) b--
+    if (b < 0 || before[b].toLowerCase() !== word[w].toLowerCase()) return false
+    b--
+  }
+  return b < 0 || !/[\p{L}\p{N}]/u.test(before[b])
+}
+
+/**
+ * 용어 뒤 괄호가 앞 말을 그대로 되풀이하면 괄호를 지운다: **Closure**(Closure) → **Closure**, **LR(k)**(LR(k)) → **LR(k)**.
+ * "한글(English)" 병기 규칙을, 강의에서 영어로 말한 용어에 그대로 적용한 모델이 이렇게 쓴다(10/4, luna).
+ * 괄호 안이 한 글자인 것(S(S) 같은 문법 기호)과 $수식$·`코드` 안은 건드리지 않는다.
+ */
+export function dropEchoedGloss(s: string): string {
+  let out = ''
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i]
+    if (c === '$' || c === '`') {
+      const end = s.indexOf(c, i + 1)
+      if (end > 0 && !s.slice(i, end).includes('\n')) {
+        out += s.slice(i, end + 1)
+        i = end
+        continue
+      }
+    }
+    if (c === '(') {
+      let close = -1
+      for (let k = i, depth = 0; k < s.length && s[k] !== '\n'; k++) {
+        if (s[k] === '(') depth++
+        else if (s[k] === ')' && --depth === 0) {
+          close = k
+          break
+        }
+      }
+      const inner = close > 0 ? s.slice(i + 1, close).trim() : ''
+      const before = out.replace(/[ \t]+$/, '')
+      if (inner.length >= 2 && endsWithWord(before.replace(/\*+$/, ''), inner)) {
+        out = before
+        i = close
+        continue
+      }
+    }
+    out += c
+  }
+  return out
+}
+
 function restoreCorrection(c: unknown): unknown {
   if (typeof c !== 'object' || c === null || Array.isArray(c)) return c
   const o = c as Record<string, unknown>
@@ -102,7 +153,7 @@ export function parseResponse(raw: string, fallbackTitle: string): Summary {
   const p = parsed as Record<string, unknown>
   return {
     title: restoreLatex(String(p['title'] || fallbackTitle)).trim(),
-    summary: restoreLatex(String(p['summary'] || '')).trim(),
+    summary: dropEchoedGloss(restoreLatex(String(p['summary'] || ''))).trim(),
     keywords: Array.isArray(p['keywords']) ? p['keywords'].map((k) => restoreLatex(String(k)).trim()).filter(Boolean) : [],
     corrections: Array.isArray(p['corrections']) ? p['corrections'].map(restoreCorrection) : [],
     parseFailed: false
