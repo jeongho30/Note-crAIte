@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, mock, test } from 'node:test'
 import { acceptable, chunkParagraphs, polishParagraphs } from '../src/core/polish.ts'
 import { verifyCorrections, verifyInput } from '../src/core/verify.ts'
@@ -45,6 +48,36 @@ test('polishParagraphs는 다듬은 문단을 시각과 함께 돌려주고, 검
   assert.equal(r.chunks, 3)
   assert.equal(r.fallbackChunks, 1)
   assert.equal(r.inputTokens, 300)
+})
+
+test('polishParagraphs는 조각 결과를 남겨 두고, 다시 부르면 끝난 조각은 다시 보내지 않는다', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ln-polish-'))
+  try {
+    const paras = [p('가'.repeat(1900), 0), p('나'.repeat(1900), 1), p('다'.repeat(1900), 2)]
+    const o = { endpoint: 'https://x/', apiKey: 'k', model: 'gpt-6-luna', resumeDir: dir, rateLimitWaitsMs: [] }
+    // 처음에는 세 번째 조각에서 실패한다
+    let users = mockChat((body) => {
+      const user = body.messages.at(-1)!.content
+      if (user.startsWith('다')) throw new Error('끊김')
+      return user.startsWith('나') ? '줄어든 답' : user
+    })
+    await assert.rejects(polishParagraphs(paras, '', o))
+    assert.equal(users.length, 3)
+    mock.restoreAll()
+    // 다시 부르면 실패한 조각만 보내고, 앞선 결과(원문으로 돌아간 조각 포함)와 토큰 수를 그대로 쓴다
+    users = mockChat((body) => body.messages.at(-1)!.content)
+    const r = await polishParagraphs(paras, '', o)
+    assert.deepEqual(users.map((u) => u[0]), ['다'])
+    assert.equal(r.fallbackChunks, 1)
+    assert.equal(r.inputTokens, 300)
+    mock.restoreAll()
+    // 모델이 바뀌면 전부 다시 보낸다
+    users = mockChat((body) => body.messages.at(-1)!.content)
+    await polishParagraphs(paras, '', { ...o, model: 'gemma' })
+    assert.equal(users.length, 3)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
 })
 
 test('verifyInput은 바꿀 곳의 앞뒤 문맥을 보이고, 다른 단어 안은 세지 않는다', () => {

@@ -290,7 +290,8 @@ const RUNNERS: Record<StageName, Runner> = {
     const summary = job.settings.llm
     const unloadAfter = !(summary?.ollama && summary.endpoint === llm.endpoint && summary.model === model)
     const r = await unloadOnError(llm, () => polishParagraphs(cleaned.paragraphs, notes, {
-      endpoint: llm.endpoint, apiKey: ctx.apiKey, model, service: llm.service, ollama: llm.ollama, signal: ctx.signal, unloadAfter
+      endpoint: llm.endpoint, apiKey: ctx.apiKey, model, service: llm.service, ollama: llm.ollama, signal: ctx.signal, unloadAfter,
+      resumeDir: join(jobDir, 'polish')
     }))
     job.usage = { ...job.usage, polish: tokenCount(r.inputTokens, r.outputTokens) }
     job.polish = { chunks: r.chunks, fallbackChunks: r.fallbackChunks }

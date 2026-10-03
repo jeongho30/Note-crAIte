@@ -1,8 +1,12 @@
 // 전사문 다듬기: 정리된 전사를 약 2000자 조각으로 나눠 LLM이 오인식만 고쳐 다시 쓰게 한다 (선택 기능, 기본은 꺼짐).
 // 예전 파이프라인의 로컬 LLM 교정 단계를 옮긴 것이다. 9/30 실험(docs/decisions.md): 교정 목록보다 훨씬 많이 고치지만
 // 90분에 약 20크레딧(gpt-6-luna)이 들고, 말하지 않은 내용을 넣거나 빼는 경우가 있다. 그래서 원문 정리본을 노트에 함께 남긴다.
+import { createHash } from 'node:crypto'
+import { mkdir } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { Paragraph } from './clean.ts'
 import { EngineError } from './errors.ts'
+import { readJson, writeJsonAtomic } from './files.ts'
 import { chat } from './llm.ts'
 import type { ChatOptions, Message, Usage } from './llm.ts'
 import type { OllamaRequest } from './ollama.ts'
@@ -41,7 +45,11 @@ export type PolishOptions = {
   unloadAfter?: boolean
   /** 요청 몰림(429) 때 조각을 다시 보내기 전에 기다릴 시간들 (테스트용) */
   rateLimitWaitsMs?: number[]
+  /** 있으면 조각 결과를 이 폴더에 part_NNN.json으로 남기고, 다시 부르면 끝난 조각은 다시 보내지 않는다 (받아쓰기 조각과 같은 방식) */
+  resumeDir?: string
 }
+/** 조각 하나의 결과. key는 주소·모델과 보낸 글의 해시라서, 모델·필기·전사가 바뀌면 다시 보낸다. texts가 null이면 검사에 걸려 원문을 쓴 조각 */
+type SavedChunk = { key: string; texts: string[] | null; inputTokens: number; outputTokens: number }
 export type PolishResult = {
   paragraphs: Paragraph[]
   /** 검사에 걸려 원문을 쓴 조각 수 / 전체 조각 수 */
@@ -78,32 +86,58 @@ export function acceptable(input: Paragraph[], output: string[]): boolean {
 
 export async function polishParagraphs(paras: Paragraph[], notes: string, o: PolishOptions): Promise<PolishResult> {
   const chunks = chunkParagraphs(paras)
-  const out: Paragraph[][] = new Array(chunks.length)
-  let fallbackChunks = 0
-  let inputTokens = 0
-  let outputTokens = 0
+  const requests = chunks.map((chunk, i) => {
+    let system = POLISH_TRANSCRIPT
+    if (notes) system += `\n\n[필기노트 용어집]\n${notes}`
+    if (i > 0) system += `\n\n[이전 청크 마지막 부분 - 참고용, 다시 출력하지 말 것]\n${chunks[i - 1].map((p) => p.text).join('\n\n').slice(-PREV_TAIL_CHARS)}`
+    const user = chunk.map((p) => p.text).join('\n\n')
+    return { system, user, key: createHash('sha256').update([o.endpoint, o.model, system, user].join('\0')).digest('hex') }
+  })
+  const fileOf = (i: number): string => join(o.resumeDir!, `part_${String(i).padStart(3, '0')}.json`)
+  if (o.resumeDir) await mkdir(o.resumeDir, { recursive: true })
+  // 앞선 실행에서 끝낸 조각 (앱이 꺼지거나 실패해 다시 하는 경우)
+  const saved: (SavedChunk | null)[] = await Promise.all(
+    requests.map(async (r, i) => {
+      if (!o.resumeDir) return null
+      const s = await readJson<SavedChunk>(fileOf(i)).catch(() => null)
+      return s?.key === r.key ? s : null
+    })
+  )
+  const pending = saved.flatMap((s, i) => (s ? [] : [i]))
   let next = 0
   const worker = async (): Promise<void> => {
-    while (next < chunks.length) {
-      const i = next++
-      let system = POLISH_TRANSCRIPT
-      if (notes) system += `\n\n[필기노트 용어집]\n${notes}`
-      if (i > 0) system += `\n\n[이전 청크 마지막 부분 - 참고용, 다시 출력하지 말 것]\n${chunks[i - 1].map((p) => p.text).join('\n\n').slice(-PREV_TAIL_CHARS)}`
+    while (next < pending.length) {
+      const at = next++
+      const i = pending[at]
       const [content, usage] = await chatWithRetry(o,
-        [{ role: 'system', content: system }, { role: 'user', content: chunks[i].map((p) => p.text).join('\n\n') }],
+        [{ role: 'system', content: requests[i].system }, { role: 'user', content: requests[i].user }],
         // 로컬은 출력 상한을 조각 길이에 맞춘다 (num_ctx 16K 안에 입력과 함께 들어가야 한다)
-        { maxTokens: o.ollama ? 4096 : 16_000, service: o.service, ollama: o.ollama, signal: o.signal, unloadAfter: o.unloadAfter && i === chunks.length - 1 },
+        { maxTokens: o.ollama ? 4096 : 16_000, service: o.service, ollama: o.ollama, signal: o.signal, unloadAfter: o.unloadAfter && at === pending.length - 1 },
         o.rateLimitWaitsMs)
-      inputTokens += typeof usage?.prompt_tokens === 'number' ? usage.prompt_tokens : 0
-      outputTokens += typeof usage?.completion_tokens === 'number' ? usage.completion_tokens : 0
       const parts = content.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean)
-      if (usage?.['done_reason'] !== 'length' && acceptable(chunks[i], parts)) out[i] = chunks[i].map((p, k) => ({ ...p, text: parts[k] }))
-      else {
-        out[i] = chunks[i]
-        fallbackChunks++
+      saved[i] = {
+        key: requests[i].key,
+        texts: usage?.['done_reason'] !== 'length' && acceptable(chunks[i], parts) ? parts : null,
+        inputTokens: typeof usage?.prompt_tokens === 'number' ? usage.prompt_tokens : 0,
+        outputTokens: typeof usage?.completion_tokens === 'number' ? usage.completion_tokens : 0
       }
+      if (o.resumeDir) await writeJsonAtomic(fileOf(i), saved[i])
     }
   }
-  await Promise.all(Array.from({ length: Math.min(o.ollama ? 1 : CONCURRENCY, chunks.length) }, worker))
-  return { paragraphs: out.flat(), fallbackChunks, chunks: chunks.length, inputTokens, outputTokens }
+  // 한 조각이 실패하면 새 조각은 보내지 않되, 이미 보낸 조각은 끝나 저장될 때까지 기다린 뒤 실패를 알린다
+  const runs = await Promise.allSettled(Array.from({ length: Math.min(o.ollama ? 1 : CONCURRENCY, pending.length) }, () => worker().catch((e) => {
+    next = pending.length
+    throw e
+  })))
+  const failed = runs.find((r) => r.status === 'rejected')
+  if (failed) throw failed.reason
+  const done = saved as SavedChunk[]
+  return {
+    paragraphs: chunks.flatMap((chunk, i) => (done[i].texts ? chunk.map((p, k) => ({ ...p, text: done[i].texts![k] })) : chunk)),
+    fallbackChunks: done.filter((s) => !s.texts).length,
+    chunks: chunks.length,
+    // 앞선 실행에서 쓴 토큰도 더한다 (그때도 과금됐다)
+    inputTokens: done.reduce((n, s) => n + s.inputTokens, 0),
+    outputTokens: done.reduce((n, s) => n + s.outputTokens, 0)
+  }
 }
