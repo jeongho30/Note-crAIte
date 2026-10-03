@@ -17,6 +17,9 @@ extraResources:
   # 설정 > 고급의 [샘플로 시험하기]가 전사를 대본과 비교한다
   - from: resources/probe-ko.txt
     to: probe-ko.txt
+  # 창과 트레이가 쓰는 아이콘
+  - from: resources/icon.ico
+    to: icon.ico
   # 글꼴 파일은 renderer 번들(asar)에 들어가고, OFL은 라이선스를 함께 배포하게 한다.
   - from: src/renderer/src/assets/fonts/LICENSE-Pretendard.txt
     to: LICENSE-Pretendard.txt
@@ -26,6 +29,7 @@ extraResources:
 npmRebuild: false
 win:
   target: nsis
+  icon: resources/icon.ico
 nsis:
   oneClick: true
   perMachine: false

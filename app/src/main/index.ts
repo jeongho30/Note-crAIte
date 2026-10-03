@@ -45,6 +45,8 @@ const whisperDirs = app.isPackaged
   ? [join(process.resourcesPath, 'bin', 'whisper')]
   : [join(app.getAppPath(), '..', '.cache', 'whisper', 'bin')]
 const probeSample = app.isPackaged ? join(process.resourcesPath, 'probe-ko.wav') : join(app.getAppPath(), 'resources', 'probe-ko.wav')
+// 창과 트레이의 아이콘 (scripts/icon.mjs가 만든다). 설치본의 실행 파일 아이콘은 electron-builder가 같은 파일로 넣는다
+const iconPath = app.isPackaged ? join(process.resourcesPath, 'icon.ico') : join(app.getAppPath(), 'resources', 'icon.ico')
 // LN_DATA_DIR: 개발 중 첫 실행 상태를 따로 시험할 때만 쓴다 (CLI의 --data-dir과 같은 역할)
 const dataDir = process.env['LN_DATA_DIR'] || defaultDataDir()
 const log = createLog(join(dataDir, 'logs'))
@@ -220,7 +222,7 @@ let closeHintShown = false
 let lastJobs: JobView[] = []
 let seenStatus = new Map<string, JobView['status']>()
 
-const tray = createTray({
+const tray = createTray(iconPath, {
   open: showWindow,
   quit: () => void quitFromTray(),
   toggleWatch: () => void watcher.pause(!watcher.get().paused)
@@ -1124,6 +1126,7 @@ function keepContentAspect(win: BrowserWindow): void {
 function createWindow(target: Size, show = true): void {
   const win = new BrowserWindow({
     show,
+    icon: iconPath,
     width: target.width,
     height: target.height,
     minWidth: MIN_CONTENT.width,
