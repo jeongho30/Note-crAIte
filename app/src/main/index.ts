@@ -723,7 +723,7 @@ const handlers: Record<string, (params: unknown) => unknown> = {
   },
 
   // ── 설정 화면 ──
-  // 화면 색: Electron이 prefers-color-scheme와 창 제목 줄을 함께 바꾼다
+  // 화면 색: Electron이 prefers-color-scheme를 바꾸고, 창 버튼의 기호 색은 nativeTheme의 updated에서 맞춘다
   'settings.setTheme': async (p) => {
     const theme: Theme = p === 'light' || p === 'dark' ? p : 'system'
     nativeTheme.themeSource = theme
@@ -1079,11 +1079,18 @@ const handlers: Record<string, (params: unknown) => unknown> = {
   }
 }
 
-// 창의 화면 영역(창 틀·메뉴 줄 제외)은 4:3. 마법사는 최소 크기로 열고, 끝나면 홈 크기로 키운다.
+// 창의 화면 영역(창 틀·메뉴 줄·맨 위 띠 제외)은 4:3. 마법사는 최소 크기로 열고, 끝나면 홈 크기로 키운다.
 const ASPECT = 4 / 3
 const MIN_CONTENT: Size = { width: 800, height: 600 }
 const WIZARD_CONTENT: Size = MIN_CONTENT
 const HOME_CONTENT: Size = { width: 1000, height: 750 }
+// 기본 제목 줄을 숨기고 화면이 맨 위에 직접 그리는 띠의 높이 (tokens.css의 --titlebar-h와 같아야 한다). 크기 계산에서는 창 틀로 친다
+const TITLE_BAR = 32
+
+/** Windows가 띠 위에 겹쳐 그리는 최소화·닫기 버튼. 배경은 비워 띠 색이 보이게 하고 기호 색만 화면 색에 맞춘다 */
+function titleBarOverlay(): { color: string; symbolColor: string; height: number } {
+  return { color: '#00000000', symbolColor: nativeTheme.shouldUseDarkColors ? '#bdb9b3' : '#46514f', height: TITLE_BAR }
+}
 
 let mainWindow: BrowserWindow | null = null
 
@@ -1091,9 +1098,9 @@ let mainWindow: BrowserWindow | null = null
 function resizeContent(win: BrowserWindow, target: Size): void {
   const outer = win.getBounds()
   const inner = win.getContentBounds()
-  const frame = { width: outer.width - inner.width, height: outer.height - inner.height }
+  const frame = { width: outer.width - inner.width, height: outer.height - inner.height + TITLE_BAR }
   const size = fitContent(target, screen.getDisplayMatching(outer).workArea, frame, ASPECT, MIN_CONTENT)
-  win.setContentSize(size.width, size.height)
+  win.setContentSize(size.width, size.height + TITLE_BAR)
   win.center()
 }
 
@@ -1104,7 +1111,7 @@ function keepContentAspect(win: BrowserWindow): void {
     const outer = win.getBounds()
     const inner = win.getContentBounds()
     const frameW = outer.width - inner.width
-    const frameH = outer.height - inner.height
+    const frameH = outer.height - inner.height + TITLE_BAR
     let w = next.width - frameW
     let h = next.height - frameH
     if (edge === 'bottom') w = Math.round(h * ASPECT)
@@ -1130,8 +1137,10 @@ function createWindow(target: Size, show = true): void {
     width: target.width,
     height: target.height,
     minWidth: MIN_CONTENT.width,
-    minHeight: MIN_CONTENT.height,
+    minHeight: MIN_CONTENT.height + TITLE_BAR,
     useContentSize: true,
+    titleBarStyle: 'hidden',
+    titleBarOverlay: titleBarOverlay(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
@@ -1139,6 +1148,9 @@ function createWindow(target: Size, show = true): void {
     }
   })
   keepContentAspect(win)
+  const syncOverlay = (): void => win.setTitleBarOverlay(titleBarOverlay())
+  nativeTheme.on('updated', syncOverlay)
+  win.on('closed', () => nativeTheme.off('updated', syncOverlay))
   resizeContent(win, target)
   mainWindow = win
   win.on('closed', () => (mainWindow = null))

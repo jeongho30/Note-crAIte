@@ -84,6 +84,10 @@
   --control-h-lg: 40px;
 
   /* 배치 */
+  /* 창 맨 위의 띠(components/TitleBar). 높이는 main/index.ts의 TITLE_BAR와 같아야 한다 */
+  --titlebar-h: 32px;
+  /* 띠를 뺀 화면 높이. 화면을 꽉 채울 때 100vh 대신 쓴다 */
+  --app-h: calc(100vh - var(--titlebar-h));
   --sidebar-w: 176px;
   --content-max-w: 720px;
 

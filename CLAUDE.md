@@ -93,6 +93,7 @@ npm 11은 의존 패키지의 설치 스크립트를 막아 `npm ci`만으로는
 - `note.ts`: 노트 마크다운(frontmatter 값은 JSON 문자열, 접는 부분은 `> [!quote]-` callout)과 저장(`<저장 폴더>/<과목|미분류>/<날짜> <제목>.md`, 겹치면 ` (2)`). `inputs.ts`: 녹음 옆 같은 이름 필기 찾기(`pairInputs`), 이미 목록에 있는 녹음에 나중에 넣은 필기 붙이기(`attachNotes`: 같은 폴더·이름 우선, 없으면 이름만 같은 녹음이 하나일 때), UTF-8이 아니면 CP949로 읽기.
 - 화면(`src/renderer/src/`):
   - 색·크기는 `styles/tokens.css`의 CSS 변수만 쓴다(라이트 B2, 다크 D4, OS 설정을 따름). 화면은 `components/`(CSS Modules)의 부품을 조합하고 색·치수를 직접 쓰지 않는다. 본문 글꼴은 내장한 Pretendard 가변 글꼴(`assets/fonts/`, 서브셋 아님).
+  - 창 맨 위 띠(10/3): Windows 기본 제목 줄을 숨기고(`titleBarStyle: 'hidden'` + `titleBarOverlay`, 창 버튼은 Windows가 겹쳐 그림) `components/TitleBar`(아이콘 + 이름, 끌어서 창 이동)를 `main.tsx`에서 모든 화면 위에 둔다. 높이는 `tokens.css`의 `--titlebar-h`와 `main/index.ts`의 `TITLE_BAR`(32)가 같아야 하고, 화면을 꽉 채울 때는 `100vh` 대신 `--app-h`를 쓴다. 아래의 4:3·최소 크기는 띠를 뺀 영역 기준이다.
   - 창의 화면 영역은 4:3(마법사 800×600, 홈 1000×750, 모니터에 맞춰 줄임, `main/fit.ts`)이고 크기 조절도 `will-resize`에서 4:3을 지킨다. 본문은 `--content-max-w`(720px)까지만 넓어진다. 모든 화면은 최소 크기 800×600에서 스크롤 없이 들어가게 만든다.
   - 폴더: `wizard/`(첫 실행 마법사), `home/`(사이드바 `Shell`, 홈, 시작 전 확인 `ConfirmDialog`, 작업 목록 `JobList`), `notes/`(노트 목록), `preview/`(노트 미리보기), `settings/`(설정). 화면 흐름·배치·문구는 아래 설계 모음 artifact의 시안이 기준이다.
   - 미리보기: `markdown.ts`가 머리말·callout·키워드를 나누고 나머지는 markdown-it(HTML 끔, cjk-friendly로 조사가 붙은 굵게도 인식, @vscode/markdown-it-katex로 수식)으로 그린다. KaTeX CSS는 Node 테스트가 못 읽으니 markdown.ts가 아니라 NotePreview.tsx에서 import한다. 미리보기는 앞 화면을 숨겨 둔 채 열어 돌아가면 상태가 그대로다. [요약 다시 만들기]는 `runner.resummarize`로 요약부터 다시 해 같은 파일에 덮어쓴다.

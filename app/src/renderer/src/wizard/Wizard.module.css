@@ -3,7 +3,7 @@
 .wizard {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  min-height: var(--app-h);
   padding: var(--space-5) var(--space-6);
 }
 

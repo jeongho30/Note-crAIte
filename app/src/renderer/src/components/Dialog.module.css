@@ -11,7 +11,7 @@
 /* 내용이 길면 대화상자 안에서 스크롤한다 */
 .lg {
   width: min(600px, calc(100vw - 2 * var(--space-6)));
-  max-height: calc(100vh - 2 * var(--space-6));
+  max-height: calc(var(--app-h) - 2 * var(--space-6));
   overflow: hidden;
 }
 
