@@ -107,6 +107,11 @@ test('오류: 없는 모델, 스트림 중 오류, 꺼진 Ollama, 조각이 안 
   })
   await assert.rejects(ollama.chat(broken.endpoint, 'm', MESSAGES, o), (e: unknown) => e instanceof EngineError && e.code === 'llm' && /terminated/.test(e.message))
   await assert.rejects(ollama.chat('http://127.0.0.1:9/api/chat', 'm', MESSAGES, o), (e: unknown) => e instanceof EngineError && e.code === 'network')
+  // Ollama가 돌려준 오류는 누구 쪽 문제인지 먼저 적고 원문을 뒤에 붙인다
+  const crashed = await fake((_b, res) => fail(res, 500, 'error starting llama-server: llama-server binary not found'))
+  await assert.rejects(ollama.chat(crashed.endpoint, 'm', MESSAGES, o), (e: unknown) => e instanceof EngineError && e.code === 'llm' && /^Ollama 프로그램에서 오류가 났어요.*다시 설치.*binary not found/.test(e.message))
+  const refused = await fake((_b, res) => fail(res, 400, 'invalid option'))
+  await assert.rejects(ollama.chat(refused.endpoint, 'm', MESSAGES, o), (e: unknown) => e instanceof EngineError && e.code === 'llm' && /^Ollama가 요청을 받아들이지 않았어요.*invalid option/.test(e.message))
 
   const silent = await fake(() => new Promise(() => {})) // 답하지 않는다
   await assert.rejects(ollama.chat(silent.endpoint, 'm', MESSAGES, { ...o, firstMs: 50 }), (e: unknown) => e instanceof EngineError && e.code === 'timeout')

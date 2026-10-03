@@ -69,6 +69,13 @@ function connectError(e: unknown): EngineError {
   return new EngineError('network', `Ollama에 연결하지 못했어요: ${code ?? (e as Error).name}`)
 }
 
+/** Ollama가 돌려준 오류: 누구 쪽 문제인지와 할 일을 먼저 적고, Ollama의 원문은 뒤에 붙인다 */
+function serverError(status: number, message: string): EngineError {
+  const raw = `(Ollama 오류 ${status}: ${message.slice(0, 500)})`
+  if (status >= 500) return new EngineError('llm', `Ollama 프로그램에서 오류가 났어요. Ollama를 다시 켜 보고, 그래도 안 되면 다시 설치해 주세요. ${raw}`)
+  return new EngineError('llm', `Ollama가 요청을 받아들이지 않았어요. 설정 > 고급 > 로컬 LLM의 모델과 요청 옵션을 확인해 주세요. ${raw}`)
+}
+
 async function get(base: string, path: string, init?: RequestInit): Promise<Response> {
   let resp: Response
   try {
@@ -76,7 +83,7 @@ async function get(base: string, path: string, init?: RequestInit): Promise<Resp
   } catch (e) {
     throw connectError(e)
   }
-  if (resp.status !== 200) throw new EngineError('llm', `Ollama 오류 (${resp.status}): ${(await errorText(resp)).slice(0, 300)}`)
+  if (resp.status !== 200) throw serverError(resp.status, await errorText(resp))
   return resp
 }
 
@@ -175,14 +182,14 @@ export async function chat(endpoint: string, model: string, messages: Message[],
         }
         if (resp.status === 404) throw new EngineError('input', `Ollama에 ${model} 모델이 없어요. 설정 > 고급 > 로컬 LLM에서 모델을 다시 골라 주세요.`)
         if (/memory|allocate|VRAM/i.test(message)) throw new EngineError('llm', `Ollama가 모델을 올리지 못했어요(메모리 부족). num_ctx를 줄이거나 더 작은 모델을 골라 주세요: ${message.slice(0, 300)}`)
-        throw new EngineError('llm', `Ollama 오류 (${resp.status}): ${message.slice(0, 500)}`)
+        throw serverError(resp.status, message)
       }
       let content = ''
       let last: Line = {}
       const handle = (line: string): void => {
         if (!line) return
         const chunk = JSON.parse(line) as Line
-        if (chunk.error) throw new EngineError('llm', `Ollama 오류: ${chunk.error.slice(0, 500)}`)
+        if (chunk.error) throw new EngineError('llm', `Ollama가 답을 만들다가 오류를 냈어요. Ollama를 다시 켜고 다시 시도해 주세요. (Ollama 오류: ${chunk.error.slice(0, 500)})`)
         content += chunk.message?.content ?? ''
         if (chunk.done) last = chunk
       }

@@ -269,7 +269,9 @@ function logJobs(jobs: JobView[]): void {
   for (const j of jobs) {
     if (prev.get(j.id) === j.status) continue
     const why = j.status === 'failed' && j.error ? ` · ${j.error.stage} · [${j.error.code}] ${j.error.message}` : ''
-    log.write(`작업 ${STATUS_WORD[j.status]}: ${j.name}${why}`)
+    // 다듬기가 오류 없이 원문으로 돌아간 조각이 있으면 남긴다 (모델이 문단 수나 길이를 못 맞춘 것)
+    const polish = j.status === 'done' && j.polish?.fallbackChunks ? ` · 다듬기 ${j.polish.chunks}조각 중 ${j.polish.fallbackChunks}조각은 원문 그대로` : ''
+    log.write(`작업 ${STATUS_WORD[j.status]}: ${j.name}${why}${polish}`)
   }
 }
 
