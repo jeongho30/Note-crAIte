@@ -13,7 +13,7 @@ import { DEFAULT_BEAM_SIZE, DEFAULT_MODEL, jobsDir, listJobs, STT_MODEL_CHOICES,
 import type { LlmSettings } from '../core/job.ts'
 import { MODELS } from '../core/models.ts'
 import { defaultDataDir, findFfmpeg, findWhisperCli } from '../core/paths.ts'
-import { estimateJobSeconds, estimateSttSeconds, sttSpeed, testSample } from '../core/probe.ts'
+import { estimateJobSeconds, estimateSttSeconds, polishRate, sttSpeed, testSample } from '../core/probe.ts'
 import type { ProbeResult } from '../core/probe.ts'
 import { DEFAULT_STEP_MODEL, estimateCredits90, estimateStepCredits90, POLISH_RECOMMENDED, RANKED, RECOMMENDED_COUNT } from '../core/llmcatalog.ts'
 import type { ModelItem } from '../core/llmcatalog.ts'
@@ -384,7 +384,9 @@ async function prepare(paths: string[]): Promise<Prepared> {
   const [probe, settings, per90, stt, steps] = await Promise.all([loadProbe(), loadSettings(dataDir), jobCredits90(), sttService(), llmSteps()])
   const cloud = stt === 'chatkhu'
   // 이 PC에서 끝낸 작업이 있으면 그 실제 속도로 예상한다
-  const speed = probe && !cloud ? sttSpeed(probe, await listJobs(dataDir), settings.sttArgs ? parseArgs(settings.sttArgs) : null) : null
+  const history = await listJobs(dataDir)
+  const speed = probe && !cloud ? sttSpeed(probe, history, settings.sttArgs ? parseArgs(settings.sttArgs) : null) : null
+  const polish = polishRate(history, steps.polish)
   const ffmpeg = findFfmpeg(binDir)
   const out: Prepared['recordings'] = []
   for (const r of recordings) {
@@ -401,7 +403,7 @@ async function prepare(paths: string[]): Promise<Prepared> {
         durationS: info.durationS,
         recordedAt,
         sttS: speed && info.durationS ? Math.round(estimateSttSeconds(info.durationS, speed)) : null,
-        totalS: speed && info.durationS ? Math.round(estimateJobSeconds(info.durationS, speed, steps.summary !== null)) : null,
+        totalS: speed && info.durationS ? Math.round(estimateJobSeconds(info.durationS, speed, steps.summary !== null, polish)) : null,
         credits: per90 !== null && info.durationS ? Math.max(1, Math.round((info.durationS / 5400) * per90)) : null,
         sttCredits: cloud && info.durationS ? chatkhuSttCredits(info.durationS) : null
       })

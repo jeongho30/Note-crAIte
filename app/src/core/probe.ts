@@ -210,7 +210,34 @@ export function estimateSttSeconds(durationS: number, p: SttSpeed): number {
 const PREP_S_PER_AUDIO_S = 1 / 1800
 const SUMMARY_S = 15
 
-/** 작업 하나의 예상 총 소요 시간(초): 오디오 준비 + 받아쓰기 + 요약(할 때만). */
-export function estimateJobSeconds(durationS: number, p: SttSpeed, withSummary: boolean): number {
-  return durationS * PREP_S_PER_AUDIO_S + estimateSttSeconds(durationS, p) + (withSummary ? SUMMARY_S : 0)
+// 전사문 다듬기에 걸리는 시간 ÷ 녹음 길이. 기록이 없을 때 쓰는 값 (10/3~4 데스크톱 실측):
+// 요약 서비스(luna, 4조각 동시)는 48분에 52초·64분에 53초, 로컬 LLM(gemma 12B, RX 9070 XT, 한 조각씩)은 48분에 72초·64분에 약 3분.
+// 로컬은 PC와 모델에 따라 크게 달라서 넉넉하게 잡고, 한 번 돌리고 나면 그 기록으로 바뀐다.
+const POLISH_RATE = { service: 0.02, local: 0.05 }
+
+/**
+ * 예상 시간에 쓸 전사문 다듬기 속도(걸린 시간 ÷ 녹음 길이). 다듬지 않으면 0.
+ * 같은 주소·모델로 끝낸 최근 작업들의 실제 값(중앙값)을 쓰고, 없으면 POLISH_RATE. 이어서 한 다듬기(resumed)는 뺀다.
+ */
+export function polishRate(jobs: Job[], target: { endpoint: string; model: string; ollama?: unknown } | null): number {
+  if (!target) return 0
+  const rates: number[] = []
+  for (const j of jobs) {
+    const st = j.stages?.polish
+    const used = j.settings.polishLlm
+    const durationS = j.audio?.durationS
+    if (!st || st.status !== 'done' || st.resumed || !st.startedAt || !st.endedAt || !used) continue
+    if (!durationS || durationS < HISTORY_MIN_S || used.endpoint !== target.endpoint || used.model !== target.model) continue
+    const tookS = (Date.parse(st.endedAt) - Date.parse(st.startedAt)) / 1000
+    if (tookS > 0) rates.push(tookS / durationS)
+  }
+  if (!rates.length) return target.ollama ? POLISH_RATE.local : POLISH_RATE.service
+  const recent = rates.slice(-HISTORY_JOBS).sort((a, b) => a - b)
+  const mid = recent.length >> 1
+  return recent.length % 2 ? recent[mid] : (recent[mid - 1] + recent[mid]) / 2
+}
+
+/** 작업 하나의 예상 총 소요 시간(초): 오디오 준비 + 받아쓰기 + 다듬기(할 때만, polish는 polishRate()로 얻는다) + 요약(할 때만). */
+export function estimateJobSeconds(durationS: number, p: SttSpeed, withSummary: boolean, polish = 0): number {
+  return durationS * PREP_S_PER_AUDIO_S + estimateSttSeconds(durationS, p) + durationS * polish + (withSummary ? SUMMARY_S : 0)
 }

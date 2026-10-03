@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { EngineError } from '../src/core/errors.ts'
 import type { Job } from '../src/core/job.ts'
-import { choose, estimateJobSeconds, estimateSttSeconds, parseTimings, parseVulkanDevices, sttSpeed } from '../src/core/probe.ts'
+import { choose, estimateJobSeconds, estimateSttSeconds, parseTimings, parseVulkanDevices, polishRate, sttSpeed } from '../src/core/probe.ts'
 import type { ProbeResult } from '../src/core/probe.ts'
 import type { Trial } from '../src/core/probe.ts'
 
@@ -52,6 +52,22 @@ test('estimateJobSeconds는 받아쓰기에 오디오 준비와 요약(할 때�
   const stt = estimateSttSeconds(5400, p)
   assert.equal(estimateJobSeconds(5400, p, false), stt + 3) // 90분 오디오 준비 3초
   assert.equal(estimateJobSeconds(5400, p, true), stt + 3 + 15)
+  // 전사문 다듬기를 하면 그 시간도 더한다 (녹음 길이 × 다듬기 속도)
+  assert.equal(estimateJobSeconds(5400, p, true, 0.05), stt + 3 + 270 + 15)
+})
+
+test('polishRate는 같은 주소·모델로 끝낸 다듬기 기록의 중앙값을 쓰고, 없으면 로컬·서비스 기본값을 쓴다', () => {
+  const local = { endpoint: 'http://127.0.0.1:11434/api/chat', model: 'gemma', ollama: {} }
+  const service = { endpoint: 'https://x/chat', model: 'gpt-6-luna' }
+  const job = (target: object, durationS: number, tookS: number, extra: object = {}): never =>
+    ({ settings: { polishLlm: target }, audio: { durationS }, stages: { polish: { status: 'done', startedAt: '2026-10-04T00:00:00Z', endedAt: new Date(Date.parse('2026-10-04T00:00:00Z') + tookS * 1000).toISOString(), ...extra } } }) as never
+  assert.equal(polishRate([], null), 0)
+  assert.equal(polishRate([], local), 0.05)
+  assert.equal(polishRate([], service), 0.02)
+  const jobs = [job(local, 3000, 90), job(local, 3000, 150), job(local, 3000, 120), job(service, 3000, 30), job(local, 3000, 5, { resumed: true }), job(local, 100, 50)]
+  assert.equal(polishRate(jobs, local), 0.04) // 90·120·150초의 중앙값 ÷ 3000. 이어서 한 것과 5분보다 짧은 녹음은 뺀다
+  assert.equal(polishRate(jobs, service), 0.01)
+  assert.equal(polishRate(jobs, { ...local, model: '다른 모델' }), 0.05)
 })
 
 test('sttSpeed는 같은 설정으로 끝낸 작업의 실제 속도를 쓰고, 없으면 잰 속도를 낮춰 쓴다', () => {
