@@ -10,8 +10,8 @@ type Props = {
   children?: ReactNode
   /** 오른쪽 아래 버튼들. 주 버튼을 마지막에 둔다 */
   actions?: ReactNode
-  /** lg: 목록·입력이 여럿인 확인 창 (예: 시작 전 확인) */
-  size?: 'md' | 'lg'
+  /** lg: 목록·입력이 여럿인 확인 창, xl: 두 단으로 나눈 창 (시작 전 확인) */
+  size?: 'md' | 'lg' | 'xl'
 }
 
 // 기본 <dialog>의 showModal()을 쓴다: 초점 가두기, Esc, 뒤 가림막을 브라우저가 처리한다.
@@ -28,7 +28,7 @@ export function Dialog({ open, onClose, title, children, actions, size = 'md' }:
   }, [open])
 
   return (
-    <dialog ref={ref} className={cx(styles.dialog, size === 'lg' && styles.lg)} aria-labelledby={titleId} onClose={onClose}>
+    <dialog ref={ref} className={cx(styles.dialog, size !== 'md' && styles.lg, size === 'xl' && styles.xl)} aria-labelledby={titleId} onClose={onClose}>
       <h2 id={titleId} className={styles.title}>
         {title}
       </h2>

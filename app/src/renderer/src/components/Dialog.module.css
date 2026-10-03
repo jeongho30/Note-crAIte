@@ -15,6 +15,10 @@
   overflow: hidden;
 }
 
+.xl {
+  width: min(720px, calc(100vw - 2 * var(--space-6)));
+}
+
 /* 제목과 버튼 줄은 두고 본문만 스크롤 */
 .lg .body {
   flex: 1;

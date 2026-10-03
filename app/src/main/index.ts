@@ -678,6 +678,13 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
     return r.canceled ? [] : r.filePaths
   },
+  // 시작 전 확인에서 녹음 하나에 붙일 필기를 고른다
+  'inputs.pickNotes': async () => {
+    const win = BrowserWindow.getFocusedWindow()
+    const opts = { properties: ['openFile'] as 'openFile'[], filters: [{ name: '필기', extensions: NOTE_EXTS }] }
+    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    return r.canceled || !r.filePaths[0] ? null : { path: r.filePaths[0], name: basename(r.filePaths[0]) }
+  },
   'inputs.prepare': (p) => prepare((p as unknown[]).map(String)),
   // 시작 전 확인에서 파일을 더 넣을 때: 이미 목록에 있는 녹음의 필기는 그 녹음에 붙이고, 나머지만 새로 확인한다
   'inputs.attach': (p) => {

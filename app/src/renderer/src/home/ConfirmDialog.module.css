@@ -7,96 +7,287 @@
 .muted {
   color: var(--color-text-3);
   font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-regular);
   font-variant-numeric: tabular-nums;
+}
+
+/* 왼쪽: 미분류 칸·파일 추가(끄는 동안에는 빼는 칸), 오른쪽: 과목 칸들 */
+.cols {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  align-items: start;
+  gap: var(--space-4);
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* 과목 칸이 길어 스크롤해도 미분류 칸과 빼는 칸은 보이는 곳에 남는다 */
+.left {
+  position: sticky;
+  top: 0;
+}
+
+.zone {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+
+.zoneOver {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.zoneHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-h-md);
+}
+
+.zoneName {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: 0 var(--space-1);
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+}
+
+.zoneTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 과목 칸의 이름은 누르면 과목을 바꾸는 버튼 */
+.zonePick {
+  height: var(--control-h-md);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  text-align: left;
+  cursor: pointer;
+}
+
+.zonePick:hover:not(:disabled) {
+  background: var(--color-surface-2);
+}
+
+.zonePick svg {
+  flex: none;
+  color: var(--color-text-3);
+}
+
+.zoneClose {
+  display: inline-flex;
+  flex: none;
+  padding: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-3);
+  cursor: pointer;
+}
+
+.zoneClose:hover {
+  background: var(--color-surface-2);
+  color: var(--color-text);
 }
 
 .files {
   display: flex;
   flex-direction: column;
+  gap: var(--space-1);
   margin: 0;
   padding: 0;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
   list-style: none;
 }
 
 .file {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: var(--space-2);
-  padding: var(--space-3);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  cursor: grab;
 }
 
-.file + .file {
-  border-top: 1px solid var(--color-border);
-}
-
-.fileHead {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-}
-
-.fileMain {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
+.fileDragging {
+  border-style: dashed;
+  color: var(--color-text-3);
 }
 
 .fileName {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
-  font-weight: var(--font-weight-semibold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.notesLine {
+/* 끌 수 있다는 표시: 점 여섯 개 */
+.grip {
+  flex: none;
+  width: 2px;
+  height: 2px;
+  margin: 0 var(--space-1) 0 2px;
+  border-radius: 50%;
+  background: var(--color-text-3);
+  box-shadow:
+    4px 0 var(--color-text-3),
+    0 -4px var(--color-text-3),
+    4px -4px var(--color-text-3),
+    0 4px var(--color-text-3),
+    4px 4px var(--color-text-3);
+}
+
+/* 필기 아이콘: 보이는 크기는 작게, 누르는 영역은 줄 높이만큼 */
+.notes {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  margin: calc(-1 * var(--space-1));
+  padding: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-3);
+  font-size: var(--font-size-md);
+  cursor: pointer;
+}
+
+.notes:hover:not(:disabled) {
+  color: var(--color-text);
+}
+
+.notesOn,
+.notesOn:hover:not(:disabled) {
+  color: var(--color-primary);
+}
+
+.empty {
+  margin: 0;
+  padding: var(--space-2);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-3);
+  font-size: var(--font-size-sm);
+  text-align: center;
+}
+
+/* 녹음 빼기: 녹음을 끄는 동안에만 파일 추가 자리에 나타난다 */
+.trash {
   display: flex;
-  align-items: baseline;
-  gap: var(--space-3); /* 파일 줄(.fileHead)과 같은 간격: 아이콘 칸 다음에 글자가 시작한다 */
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1.5px dashed var(--color-danger);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
   font-size: var(--font-size-sm);
 }
 
-.picker {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: var(--space-3) var(--space-4);
+.trashOver {
+  border-style: solid;
 }
 
-/* 새 과목 이름 칸은 과목 칸 아래 한 줄을 다 쓴다 */
-.picker > :nth-child(2):not(.lang) {
-  grid-column: 1;
-  grid-row: 2;
-}
-
-.lang {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  grid-column: 2;
-  grid-row: 1;
-}
-
-.langLabel {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-}
-
-.group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.groupLabel {
+.undo {
+  margin: 0;
   color: var(--color-text-2);
   font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
 }
 
+/* 과목 고르기 메뉴 (popover). 누른 버튼 바로 아래에 뜨고, 자리가 없으면 위로 뒤집는다 */
+.menu {
+  position: fixed;
+  inset: auto;
+  top: calc(anchor(bottom) + var(--space-1));
+  left: anchor(left);
+  position-try-fallbacks: flip-block;
+  flex-direction: column;
+  min-width: 200px;
+  max-width: 280px;
+  margin: 0;
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-1);
+  color: var(--color-text);
+}
+
+.menu:popover-open {
+  display: flex;
+}
+
+.menuItem {
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.menuItem:hover,
+.menuItem:focus-visible {
+  background: var(--color-surface-2);
+}
+
+.menuNew {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-1);
+}
+
+.menuInput {
+  flex: 1;
+  min-width: 0;
+  height: var(--control-h-sm);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+}
+
+.menuError {
+  margin: 0;
+  padding: 0 var(--space-2) var(--space-1);
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+}
+
+/* 과목 칸이 길어 스크롤해도 예상 시간은 맨 아래에 남는다 */
 .summary {
+  position: sticky;
+  bottom: 0;
+  /* 아래로 비치는 목록을 가린다 */
+  box-shadow: 0 var(--space-2) 0 var(--color-surface);
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
   gap: var(--space-1) var(--space-4);
@@ -120,48 +311,13 @@
   font-weight: var(--font-weight-semibold);
 }
 
-/* 녹음 빼기: 빨간 동그라미 안의 빼기(−) */
-.remove {
-  position: relative;
-  flex: none;
-  width: 20px;
-  height: 20px;
-  margin-top: 1px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: var(--color-danger);
-  cursor: pointer;
-}
-
-.remove::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 10px;
-  height: 2px;
-  border-radius: 1px;
-  background: var(--color-on-danger);
-  transform: translate(-50%, -50%);
-}
-
-.remove:hover:not(:disabled) {
-  filter: brightness(1.1);
-}
-
-.remove:disabled {
-  cursor: default;
-  opacity: 0.5;
-}
-
-/* 녹음 추가: 점선 테두리 칸 안의 더하기(+) */
+/* 파일 추가·과목 추가: 점선 테두리 칸 안의 더하기(+) */
 .add {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  padding: var(--space-3);
+  padding: var(--space-2);
   border: 1.5px dashed var(--color-border-strong);
   border-radius: var(--radius-md);
   background: none;
@@ -205,23 +361,4 @@
 .plus::after {
   width: 2px;
   height: 12px;
-}
-
-/* 필기 줄의 아이콘 자리(20px): 뺀 상태에서도 글자 시작이 위 파일 이름과 맞는다 */
-.iconSpace {
-  flex: none;
-  width: 20px;
-}
-
-/* 필기 빼기: 필기 파일 이름(13px)에 맞춘 작은 크기 */
-.removeSm {
-  width: 14px;
-  height: 14px;
-  margin-top: 0;
-  margin-inline: 3px; /* 위 녹음 아이콘(20px) 칸과 가운데 축을 맞춘다: (20 − 14) / 2 */
-  align-self: center;
-}
-
-.removeSm::before {
-  width: 8px;
 }
