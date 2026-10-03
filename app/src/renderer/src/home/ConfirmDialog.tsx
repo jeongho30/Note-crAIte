@@ -182,7 +182,9 @@ export function ConfirmDialog({ paths, llm, onClose }: Props): React.JSX.Element
 
   useEffect(() => {
     Promise.all([call<Prepared>('inputs.prepare', paths), call<Subjects>('subjects.get')]).then(
-      ([p, s]) => {
+      ([p, got]) => {
+        // 저장 폴더의 "미분류" 폴더는 과목이 아니다 (왼쪽의 미분류 칸이 그 폴더다)
+        const s = { ...got, subjects: got.subjects.filter((name) => name !== NONE_NAME) }
         const subject = s.lastSubject && s.subjects.includes(s.lastSubject) ? s.lastSubject : (s.subjects[0] ?? null)
         const first: Zone[] = subject ? [{ id: nextId.current++, subject, language: s.subjectLanguage[subject] ?? 'ko' }] : []
         const home = first[0]?.id ?? NONE_ID
