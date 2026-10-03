@@ -206,9 +206,36 @@ export function estimateSttSeconds(durationS: number, p: SttSpeed): number {
   return durationS * p.rtf + Math.ceil(durationS / 600) * p.loadS
 }
 
-// 받아쓰기 밖의 단계 (데스크톱 63분 강의 실측, 9/29): 오디오 준비 1.2~1.4초, 요약 5.6~11.4초. 넉넉하게 잡는다.
+// 받아쓰기 밖의 단계 (데스크톱 63분 강의 실측, 9/29): 오디오 준비 1.2~1.4초. 넉넉하게 잡는다.
 const PREP_S_PER_AUDIO_S = 1 / 1800
-const SUMMARY_S = 15
+// 요약에 걸리는 시간(초). 기록이 없을 때 쓰는 값: 요약 서비스(luna)는 주제별 틀(10/2)부터 48~167분 강의에 16~30초로 길이와 거의 상관없다.
+// 로컬 LLM은 PC와 모델에 따라 크게 달라서 넉넉하게 잡는다 (gemma 12B, RX 9070 XT: 90분 분량 22초).
+const SUMMARY_S = { service: 25, local: 90 }
+
+type LlmTarget = { endpoint: string; model: string; ollama?: unknown }
+const median = (xs: number[]): number => {
+  const recent = xs.slice(-HISTORY_JOBS).sort((a, b) => a - b)
+  const mid = recent.length >> 1
+  return recent.length % 2 ? recent[mid] : (recent[mid - 1] + recent[mid]) / 2
+}
+
+/**
+ * 예상 시간에 쓸 요약 시간(초). 요약하지 않으면 0.
+ * 같은 주소·모델로 끝낸 최근 요약들의 실제 시간(중앙값)을 쓰고, 없으면 SUMMARY_S. 요약은 길이와 거의 상관없어 비율이 아니라 시간으로 본다.
+ */
+export function summarySeconds(jobs: Job[], target: LlmTarget | null): number {
+  if (!target) return 0
+  const times: number[] = []
+  for (const j of jobs) {
+    const st = j.stages?.summarize
+    const used = j.settings.llm
+    if (!st || st.status !== 'done' || st.resumed || !st.startedAt || !st.endedAt || !used) continue
+    if (used.endpoint !== target.endpoint || used.model !== target.model) continue
+    const tookS = (Date.parse(st.endedAt) - Date.parse(st.startedAt)) / 1000
+    if (tookS > 0) times.push(tookS)
+  }
+  return times.length ? median(times) : target.ollama ? SUMMARY_S.local : SUMMARY_S.service
+}
 
 // 전사문 다듬기에 걸리는 시간 ÷ 녹음 길이. 기록이 없을 때 쓰는 값 (10/3~4 데스크톱 실측):
 // 요약 서비스(luna, 4조각 동시)는 48분에 52초·64분에 53초, 로컬 LLM(gemma 12B, RX 9070 XT, 한 조각씩)은 48분에 72초·64분에 약 3분.
@@ -219,7 +246,7 @@ const POLISH_RATE = { service: 0.02, local: 0.05 }
  * 예상 시간에 쓸 전사문 다듬기 속도(걸린 시간 ÷ 녹음 길이). 다듬지 않으면 0.
  * 같은 주소·모델로 끝낸 최근 작업들의 실제 값(중앙값)을 쓰고, 없으면 POLISH_RATE. 이어서 한 다듬기(resumed)는 뺀다.
  */
-export function polishRate(jobs: Job[], target: { endpoint: string; model: string; ollama?: unknown } | null): number {
+export function polishRate(jobs: Job[], target: LlmTarget | null): number {
   if (!target) return 0
   const rates: number[] = []
   for (const j of jobs) {
@@ -231,13 +258,13 @@ export function polishRate(jobs: Job[], target: { endpoint: string; model: strin
     const tookS = (Date.parse(st.endedAt) - Date.parse(st.startedAt)) / 1000
     if (tookS > 0) rates.push(tookS / durationS)
   }
-  if (!rates.length) return target.ollama ? POLISH_RATE.local : POLISH_RATE.service
-  const recent = rates.slice(-HISTORY_JOBS).sort((a, b) => a - b)
-  const mid = recent.length >> 1
-  return recent.length % 2 ? recent[mid] : (recent[mid - 1] + recent[mid]) / 2
+  return rates.length ? median(rates) : target.ollama ? POLISH_RATE.local : POLISH_RATE.service
 }
 
-/** 작업 하나의 예상 총 소요 시간(초): 오디오 준비 + 받아쓰기 + 다듬기(할 때만, polish는 polishRate()로 얻는다) + 요약(할 때만). */
-export function estimateJobSeconds(durationS: number, p: SttSpeed, withSummary: boolean, polish = 0): number {
-  return durationS * PREP_S_PER_AUDIO_S + estimateSttSeconds(durationS, p) + durationS * polish + (withSummary ? SUMMARY_S : 0)
+/**
+ * 작업 하나의 예상 총 소요 시간(초): 오디오 준비 + 받아쓰기 + 다듬기 + 요약.
+ * summaryS는 summarySeconds(), polish는 polishRate()로 얻는다 (그 단계를 안 하면 0).
+ */
+export function estimateJobSeconds(durationS: number, p: SttSpeed, summaryS: number, polish = 0): number {
+  return durationS * PREP_S_PER_AUDIO_S + estimateSttSeconds(durationS, p) + durationS * polish + summaryS
 }

@@ -13,7 +13,7 @@ import { DEFAULT_BEAM_SIZE, DEFAULT_MODEL, jobsDir, listJobs, STT_MODEL_CHOICES,
 import type { LlmSettings } from '../core/job.ts'
 import { MODELS } from '../core/models.ts'
 import { defaultDataDir, findFfmpeg, findWhisperCli } from '../core/paths.ts'
-import { estimateJobSeconds, estimateSttSeconds, polishRate, sttSpeed, testSample } from '../core/probe.ts'
+import { estimateJobSeconds, estimateSttSeconds, polishRate, sttSpeed, summarySeconds, testSample } from '../core/probe.ts'
 import type { ProbeResult } from '../core/probe.ts'
 import { DEFAULT_STEP_MODEL, estimateCredits90, estimateStepCredits90, POLISH_RECOMMENDED, RANKED, RECOMMENDED_COUNT } from '../core/llmcatalog.ts'
 import type { ModelItem } from '../core/llmcatalog.ts'
@@ -387,6 +387,7 @@ async function prepare(paths: string[]): Promise<Prepared> {
   const history = await listJobs(dataDir)
   const speed = probe && !cloud ? sttSpeed(probe, history, settings.sttArgs ? parseArgs(settings.sttArgs) : null) : null
   const polish = polishRate(history, steps.polish)
+  const summaryS = summarySeconds(history, steps.summary)
   const ffmpeg = findFfmpeg(binDir)
   const out: Prepared['recordings'] = []
   for (const r of recordings) {
@@ -403,7 +404,7 @@ async function prepare(paths: string[]): Promise<Prepared> {
         durationS: info.durationS,
         recordedAt,
         sttS: speed && info.durationS ? Math.round(estimateSttSeconds(info.durationS, speed)) : null,
-        totalS: speed && info.durationS ? Math.round(estimateJobSeconds(info.durationS, speed, steps.summary !== null, polish)) : null,
+        totalS: speed && info.durationS ? Math.round(estimateJobSeconds(info.durationS, speed, summaryS, polish)) : null,
         credits: per90 !== null && info.durationS ? Math.max(1, Math.round((info.durationS / 5400) * per90)) : null,
         sttCredits: cloud && info.durationS ? chatkhuSttCredits(info.durationS) : null
       })

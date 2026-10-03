@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { EngineError } from '../src/core/errors.ts'
 import type { Job } from '../src/core/job.ts'
-import { choose, estimateJobSeconds, estimateSttSeconds, parseTimings, parseVulkanDevices, polishRate, sttSpeed } from '../src/core/probe.ts'
+import { choose, estimateJobSeconds, estimateSttSeconds, parseTimings, parseVulkanDevices, polishRate, sttSpeed, summarySeconds } from '../src/core/probe.ts'
 import type { ProbeResult } from '../src/core/probe.ts'
 import type { Trial } from '../src/core/probe.ts'
 
@@ -50,10 +50,10 @@ test('estimateSttSeconds는 처리 속도에 조각마다 모델 로드를 더�
 test('estimateJobSeconds는 받아쓰기에 오디오 준비와 요약(할 때만)을 더한다', () => {
   const p = { rtf: 0.3, loadS: 2 }
   const stt = estimateSttSeconds(5400, p)
-  assert.equal(estimateJobSeconds(5400, p, false), stt + 3) // 90분 오디오 준비 3초
-  assert.equal(estimateJobSeconds(5400, p, true), stt + 3 + 15)
+  assert.equal(estimateJobSeconds(5400, p, 0), stt + 3) // 90분 오디오 준비 3초
+  assert.equal(estimateJobSeconds(5400, p, 25), stt + 3 + 25)
   // 전사문 다듬기를 하면 그 시간도 더한다 (녹음 길이 × 다듬기 속도)
-  assert.equal(estimateJobSeconds(5400, p, true, 0.05), stt + 3 + 270 + 15)
+  assert.equal(estimateJobSeconds(5400, p, 25, 0.05), stt + 3 + 270 + 25)
 })
 
 test('polishRate는 같은 주소·모델로 끝낸 다듬기 기록의 중앙값을 쓰고, 없으면 로컬·서비스 기본값을 쓴다', () => {
@@ -68,6 +68,19 @@ test('polishRate는 같은 주소·모델로 끝낸 다듬기 기록의 중앙�
   assert.equal(polishRate(jobs, local), 0.04) // 90·120·150초의 중앙값 ÷ 3000. 이어서 한 것과 5분보다 짧은 녹음은 뺀다
   assert.equal(polishRate(jobs, service), 0.01)
   assert.equal(polishRate(jobs, { ...local, model: '다른 모델' }), 0.05)
+})
+
+test('summarySeconds는 같은 주소·모델로 끝낸 요약 시간의 중앙값을 쓰고, 없으면 로컬·서비스 기본값을 쓴다', () => {
+  const local = { endpoint: 'http://127.0.0.1:11434/api/chat', model: 'gemma', ollama: {} }
+  const service = { endpoint: 'https://x/chat', model: 'gpt-6-luna' }
+  const job = (target: object, tookS: number, extra: object = {}): never =>
+    ({ settings: { llm: target }, stages: { summarize: { status: 'done', startedAt: '2026-10-04T00:00:00Z', endedAt: new Date(Date.parse('2026-10-04T00:00:00Z') + tookS * 1000).toISOString(), ...extra } } }) as never
+  assert.equal(summarySeconds([], null), 0)
+  assert.equal(summarySeconds([], service), 25)
+  assert.equal(summarySeconds([], local), 90)
+  const jobs = [job(service, 16), job(service, 30), job(service, 24), job(local, 200), job(service, 500, { resumed: true })]
+  assert.equal(summarySeconds(jobs, service), 24) // 이어서 한 요약은 뺀다
+  assert.equal(summarySeconds(jobs, local), 200)
 })
 
 test('sttSpeed는 같은 설정으로 끝낸 작업의 실제 속도를 쓰고, 없으면 잰 속도를 낮춰 쓴다', () => {
