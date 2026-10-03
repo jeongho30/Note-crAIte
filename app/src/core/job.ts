@@ -384,7 +384,7 @@ const RUNNERS: Record<StageName, Runner> = {
     const markdown = await readFile(join(jobDir, 'note.md'), 'utf8')
     const title = /^# (.*)$/m.exec(markdown)?.[1] ?? stem(job.input.audio)
     job.output = {
-      notePath: await saveNote(job.settings.outDir, job.input.subject, localDate(job.audio!.recordedAt), title, markdown,
+      notePath: await saveNote(job.settings.outDir, job.input.subject, job.edits?.date ?? localDate(job.audio!.recordedAt), title, markdown,
                                job.output?.notePath)
     }
     return 'done'

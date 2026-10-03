@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -60,8 +61,17 @@ test('saveNote는 과목 폴더에 쓰고, 이름이 겹치면 번호를 붙이�
   const second = await saveNote(out, '자료구조', '2026-10-05', '이진 탐색 트리', 'B')
   assert.equal(first, join(out, '자료구조', '2026-10-05 이진 탐색 트리.md'))
   assert.equal(second, join(out, '자료구조', '2026-10-05 이진 탐색 트리 (2).md'))
-  assert.equal(await saveNote(out, '자료구조', '2026-10-05', '다른 제목', 'C', first), first)
-  assert.equal(await readFile(first, 'utf8'), 'C')
+  // 이전 경로가 있고 날짜·제목이 그대로면 그 파일에 덮어쓴다 (" (2)"가 붙은 파일도 같은 이름으로 본다)
+  assert.equal(await saveNote(out, '자료구조', '2026-10-05', '이진 탐색 트리', 'C', second), second)
+  assert.equal(await readFile(second, 'utf8'), 'C')
+  // 제목이 바뀌면 같은 폴더에 새 이름으로 쓰고 옛 파일은 지운다 (과목 폴더를 옮겨 둔 노트는 옮긴 폴더에 남는다)
+  const renamed = await saveNote(out, '다른 과목', '2026-10-05', '다른 제목', 'D', second)
+  assert.equal(renamed, join(out, '자료구조', '2026-10-05 다른 제목.md'))
+  assert.equal(await readFile(renamed, 'utf8'), 'D')
+  assert.equal(existsSync(second), false)
+  // 새 이름이 이미 있으면 번호를 붙인다
+  assert.equal(await saveNote(out, '자료구조', '2026-10-05', '이진 탐색 트리', 'E', renamed), second)
+  assert.equal(await readFile(first, 'utf8'), 'A')
   assert.equal(await saveNote(out, null, '2026-10-06', '특강', 'D'), join(out, '미분류', '2026-10-06 특강.md'))
 })
 

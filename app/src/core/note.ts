@@ -1,8 +1,8 @@
 // 노트 마크다운을 만들고 저장 폴더에 쓴다. 기존 파이프라인 generate_note()의 템플릿을 artifact의 노트 구성으로 바꾼 것이다.
 // 접는 부분은 <details> 대신 옵시디언 callout(> [!quote]-)으로 쓴다: 옵시디언은 <details> 안의 마크다운을 처리하지 않는다.
 import { existsSync } from 'node:fs'
-import { mkdir, rename, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
+import { basename, dirname, join } from 'node:path'
 import type { Paragraph } from './clean.ts'
 import type { AppliedCorrection } from './corrections.ts'
 
@@ -85,21 +85,24 @@ export function safeName(name: string, max = 80): string {
 
 /**
  * <outDir>/<과목|미분류>/<날짜> <제목>.md에 쓴다. 이름이 겹치면 " (2)"를 붙인다.
- * existing(이전에 저장한 경로)이 있으면 그 파일에 덮어쓴다 (요약만 다시 만들기).
+ * existing(이전에 저장한 경로)이 있으면 그 파일이 있던 폴더에 쓴다 (요약만 다시 만들기): 날짜와 제목이 그대로면 그 파일에 덮어쓰고,
+ * 제목이 바뀌었으면 새 이름으로 쓴 뒤 옛 파일을 지운다 (파일 이름과 안의 제목이 어긋나지 않게).
  * 임시 파일에 쓴 뒤 바꿔 끼워 옵시디언 동기화가 쓰다 만 파일을 가져가지 않게 한다.
  */
 export async function saveNote(outDir: string, subject: string | null, date: string, title: string,
                                markdown: string, existing?: string): Promise<string> {
-  let path = existing
-  if (!path) {
-    const dir = join(outDir, safeName(subject || '미분류'))
+  const base = `${date} ${safeName(title)}`
+  const dir = existing ? dirname(existing) : join(outDir, safeName(subject || '미분류'))
+  // 이름이 겹쳐 붙인 " (2)"는 같은 이름으로 본다
+  const sameName = existing !== undefined && basename(existing).replace(/( \(\d+\))?\.md$/i, '') === base
+  let path = sameName ? existing : join(dir, `${base}.md`)
+  if (!sameName) {
     await mkdir(dir, { recursive: true })
-    const base = `${date} ${safeName(title)}`
-    path = join(dir, `${base}.md`)
     for (let i = 2; existsSync(path); i++) path = join(dir, `${base} (${i}).md`)
   }
   const tmp = path + '.tmp'
   await writeFile(tmp, markdown, 'utf8')
   await rename(tmp, path)
+  if (existing && !sameName) await rm(existing, { force: true })
   return path
 }

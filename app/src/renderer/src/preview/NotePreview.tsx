@@ -90,9 +90,13 @@ export function NotePreview({ path, jobs, llm, onBack, onConnect, onMoved, onDel
   const working = job !== null && isActive(job)
   const wasWorking = useRef(false)
   useEffect(() => {
-    if (wasWorking.current && !working && job?.status === 'done') load()
+    if (wasWorking.current && !working && job?.status === 'done') {
+      // 요약을 다시 만들어 제목이 바뀌면 파일 이름도 바뀐다
+      if (job.notePath && job.notePath !== path) onMoved(job.notePath)
+      else load()
+    }
     wasWorking.current = working
-  }, [working, job, load])
+  }, [working, job, load, path, onMoved])
 
   async function open(method: string): Promise<void> {
     try {
