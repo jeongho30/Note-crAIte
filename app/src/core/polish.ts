@@ -88,7 +88,7 @@ export async function polishParagraphs(paras: Paragraph[], notes: string, o: Pol
   const chunks = chunkParagraphs(paras)
   const requests = chunks.map((chunk, i) => {
     let system = POLISH_TRANSCRIPT
-    if (notes) system += `\n\n[필기노트 용어집]\n${notes}`
+    if (notes) system += `\n\n[필기노트]\n${notes}`
     if (i > 0) system += `\n\n[이전 청크 마지막 부분 - 참고용, 다시 출력하지 말 것]\n${chunks[i - 1].map((p) => p.text).join('\n\n').slice(-PREV_TAIL_CHARS)}`
     const user = chunk.map((p) => p.text).join('\n\n')
     return { system, user, key: createHash('sha256').update([o.endpoint, o.model, system, user].join('\0')).digest('hex') }
