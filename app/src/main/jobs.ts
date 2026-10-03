@@ -9,7 +9,7 @@ import { writeJsonAtomic } from '../core/files.ts'
 import { createJob, DEFAULT_BEAM_SIZE, jobsDir, listJobs, loadJob, polishTarget, runJob, STAGES } from '../core/job.ts'
 import type { Job, JobContext, LlmSettings, StageName, StageState } from '../core/job.ts'
 import { MODELS } from '../core/models.ts'
-import { estimateSttSeconds, sttSpeed } from '../core/probe.ts'
+import { estimateSttSeconds, polishRate, sttSpeed, summarySeconds } from '../core/probe.ts'
 import type { SttSpeed } from '../core/probe.ts'
 import type { ProbeResult } from '../core/probe.ts'
 import type { Language } from '../core/settings.ts'
@@ -26,7 +26,7 @@ export type JobView = {
   /** 지금 도는 단계와 그 단계의 진행률 (running일 때만) */
   stage: StageName | null
   frac: number
-  /** 받아쓰기가 끝날 때까지 남은 시간(초). 모르면 null */
+  /** 작업이 끝날 때까지 남은 시간(초): 받아쓰기의 남은 시간 + 다듬기·요약 예상 시간. 받아쓰기 중에만 있고, 모르면 null */
   etaS: number | null
   durationS: number | null
   /** queued일 때 무엇을 기다리는지 (recording: 앱에서 녹음하는 동안 받아쓰기를 멈춤) */
@@ -96,6 +96,7 @@ export function createJobRunner(d: Deps) {
   let lastEmit = 0
   let probeCache: ProbeResult | null = null
   let speed: SttSpeed | null = null // 지금 도는 작업의 예상 시간에 쓸 속도
+  let later = { polish: 0, summaryS: 0 } // 지금 도는 작업이 받아쓰기 뒤에 쓸 시간: 다듬기(녹음 길이에 곱하는 값)와 요약(초)
   let last: JobView[] = [] // 마지막으로 보낸 목록 (트레이·창 닫기 판단용)
   let loopDone: Promise<void> = Promise.resolve()
   let controller: AbortController | null = null
@@ -143,7 +144,8 @@ export function createJobRunner(d: Deps) {
       // 처음엔 이 PC에서 잰 속도로, 어느 정도 진행되면 실제 속도로 남은 시간을 계산한다
       if (live.frac >= 0.05) etaS = (elapsedS / live.frac) * (1 - live.frac)
       else if (speed && !cloudStt(job)) etaS = estimateSttSeconds(durationS, speed) - elapsedS
-      if (etaS !== null) etaS = Math.max(0, Math.round(etaS))
+      // 받아쓰기가 끝난 뒤의 다듬기·요약 예상 시간까지 더해 작업 전체의 남은 시간을 보인다
+      if (etaS !== null) etaS = Math.max(0, Math.round(Math.max(0, etaS) + durationS * later.polish + later.summaryS))
     }
     return {
       id: job.id,
@@ -229,7 +231,9 @@ export function createJobRunner(d: Deps) {
           }
           await writeJsonAtomic(join(jobDir, 'job.json'), job)
         }
-        speed = probeCache ? sttSpeed(probeCache, await listJobs(d.dataDir), job.settings.args ?? null) : null
+        const history = await listJobs(d.dataDir)
+        speed = probeCache ? sttSpeed(probeCache, history, job.settings.args ?? null) : null
+        later = { polish: polishRate(history, polishTarget(job.settings)), summaryS: summarySeconds(history, job.settings.llm ?? null) }
         if (stopping) break
         current = { id: job.id, stage: 'audio', frac: 0, stageStartedAt: Date.now(), cloud: cloudStt(job) }
         controller = new AbortController()
