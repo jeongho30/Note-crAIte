@@ -42,13 +42,14 @@ test('renderNote는 frontmatter를 이스케이프하고 접는 부분의 모든
   assert.match(md, /> \[!quote\]- 교정 내역 \(1건\)\n> - 팔싱 → 파싱 \(3회\)/)
 })
 
-test('태그처럼 보이는 꺾쇠는 글자로 남긴다 (옵시디언이 뒤를 HTML로 읽지 않게)', () => {
-  assert.equal(escapeTags('#include <iostream>이 뭐해? </div> <!-- -->'), '#include \\<iostream>이 뭐해? \\</div> \\<!-- -->')
+test('태그처럼 보이는 꺾쇠와 #낱말은 글자로 남긴다 (옵시디언이 HTML·태그로 읽지 않게)', () => {
+  assert.equal(escapeTags('#include <iostream>이 뭐해? </div> <!-- -->'), '\\#include \\<iostream>이 뭐해? \\</div> \\<!-- -->')
+  assert.equal(escapeTags('(#define) #2학기 #123 C#은 a#b # 제목 &#39; `#if`'), '(\\#define) \\#2학기 #123 C#은 a#b # 제목 &#39; `#if`', '낱말 앞의 #만')
   assert.equal(escapeTags('a < b, 3<5, `vector<int>`, $a<b$'), 'a < b, 3<5, `vector<int>`, $a<b$', '부등호·코드·수식은 그대로')
   const md = renderNote({ ...BASE, summary: '**<fstream>**: 파일 입출력', keywords: ['<iostream>'], transcript: ['#include <iostream> 뭐해?'] })
   assert.ok(md.includes('## 요약\n\n**\\<fstream>**'))
   assert.ok(md.includes('\n- \\<iostream>\n'))
-  assert.ok(md.includes('> #include \\<iostream> 뭐해?'))
+  assert.ok(md.includes('> \\#include \\<iostream> 뭐해?'))
 })
 
 test('요약이 없으면 요약·키워드 없이 전사만 담고, 교정이 없으면 교정 내역도 없다', () => {

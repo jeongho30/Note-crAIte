@@ -32,10 +32,12 @@ export function timestamp(ms: number): string {
 /**
  * 태그처럼 보이는 `<`를 글자로 남긴다 (`#include <iostream>` → `#include \<iostream>`).
  * 옵시디언은 닫히지 않은 태그 뒤를 전부 HTML로 읽어, 그 줄 뒤의 callout이 접히지 않고 본문으로 쏟아진다 (10/4).
+ * 낱말 앞의 `#`도 글자로 남긴다 (`#include` → `\#include`): 옵시디언이 본문의 `#낱말`을 태그로 만든다.
  * 코드(`…`)와 수식($…$) 안은 그대로 둔다.
  */
 export function escapeTags(text: string): string {
-  return text.split(/(`[^`\n]*`|\$[^$\n]*\$)/).map((part, i) => (i % 2 ? part : part.replace(/<(?=[A-Za-z/!?])/g, '\\<'))).join('')
+  return text.split(/(`[^`\n]*`|\$[^$\n]*\$)/).map((part, i) => (i % 2 ? part
+    : part.replace(/(?<!\\)<(?=[A-Za-z/!?])/g, '\\<').replace(/(?<![\p{L}\p{N}\\&])#(?=[\p{N}_/-]*\p{L})/gu, '\\#'))).join('')
 }
 
 function callout(title: string, lines: string[]): string {
