@@ -29,8 +29,17 @@ export function timestamp(ms: number): string {
   return h ? `${h}:${mmss}` : mmss
 }
 
+/**
+ * 태그처럼 보이는 `<`를 글자로 남긴다 (`#include <iostream>` → `#include \<iostream>`).
+ * 옵시디언은 닫히지 않은 태그 뒤를 전부 HTML로 읽어, 그 줄 뒤의 callout이 접히지 않고 본문으로 쏟아진다 (10/4).
+ * 코드(`…`)와 수식($…$) 안은 그대로 둔다.
+ */
+export function escapeTags(text: string): string {
+  return text.split(/(`[^`\n]*`|\$[^$\n]*\$)/).map((part, i) => (i % 2 ? part : part.replace(/<(?=[A-Za-z/!?])/g, '\\<'))).join('')
+}
+
 function callout(title: string, lines: string[]): string {
-  return [`> [!quote]- ${title}`, ...lines.map((l) => (l ? `> ${l}` : '>'))].join('\n')
+  return [`> [!quote]- ${title}`, ...lines.map((l) => (l ? `> ${escapeTags(l)}` : '>'))].join('\n')
 }
 
 /** 옵시디언 태그에는 공백·문장부호를 쓸 수 없다. */
@@ -57,8 +66,8 @@ export function renderNote(n: NoteInput): string {
 
   const parts = [frontmatter, `# ${title}`]
   if (n.summary !== null) {
-    parts.push(`## 요약\n\n${n.summary}`)
-    parts.push(`## 주요 키워드\n\n${n.keywords.length ? n.keywords.map((k) => `- ${k}`).join('\n') : '(없음)'}`)
+    parts.push(`## 요약\n\n${escapeTags(n.summary)}`)
+    parts.push(`## 주요 키워드\n\n${n.keywords.length ? n.keywords.map((k) => `- ${escapeTags(k)}`).join('\n') : '(없음)'}`)
   }
   // 전사문도 원문 정리본·교정 내역처럼 접어 둔다 (길어서 요약을 읽는 데 방해되지 않게)
   // 다듬은 전사문은 모델이 말하지 않은 내용을 넣거나 뺄 수 있어, 원문 정리본과 대조하라고 제목에 적는다
