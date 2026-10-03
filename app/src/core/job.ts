@@ -90,7 +90,7 @@ export type Job = {
   /** 다듬기·요약 호출의 토큰 수 (크레딧을 쓰지 않는 서비스는 이것만 보인다) */
   usage?: { polish?: TokenCount; summary?: TokenCount }
   /** 전사문 다듬기 조각 수와, 그중 검사에 걸려 원문을 그대로 쓴 조각 수 (10/3 전 작업에는 없다) */
-  polish?: { chunks: number; fallbackChunks: number }
+  polish?: { chunks: number; fallbackChunks: number; reasons?: string[] }
   output?: { notePath: string }
   /** 노트 목록에서 수정한 제목·날짜. 있으면 요약을 다시 만들어도 이 값을 쓴다 (과목은 input.subject를 고친다) */
   edits?: { title: string; date: string }
@@ -294,7 +294,7 @@ const RUNNERS: Record<StageName, Runner> = {
       resumeDir: join(jobDir, 'polish')
     }))
     job.usage = { ...job.usage, polish: tokenCount(r.inputTokens, r.outputTokens) }
-    job.polish = { chunks: r.chunks, fallbackChunks: r.fallbackChunks }
+    job.polish = { chunks: r.chunks, fallbackChunks: r.fallbackChunks, ...(r.fallbackReasons.length ? { reasons: r.fallbackReasons } : {}) }
     if (credited(llm)) job.cost = { ...job.cost, summaryCredits: job.cost?.summaryCredits ?? null, polishCredits: creditsFromTokens(model, r.inputTokens, r.outputTokens) }
     const file: PolishedFile = { model, paragraphs: r.paragraphs, fallbackChunks: r.fallbackChunks, chunks: r.chunks }
     await writeJsonAtomic(join(jobDir, 'polished.json'), file)

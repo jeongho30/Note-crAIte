@@ -48,13 +48,16 @@ export type PolishOptions = {
   /** 있으면 조각 결과를 이 폴더에 part_NNN.json으로 남기고, 다시 부르면 끝난 조각은 다시 보내지 않는다 (받아쓰기 조각과 같은 방식) */
   resumeDir?: string
 }
-/** 조각 하나의 결과. key는 주소·모델과 보낸 글의 해시라서, 모델·필기·전사가 바뀌면 다시 보낸다. texts가 null이면 검사에 걸려 원문을 쓴 조각 */
-type SavedChunk = { key: string; texts: string[] | null; inputTokens: number; outputTokens: number }
+/** 조각 하나의 결과. key는 주소·모델과 보낸 글의 해시라서, 모델·필기·전사가 바뀌면 다시 보낸다. texts가 null이면 검사에 걸려 원문을 쓴 조각이고,
+ * 그때는 왜 걸렸는지(reason)와 모델이 돌려준 글(rejected)을 함께 남긴다 (나중에 들여다볼 수 있게. 노트에는 쓰지 않는다) */
+type SavedChunk = { key: string; texts: string[] | null; inputTokens: number; outputTokens: number; reason?: string; rejected?: string }
 export type PolishResult = {
   paragraphs: Paragraph[]
   /** 검사에 걸려 원문을 쓴 조각 수 / 전체 조각 수 */
   fallbackChunks: number
   chunks: number
+  /** 원문을 쓴 조각마다의 이유 (예: "3번 조각: 문단 수 10 → 9") */
+  fallbackReasons: string[]
   inputTokens: number
   outputTokens: number
 }
@@ -79,9 +82,14 @@ export function chunkParagraphs(paras: Paragraph[]): Paragraph[][] {
 
 /** 다시 쓴 조각을 받아들일지: 문단 수가 같고 전체 길이가 크게 달라지지 않았을 때만 */
 export function acceptable(input: Paragraph[], output: string[]): boolean {
-  if (output.length !== input.length) return false
+  return rejectReason(input, output) === null
+}
+
+/** 다시 쓴 조각을 받아들이지 않는 이유. 받아들이면 null */
+export function rejectReason(input: Paragraph[], output: string[]): string | null {
+  if (output.length !== input.length) return `문단 수 ${input.length} → ${output.length}`
   const ratio = output.join('').length / Math.max(1, input.map((p) => p.text).join('').length)
-  return ratio >= MIN_RATIO && ratio <= MAX_RATIO
+  return ratio >= MIN_RATIO && ratio <= MAX_RATIO ? null : `길이 ${ratio.toFixed(2)}배`
 }
 
 export async function polishParagraphs(paras: Paragraph[], notes: string, o: PolishOptions): Promise<PolishResult> {
@@ -115,9 +123,11 @@ export async function polishParagraphs(paras: Paragraph[], notes: string, o: Pol
         { maxTokens: o.ollama ? 4096 : 16_000, service: o.service, ollama: o.ollama, signal: o.signal, unloadAfter: o.unloadAfter && at === pending.length - 1 },
         o.rateLimitWaitsMs)
       const parts = content.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean)
+      const reason = usage?.['done_reason'] === 'length' ? '출력이 상한에 걸려 끊김' : rejectReason(chunks[i], parts)
       saved[i] = {
         key: requests[i].key,
-        texts: usage?.['done_reason'] !== 'length' && acceptable(chunks[i], parts) ? parts : null,
+        texts: reason ? null : parts,
+        ...(reason ? { reason, rejected: content } : {}),
         inputTokens: typeof usage?.prompt_tokens === 'number' ? usage.prompt_tokens : 0,
         outputTokens: typeof usage?.completion_tokens === 'number' ? usage.completion_tokens : 0
       }
@@ -136,6 +146,7 @@ export async function polishParagraphs(paras: Paragraph[], notes: string, o: Pol
     paragraphs: chunks.flatMap((chunk, i) => (done[i].texts ? chunk.map((p, k) => ({ ...p, text: done[i].texts![k] })) : chunk)),
     fallbackChunks: done.filter((s) => !s.texts).length,
     chunks: chunks.length,
+    fallbackReasons: done.flatMap((s, i) => (s.texts ? [] : [`${i + 1}번 조각: ${s.reason ?? '이유 기록 없음'}`])),
     // 앞선 실행에서 쓴 토큰도 더한다 (그때도 과금됐다)
     inputTokens: done.reduce((n, s) => n + s.inputTokens, 0),
     outputTokens: done.reduce((n, s) => n + s.outputTokens, 0)

@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, mock, test } from 'node:test'
-import { acceptable, chunkParagraphs, polishParagraphs } from '../src/core/polish.ts'
+import { acceptable, chunkParagraphs, polishParagraphs, rejectReason } from '../src/core/polish.ts'
 import { verifyCorrections, verifyInput } from '../src/core/verify.ts'
 
 afterEach(() => mock.restoreAll())
@@ -47,7 +47,15 @@ test('polishParagraphs는 다듬은 문단을 시각과 함께 돌려주고, 검
   assert.deepEqual(r.paragraphs.map((x) => x.startMs), [0, 1000, 2000])
   assert.equal(r.chunks, 3)
   assert.equal(r.fallbackChunks, 1)
+  assert.deepEqual(r.fallbackReasons, ['2번 조각: 길이 0.00배'])
   assert.equal(r.inputTokens, 300)
+})
+
+test('rejectReason은 문단 수나 길이가 왜 안 맞는지 적는다', () => {
+  const input = [p('안녕하세요 강의를 시작합니다'), p('오늘은 파싱')]
+  assert.equal(rejectReason(input, ['안녕하세요 강의를 시작합니다', '오늘은 파싱을']), null)
+  assert.equal(rejectReason(input, ['안녕하세요 강의를 시작합니다 오늘은 파싱']), '문단 수 2 → 1')
+  assert.equal(rejectReason(input, ['안녕', '오늘']), '길이 0.19배')
 })
 
 test('polishParagraphs는 조각 결과를 남겨 두고, 다시 부르면 끝난 조각은 다시 보내지 않는다', async () => {
@@ -63,6 +71,9 @@ test('polishParagraphs는 조각 결과를 남겨 두고, 다시 부르면 끝�
     })
     await assert.rejects(polishParagraphs(paras, '', o))
     assert.equal(users.length, 3)
+    // 검사에 걸린 조각은 이유와 모델의 답을 조각 파일에 남긴다
+    const kept = JSON.parse(await readFile(join(dir, 'part_001.json'), 'utf8'))
+    assert.deepEqual([kept.texts, kept.reason, kept.rejected], [null, '길이 0.00배', '줄어든 답'])
     mock.restoreAll()
     // 다시 부르면 실패한 조각만 보내고, 앞선 결과(원문으로 돌아간 조각 포함)와 토큰 수를 그대로 쓴다
     users = mockChat((body) => body.messages.at(-1)!.content)
