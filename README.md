@@ -1,3 +1,5 @@
+<img src="docs/images/icon.png" alt="Note-crAIte 앱 아이콘" width="96">
+
 # Note-crAIte
 
 **강의 녹음을 노트로.** 녹음 파일을 끌어 놓으면 요약, 주요 키워드, 전사문이 담긴 마크다운 노트가 과목 폴더에 저장되는 Windows 앱입니다. 받아쓰기는 내 PC에서 하고 요약만 ChatKHU에 맡겨서, 90분 강의 한 개에 약 4크레딧이 듭니다.
