@@ -133,11 +133,7 @@ export const ProviderSection = forwardRef<HTMLElement, Props>(function ProviderS
         ) : connected ? (
           <Row
             title={`${llm.name}와 연동되어 있어요`}
-            sub={[
-              `키 ••••${llm.keyHint}`,
-              llm.credits != null ? `남은 크레딧 ${llm.credits.toLocaleString()}` : null,
-              llm.summariesLeft != null ? `이번 달 약 ${llm.summariesLeft.toLocaleString()}개` : null
-            ]
+            sub={[`키 ••••${llm.keyHint}`, llm.credits != null ? `남은 크레딧 ${llm.credits.toLocaleString()}` : null]
               .filter(Boolean)
               .join(' · ')}
             ctrl={

@@ -125,7 +125,6 @@ export default function Shell({ onRestartWizard }: Props): React.JSX.Element {
             <>
               <span>남은 크레딧</span>
               <b>{llm.credits.toLocaleString()}</b>
-              {llm.summariesLeft != null && <span>이번 달 약 {llm.summariesLeft.toLocaleString()}개 더 요약 가능</span>}
             </>
           )}
           {llm?.provider && llm.credits == null && <b>{llm.name}와 연동됨</b>}
