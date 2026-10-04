@@ -1250,6 +1250,20 @@ function createWindow(target: Size, show = true): void {
     }
   })
   win.on('show', updateTray)
+  // Electron에는 기본 우클릭 메뉴가 없다. 입력칸에서는 붙여넣기 등을, 그 밖에는 고른 글 복사만 보인다
+  win.webContents.on('context-menu', (_event, p) => {
+    if (p.isEditable) {
+      Menu.buildFromTemplate([
+        { role: 'cut', label: '잘라내기', enabled: p.editFlags.canCut },
+        { role: 'copy', label: '복사', enabled: p.editFlags.canCopy },
+        { role: 'paste', label: '붙여넣기', enabled: p.editFlags.canPaste },
+        { type: 'separator' },
+        { role: 'selectAll', label: '모두 선택', enabled: p.editFlags.canSelectAll }
+      ]).popup({ window: win })
+    } else if (p.selectionText.trim()) {
+      Menu.buildFromTemplate([{ role: 'copy', label: '복사' }]).popup({ window: win })
+    }
+  })
   // Windows 로그아웃·종료 때는 트레이로 숨지 않고 끝낸다
   win.on('query-session-end', () => {
     quitting = true
