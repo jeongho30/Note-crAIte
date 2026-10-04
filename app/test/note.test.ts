@@ -50,6 +50,22 @@ test('태그처럼 보이는 꺾쇠와 #낱말은 글자로 남긴다 (옵시디
   // 요약: 레지스터 이름 둘이 수식 하나로 묶이는 것만 글자로, 진짜 수식은 그대로
   assert.equal(escapeTags('$zero는 0, $v0–$v1은 반환값, $a0–$a3은 인자, LW $t0, 32($s3)로'), '$zero는 0, \\$v0–\\$v1은 반환값, \\$a0–\\$a3은 인자, LW \\$t0, 32(\\$s3)로')
   assert.equal(escapeTags('각 $\\theta$만큼 돌리면 $(x, y)$를 $e_1, e_2$로, `$v0–$v1`'), '각 $\\theta$만큼 돌리면 $(x, y)$를 $e_1, e_2$로, `$v0–$v1`')
+  // 수식 블록과 줄 안 수식의 안쪽은 꺾쇠·#도 건드리지 않는다
+  for (const math of ['$$\\sum_{i<j} a_{ij}$$', '$$\nP(X<x) = F(x)\n$$', '$$#S$$와 $i<n$', '$c = \\$5,\\ a<b$'])
+    assert.equal(escapeTags(math), math)
+  // 문단 안의 줄바꿈: 모든 줄이 >로 시작한다
+  const broken = renderNote({ ...BASE, transcript: ['첫 줄\n- 둘째 줄\n\n셋째 줄', '다음 문단'] })
+  assert.ok(broken.includes('> [!quote]- 전사문\n> 첫 줄\n> - 둘째 줄\n>\n> 셋째 줄\n>\n> 다음 문단\n'))
+  // 짝 없는 $(레지스터 하나, 금액)가 있어도 뒤의 수식 안은 그대로 두고, 수식이 아닌 구간의 태그는 막는다
+  assert.equal(escapeTags('$ra에 저장하고 $a<b$이면, 가격이 $5일 때 $q<q_0$'), '$ra에 저장하고 $a<b$이면, 가격이 $5일 때 $q<q_0$')
+  assert.equal(escapeTags('$t0에 <iostream>을 넣고 $t1에 #include'), '$t0에 \\<iostream>을 넣고 $t1에 \\#include')
+  // 코드 블록과 백틱 두 개짜리 코드 안은 그대로
+  assert.equal(escapeTags('예:\n```c\n#include <stdio.h>\n```\n그리고 ``<a>``'), '예:\n```c\n#include <stdio.h>\n```\n그리고 ``<a>``')
+  assert.equal(escapeTags('$f0–$f12는 인자, 결과는 $hi·$lo에'), '\\$f0–\\$f12는 인자, 결과는 \\$hi·\\$lo에')
+  // 레지스터 둘이 묶이는 경우가 아니면 수식으로 보고 그대로 둔다 (뒤에 영문자가 바로 붙어도, 한쪽만 레지스터 꼴이어도)
+  for (const math of ['주소는 $n$bit, 크기는 $2^{32}$B, $O(n)$time', '$x$y 좌표와 $a$b', '시각 $t0$에서 $s1$까지', '$name=$value', '$(x, y)$a', '$E_1, E_2$abc', '$A_1$x와 $T_0$y', '$FIRST(X)$s', '$DFA$state와 $EOF$token', '$RTT = 100$ms', '$T1$s and $T2$s', '$sp^2$and $sp^3$orbitals', '$t1 - t0$seconds', 'The $a0$th element, $s2$m', '$_nC_k$ways', '$HOME/bin:$PATH', '$v0+$x$만큼'])
+    assert.equal(escapeTags(math), math)
+  assert.equal(escapeTags('($a0)와 ($a1)에, $t0=$t1+$t2'), '(\\$a0)와 (\\$a1)에, \\$t0=\\$t1+$t2')
   assert.equal(escapeTags('문장($S$), 표현식($E$), 목록($L$)이'), '문장($S$), 표현식($E$), 목록($L$)이', '수식의 닫는 $를 다음 구간의 여는 $로 쓰지 않는다')
   const once = escapeTags('$zero는 0, $v0–$v1은 반환값, **$gp·$sp·$ra**: $gp는')
   assert.equal(escapeTags(once), once, '두 번 적용해도 같다')

@@ -39,33 +39,41 @@ export function timestamp(ms: number): string {
  */
 export function escapeTags(text: string, literalDollar = false): string {
   const plain = (s: string): string => s.replace(/(?<!\\)<(?=[A-Za-z/!?])/g, '\\<').replace(/(?<![\p{L}\p{N}\\&])#(?=[\p{N}_/-]*\p{L})/gu, '\\#')
-  return text.split(/(`[^`\n]*`)/).map((part, i) => {
-    if (i % 2) return part
-    if (literalDollar) return plain(part).replace(/(?<!\\)\$/g, '\\$')
-    return escapeFakeMath(part).split(/((?<!\\)\$[^$\n]*\$)/).map((p, j) => (j % 2 ? p : plain(p))).join('')
-  }).join('')
+  if (literalDollar) return text.split(/(`[^`\n]*`)/).map((part, i) => (i % 2 ? part : plain(part).replace(/(?<!\\)\$/g, '\\$'))).join('')
+  // 요약: 코드(```블록, ``…``, `…`)와 수식 블록($$…$$, 여러 줄일 수 있음)은 통째로 그대로 두고, 줄 안 수식($…$) 안도 건드리지 않는다.
+  // 줄 안 수식은 escapeFakeMath와 같은 규칙(INLINE_MATH)으로 본다: `$ra에 저장하고 $a<b$이면`의 `$ra에 … $`는 수식이 아니다
+  return text.split(/(```[\s\S]*?```|``[^`\n]*``|`[^`\n]*`|(?<!\\)\$\$[\s\S]*?\$\$)/).map((part, i) => (i % 2 ? part
+    : escapeFakeMath(part).split(new RegExp(`(${INLINE_MATH.source})`)).map((p, j) => (j % 2 ? p : plain(p))).join(''))).join('')
 }
+
+// 옵시디언의 줄 안 수식: 여는 $ 뒤와 닫는 $ 앞이 공백이 아니고, 닫는 $ 뒤가 숫자가 아니다. \$는 $로 치지 않는다
+const INLINE_MATH = /(?<!\\)\$(?!\s)(?:\\.|[^$\\\n])*?(?:\\.|[^\s$\\])\$(?!\d)/
 
 /**
  * 요약에서 수식이 아닌데 옵시디언이 수식으로 묶는 `$…$`를 글자로 남긴다: `$v0–$v1은 반환값`의 `$v0–$`처럼
- * 닫는 `$` 바로 뒤에 영문자·숫자가 오는 것. 레지스터 이름 둘이 수식 하나로 묶여 `$`가 사라지고 글꼴이 바뀌었다 (10/4).
- * 어림 기준이다: 그때까지의 요약 293개에서는 레지스터 6곳만 걸리고 수식 140곳은 그대로였지만, `$n$bit`처럼 수식 뒤에
- * 영문자가 바로 붙으면 수식도 글자로 남는다.
+ * 소문자 MIPS 레지스터 이름으로 시작하고, 닫는 `$` 바로 뒤에도 레지스터 이름이 오는 것만. 레지스터 이름 둘이 수식 하나로
+ * 묶여 `$`가 사라지고 글꼴이 바뀌었다 (10/4).
+ * 일부러 좁게 잡았다: 뒤에 영문자가 오는 것 전부(`$n$bit`), 대문자 레지스터(`$T1$s`), 대문자 낱말을 셸 변수로 보기(`$DFA$state`),
+ * 한쪽만 레지스터인 것(`$sp^2$and`, `$t1 - t0$seconds`)까지 막으면 진짜 수식이 글자로 남았다. 그래서 셸·PHP 변수는 막지 않는다.
  */
+const REGISTER = /^(?:zero|v[01]|a[0-3]|t[0-9]|s[0-8]|k[01]|gp|sp|fp|ra|hi|lo|f(?:[12]?\d|3[01]))(?![A-Za-z0-9_])/
+
 function escapeFakeMath(text: string): string {
-  // 옵시디언의 줄 안 수식: 여는 $ 뒤와 닫는 $ 앞이 공백이 아니고, 닫는 $ 뒤가 숫자가 아니다. \$는 $로 치지 않는다.
   // 옵시디언처럼 앞에서부터 짝을 지어, 수식으로 둔 구간의 닫는 $가 다음 구간의 여는 $로 쓰이지 않게 한다
   // 글자로 바꾸고 나면 남은 $끼리 새로 짝이 될 수 있어 더 바뀌지 않을 때까지 되풀이한다
   for (;;) {
-    const next = text.replace(/(?<!\\)\$(?!\s)((?:\\.|[^$\\\n])*?(?:\\.|[^\s$\\]))\$(?!\d)([A-Za-z])?/g,
-      (span, inner: string, after: string | undefined) => (after ? `\\$${inner}\\$${after}` : span))
+    const next = text.replace(new RegExp(INLINE_MATH.source, 'g'), (span, at: number, all: string) => {
+      const inner = span.slice(1, -1)
+      return REGISTER.test(inner) && REGISTER.test(all.slice(at + span.length)) ? `\\$${inner}\\$` : span
+    })
     if (next === text) return text
     text = next
   }
 }
 
 function callout(title: string, lines: string[]): string {
-  return [`> [!quote]- ${title}`, ...lines.map((l) => (l ? `> ${escapeTags(l, true)}` : '>'))].join('\n')
+  // 문단 안에 줄바꿈이 있으면(다듬은 전사문) 그 줄들에도 >를 붙인다: 안 붙이면 `- `로 시작하는 줄이 callout 밖으로 나온다
+  return [`> [!quote]- ${title}`, ...lines.flatMap((l) => l.split('\n')).map((l) => (l ? `> ${escapeTags(l, true)}` : '>'))].join('\n')
 }
 
 /** 옵시디언 태그에는 공백·문장부호를 쓸 수 없다. */
