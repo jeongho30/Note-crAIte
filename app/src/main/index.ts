@@ -52,6 +52,11 @@ const dataDir = process.env['LN_DATA_DIR'] || defaultDataDir()
 const log = createLog(join(dataDir, 'logs'))
 const RELEASES_URL = 'https://github.com/jeongho30/Note-crAIte/releases'
 
+// Windows 알림에 보이는 앱 이름. 정하지 않으면 "electron.app.…"으로 뜬다.
+// 설치본은 설치 파일이 만든 바로 가기의 ID(electron-builder.yml의 appId)와 같아야 그 바로 가기의 이름·아이콘으로 보이고,
+// 개발 실행은 바로 가기가 없어 ID가 그대로 보이므로 앱 이름을 넣는다
+if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? 'io.github.jeongho30.lecture-notes' : PRODUCT_NAME)
+
 // 앱은 하나만 띄운다: 두 번째로 실행하면 이미 떠 있는 창을 앞으로 가져온다 (같은 설정·작업 파일을 두 곳에서 쓰지 않게)
 const primary = app.requestSingleInstanceLock()
 if (!primary) app.quit()
