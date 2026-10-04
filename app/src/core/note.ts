@@ -38,11 +38,30 @@ export function timestamp(ms: number): string {
  * 수식 블록의 시작으로 읽어, 다음 `$$`까지의 callout 제목 줄이 수식에 먹혀 접히지 않았다 (10/4).
  */
 export function escapeTags(text: string, literalDollar = false): string {
-  return text.split(literalDollar ? /(`[^`\n]*`)/ : /(`[^`\n]*`|\$[^$\n]*\$)/).map((part, i) => {
+  const plain = (s: string): string => s.replace(/(?<!\\)<(?=[A-Za-z/!?])/g, '\\<').replace(/(?<![\p{L}\p{N}\\&])#(?=[\p{N}_/-]*\p{L})/gu, '\\#')
+  return text.split(/(`[^`\n]*`)/).map((part, i) => {
     if (i % 2) return part
-    const s = part.replace(/(?<!\\)<(?=[A-Za-z/!?])/g, '\\<').replace(/(?<![\p{L}\p{N}\\&])#(?=[\p{N}_/-]*\p{L})/gu, '\\#')
-    return literalDollar ? s.replace(/(?<!\\)\$/g, '\\$') : s
+    if (literalDollar) return plain(part).replace(/(?<!\\)\$/g, '\\$')
+    return escapeFakeMath(part).split(/((?<!\\)\$[^$\n]*\$)/).map((p, j) => (j % 2 ? p : plain(p))).join('')
   }).join('')
+}
+
+/**
+ * 요약에서 수식이 아닌데 옵시디언이 수식으로 묶는 `$…$`를 글자로 남긴다: `$v0–$v1은 반환값`의 `$v0–$`처럼
+ * 닫는 `$` 바로 뒤에 영문자·숫자가 오는 것. 레지스터 이름 둘이 수식 하나로 묶여 `$`가 사라지고 글꼴이 바뀌었다 (10/4).
+ * 어림 기준이다: 그때까지의 요약 293개에서는 레지스터 6곳만 걸리고 수식 140곳은 그대로였지만, `$n$bit`처럼 수식 뒤에
+ * 영문자가 바로 붙으면 수식도 글자로 남는다.
+ */
+function escapeFakeMath(text: string): string {
+  // 옵시디언의 줄 안 수식: 여는 $ 뒤와 닫는 $ 앞이 공백이 아니고, 닫는 $ 뒤가 숫자가 아니다. \$는 $로 치지 않는다.
+  // 옵시디언처럼 앞에서부터 짝을 지어, 수식으로 둔 구간의 닫는 $가 다음 구간의 여는 $로 쓰이지 않게 한다
+  // 글자로 바꾸고 나면 남은 $끼리 새로 짝이 될 수 있어 더 바뀌지 않을 때까지 되풀이한다
+  for (;;) {
+    const next = text.replace(/(?<!\\)\$(?!\s)((?:\\.|[^$\\\n])*?(?:\\.|[^\s$\\]))\$(?!\d)([A-Za-z])?/g,
+      (span, inner: string, after: string | undefined) => (after ? `\\$${inner}\\$${after}` : span))
+    if (next === text) return text
+    text = next
+  }
 }
 
 function callout(title: string, lines: string[]): string {

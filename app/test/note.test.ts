@@ -47,6 +47,12 @@ test('태그처럼 보이는 꺾쇠와 #낱말은 글자로 남긴다 (옵시디
   assert.equal(escapeTags('(#define) #2학기 #123 C#은 a#b # 제목 &#39; `#if`'), '(\\#define) \\#2학기 #123 C#은 a#b # 제목 &#39; `#if`', '낱말 앞의 #만')
   assert.equal(escapeTags('a < b, 3<5, `vector<int>`, $a<b$'), 'a < b, 3<5, `vector<int>`, $a<b$', '부등호·코드·수식은 그대로')
   assert.equal(escapeTags('add_i$sp$$. $ra에 <a>', true), 'add_i\\$sp\\$\\$. \\$ra에 \\<a>', '전사문에서는 $도 글자로')
+  // 요약: 레지스터 이름 둘이 수식 하나로 묶이는 것만 글자로, 진짜 수식은 그대로
+  assert.equal(escapeTags('$zero는 0, $v0–$v1은 반환값, $a0–$a3은 인자, LW $t0, 32($s3)로'), '$zero는 0, \\$v0–\\$v1은 반환값, \\$a0–\\$a3은 인자, LW \\$t0, 32(\\$s3)로')
+  assert.equal(escapeTags('각 $\\theta$만큼 돌리면 $(x, y)$를 $e_1, e_2$로, `$v0–$v1`'), '각 $\\theta$만큼 돌리면 $(x, y)$를 $e_1, e_2$로, `$v0–$v1`')
+  assert.equal(escapeTags('문장($S$), 표현식($E$), 목록($L$)이'), '문장($S$), 표현식($E$), 목록($L$)이', '수식의 닫는 $를 다음 구간의 여는 $로 쓰지 않는다')
+  const once = escapeTags('$zero는 0, $v0–$v1은 반환값, **$gp·$sp·$ra**: $gp는')
+  assert.equal(escapeTags(once), once, '두 번 적용해도 같다')
   const dollars = renderNote({ ...BASE, summary: '$a<b$이면 $ra에 저장', transcript: ['add_i$sp$$. 원래'] })
   assert.ok(dollars.includes('## 요약\n\n$a<b$이면 $ra에 저장'), '요약의 수식은 그대로')
   assert.ok(dollars.includes('> add_i\\$sp\\$\\$. 원래'))
