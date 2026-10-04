@@ -2,6 +2,7 @@
 // 옵시디언 볼트면 이 앱이 만들지 않은 노트도 섞인다(작성자 결정).
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { diskName } from './files.ts'
 
 export type RecentNote = { path: string; title: string; subject: string | null; date: string; modifiedMs: number }
 
@@ -31,12 +32,12 @@ export async function listNotes(outDir: string): Promise<RecentNote[]> {
   const found: { path: string; name: string; subject: string | null }[] = []
   for (const name of await mdFiles(outDir)) found.push({ path: join(outDir, name), name, subject: null })
   for (const subject of subjects) {
-    for (const name of await mdFiles(join(outDir, subject))) found.push({ path: join(outDir, subject, name), name, subject })
+    for (const name of await mdFiles(join(outDir, subject))) found.push({ path: join(outDir, subject, name), name, subject: diskName(subject) })
   }
   const notes = await Promise.all(
     found.map(async ({ path, name, subject }) => {
       const modifiedMs = (await stat(path)).mtimeMs
-      const stem = name.slice(0, -3)
+      const stem = name.slice(0, -3).normalize('NFC') // 자모가 풀린 이름(macOS)도 검색·표시가 같게
       // 이 앱의 노트 이름은 "날짜 제목". 그 밖의 노트는 수정한 날짜를 쓴다.
       const m = DATED.exec(stem)
       return { path, subject, modifiedMs, title: m ? m[2] : stem, date: m ? m[1] : localDate(modifiedMs) }

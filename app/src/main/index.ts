@@ -47,6 +47,8 @@ const whisperDirs = app.isPackaged
 const probeSample = app.isPackaged ? join(process.resourcesPath, 'probe-ko.wav') : join(app.getAppPath(), 'resources', 'probe-ko.wav')
 // 창과 트레이의 아이콘 (scripts/icon.mjs가 만든다). 설치본의 실행 파일 아이콘은 electron-builder가 같은 파일로 넣는다
 const iconPath = app.isPackaged ? join(process.resourcesPath, 'icon.ico') : join(app.getAppPath(), 'resources', 'icon.ico')
+// macOS는 .ico를 읽지 못해 메뉴 막대 아이콘은 PNG로 둔다 (옆의 tray@2x.png는 Electron이 고해상도 화면에서 알아서 쓴다)
+const trayIconPath = process.platform !== 'darwin' ? iconPath : app.isPackaged ? join(process.resourcesPath, 'tray.png') : join(app.getAppPath(), 'resources', 'tray.png')
 // LN_DATA_DIR: 개발 중 첫 실행 상태를 따로 시험할 때만 쓴다 (CLI의 --data-dir과 같은 역할)
 const dataDir = process.env['LN_DATA_DIR'] || defaultDataDir()
 const log = createLog(join(dataDir, 'logs'))
@@ -227,7 +229,7 @@ let closeHintShown = false
 let lastJobs: JobView[] = []
 let seenStatus = new Map<string, JobView['status']>()
 
-const tray = createTray(iconPath, {
+const tray = createTray(trayIconPath, {
   open: showWindow,
   quit: () => void quitFromTray(),
   toggleWatch: () => void watcher.pause(!watcher.get().paused)
@@ -1038,6 +1040,7 @@ const handlers: Record<string, (params: unknown) => unknown> = {
   'rec.openFolder': () => openFolder(recordingsDir(dataDir)),
   'rec.openMicSettings': () => {
     if (process.platform === 'win32') void shell.openExternal('ms-settings:privacy-microphone')
+    if (process.platform === 'darwin') void shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone')
   },
   // 설정 > 고급 > 실험 기능: ChatKHU 받아쓰기. 켜는 것은 ChatKHU가 연결돼 있을 때만
   'settings.setChatkhuStt': async (p) => {
@@ -1212,7 +1215,8 @@ function createWindow(target: Size, show = true): void {
     minHeight: MIN_CONTENT.height + TITLE_BAR,
     useContentSize: true,
     titleBarStyle: 'hidden',
-    titleBarOverlay: titleBarOverlay(),
+    // macOS는 창 버튼(신호등)을 스스로 그린다
+    ...(process.platform === 'darwin' ? {} : { titleBarOverlay: titleBarOverlay() }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
@@ -1220,9 +1224,12 @@ function createWindow(target: Size, show = true): void {
     }
   })
   keepContentAspect(win)
-  const syncOverlay = (): void => win.setTitleBarOverlay(titleBarOverlay())
-  nativeTheme.on('updated', syncOverlay)
-  win.on('closed', () => nativeTheme.off('updated', syncOverlay))
+  if (process.platform !== 'darwin') {
+    // setTitleBarOverlay는 macOS에 없다
+    const syncOverlay = (): void => win.setTitleBarOverlay(titleBarOverlay())
+    nativeTheme.on('updated', syncOverlay)
+    win.on('closed', () => nativeTheme.off('updated', syncOverlay))
+  }
   resizeContent(win, target)
   mainWindow = win
   win.on('closed', () => (mainWindow = null))
@@ -1288,7 +1295,12 @@ app.whenReady().then(async () => {
   nativeTheme.themeSource = settings.theme
   sttWhileRecording = settings.sttWhileRecording
   // 앱이 꺼져 녹음 중 파일로 남은 앱 녹음을 녹음 파일로 만든다 (홈의 "처리하지 않은 녹음"에 뜬다)
-  await repairRecordings(findFfmpeg(binDir), dataDir, null).catch((e) => log.write(`남은 녹음 고치기 실패: ${(e as Error).message}`))
+  // ffmpeg를 못 찾아도(findFfmpeg가 던짐) 창은 떠야 한다
+  try {
+    await repairRecordings(findFfmpeg(binDir), dataDir, null)
+  } catch (e) {
+    log.write(`남은 녹음 고치기 실패: ${(e as Error).message}`)
+  }
   // 컴퓨터 소리 녹음: 화면의 getDisplayMedia에 화면 하나와 시스템 소리(loopback)를 준다. 영상은 화면 쪽에서 바로 끈다
   session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
     desktopCapturer.getSources({ types: ['screen'] }).then(
@@ -1300,12 +1312,18 @@ app.whenReady().then(async () => {
   runner.kick() // 앱이 꺼져 멈췄던 작업을 이어서 한다
   await watcher.init()
   // 설치본에는 기본 메뉴 줄(File·Edit·View…)을 두지 않는다. 개발 실행에서는 새로 고침·개발자 도구 단축키 때문에 남긴다.
-  if (app.isPackaged) Menu.setApplicationMenu(null)
+  // macOS는 복사·붙여넣기·끝내기 단축키가 앱 메뉴에 달려 있어 없애면 안 되므로 앱·편집·창 메뉴만 둔다.
+  if (app.isPackaged) {
+    Menu.setApplicationMenu(process.platform === 'darwin' ? Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]) : null)
+  }
   // PC를 켜면서 자동 실행된 경우: 자동 처리가 켜져 있으면 창 없이 트레이로만 시작한다
   const startHidden = process.argv.includes(HIDDEN_ARG) && settings.wizardDone && settings.watch.enabled
   createWindow(settings.wizardDone ? HOME_CONTENT : WIZARD_CONTENT, !startHidden)
   if (startHidden) updateTray()
 })
+
+// macOS: Dock 아이콘을 누르면 숨겨 둔 창을 다시 연다
+app.on('activate', showWindow)
 
 app.on('window-all-closed', () => {
   app.quit()

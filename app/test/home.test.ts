@@ -3,6 +3,7 @@ import { mkdir, utimes, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { attachNotes, pairInputs } from '../src/core/inputs.ts'
+import { diskName } from '../src/core/files.ts'
 import { recentNotes } from '../src/core/recent.ts'
 import { tempDir } from './helpers.ts'
 
@@ -69,4 +70,14 @@ test('recentNotes: 저장 폴더와 과목 폴더의 .md를 최근 수정 순으
     ]
   )
   assert.deepEqual(await recentNotes(join(out, '없는 폴더')), [])
+})
+
+test('자모가 풀린 이름(macOS): 폴더에서 읽은 이름은 macOS에서만 합치고, 노트 제목은 어디서나 합친다', async () => {
+  const nfd = '컴파일러'.normalize('NFD')
+  assert.equal(diskName(nfd, 'darwin'), '컴파일러')
+  assert.equal(diskName(nfd, 'win32'), nfd, '다른 OS에서는 두 형태가 다른 폴더라 그대로 둔다')
+
+  const out = await tempDir()
+  await writeFile(join(out, `2026-10-04 ${nfd}.md`), '')
+  assert.equal((await recentNotes(out))[0].title, '컴파일러')
 })

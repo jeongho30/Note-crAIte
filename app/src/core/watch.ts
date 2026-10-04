@@ -4,7 +4,7 @@
 import { createHash } from 'node:crypto'
 import { mkdir, open, readdir, rename, stat } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
-import { readJson, writeJsonAtomic } from './files.ts'
+import { diskName, readJson, writeJsonAtomic } from './files.ts'
 import { AUDIO_EXTS, findNotes } from './inputs.ts'
 
 export const DONE_DIR = '처리됨'
@@ -47,7 +47,7 @@ export async function scanWatchFolder(root: string): Promise<WatchFile[]> {
   } catch {
     return files
   }
-  for (const d of dirs) files.push(...(await audioIn(join(root, d.name), d.name)))
+  for (const d of dirs) files.push(...(await audioIn(join(root, d.name), diskName(d.name))))
   return files
 }
 
@@ -56,7 +56,7 @@ export async function subjectDirs(root: string): Promise<string[]> {
   try {
     return (await readdir(root, { withFileTypes: true }))
       .filter((e) => e.isDirectory() && !isHidden(e.name) && e.name !== DONE_DIR)
-      .map((e) => e.name)
+      .map((e) => diskName(e.name))
   } catch {
     return []
   }

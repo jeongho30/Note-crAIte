@@ -212,8 +212,9 @@ function localDate(iso: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+/** 녹음 파일 이름에서 확장자를 뺀 것 (노트 제목으로 쓴다). macOS가 자모를 풀어 준 이름이 노트에 그대로 들어가지 않게 NFC로 맞춘다 */
 function stem(path: string): string {
-  return basename(path).slice(0, basename(path).length - extname(path).length)
+  return basename(path).slice(0, basename(path).length - extname(path).length).normalize('NFC')
 }
 
 /** 이 작업의 전사문 다듬기 대상 (없으면 다듬지 않는다) */
@@ -366,7 +367,7 @@ const RUNNERS: Record<StageName, Runner> = {
       title: job.edits?.title ?? summary?.title ?? stem(job.input.audio),
       subject: job.input.subject,
       date: job.edits?.date ?? localDate(job.audio!.recordedAt),
-      source: basename(job.input.audio),
+      source: basename(job.input.audio).normalize('NFC'),
       stt: `whisper.cpp ${s.model}`,
       llm: summary ? s.llm!.model : null,
       summary: summary?.summary ?? null,

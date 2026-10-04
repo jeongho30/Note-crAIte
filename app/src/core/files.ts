@@ -5,6 +5,14 @@ import { join } from 'node:path'
 
 const RENAME_RETRIES = 5
 
+/**
+ * 폴더에서 읽은 이름. macOS는 Finder 등이 만든 이름을 한글 자모를 풀어 쓴 형태(NFD)로 줘서, 앱에서 입력한 이름(NFC)과 다른 글자열이 된다.
+ * macOS에서만 NFC로 맞춘다: APFS는 두 형태를 같은 이름으로 봐서 경로에 다시 써도 되지만, 다른 OS에서는 서로 다른 폴더다.
+ */
+export function diskName(name: string, platform: string = process.platform): string {
+  return platform === 'darwin' ? name.normalize('NFC') : name
+}
+
 export async function writeJsonAtomic(path: string, data: unknown): Promise<void> {
   // 임시 파일 이름을 쓸 때마다 다르게 해서, 같은 파일을 동시에 써도 서로의 임시 파일을 덮지 않게 한다.
   const tmp = `${path}.${randomBytes(4).toString('hex')}.tmp`

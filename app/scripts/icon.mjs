@@ -163,3 +163,8 @@ images.forEach(({ size, data }, i) => {
 })
 writeFileSync(OUT, Buffer.concat([dir, ...images.map((i) => i.data)]))
 console.log(`${OUT} (${SIZES.join(', ')}px)`)
+
+// macOS 메뉴 막대 아이콘 (.ico를 못 읽는다). 16px와 고해상도 화면용 32px
+for (const [name, size] of [['tray.png', 16], ['tray@2x.png', 32]]) {
+  writeFileSync(join(import.meta.dirname, '..', 'resources', name), png(size, render(size)))
+}

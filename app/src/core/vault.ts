@@ -3,6 +3,7 @@ import { existsSync, statSync } from 'node:fs'
 import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { EngineError } from './errors.ts'
+import { diskName } from './files.ts'
 
 export type FolderInfo = {
   path: string
@@ -53,7 +54,7 @@ export async function inspectFolder(path: string): Promise<FolderInfo> {
   const subjects = exists
     ? (await readdir(path, { withFileTypes: true }))
         .filter((d) => d.isDirectory() && !d.name.startsWith('.'))
-        .map((d) => d.name)
+        .map((d) => diskName(d.name))
         .sort((a, b) => a.localeCompare(b, 'ko'))
     : []
   return { path, exists, writable: exists ? await canWrite(path) : null, vaultRoot: findVaultRoot(nearestExisting(path)), subjects }

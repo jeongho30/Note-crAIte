@@ -1,5 +1,5 @@
 // 트레이: 작업 중이거나 자동 처리가 켜져 있으면 창을 닫아도 트레이에 남아 일을 계속한다. 메뉴는 진행 상황·창 열기·자동 처리 멈추기·끝내기.
-import { Menu, Tray } from 'electron'
+import { Menu, Notification, Tray } from 'electron'
 import { PRODUCT_NAME } from '../core/brand.ts'
 
 export type TrayState = {
@@ -27,6 +27,7 @@ export function createTray(icon: string, actions: Actions) {
   let tray: Tray | null = null
   let onBalloon: (() => void) | null = null // 마지막 알림을 눌렀을 때 (없으면 창만 연다)
   let state: TrayState = { lines: [], watch: 'off' }
+  let shown: Notification | null = null // 누를 때까지 살아 있게 잡아 둔다
 
   function ensure(): Tray {
     if (tray) return tray
@@ -54,6 +55,13 @@ export function createTray(icon: string, actions: Actions) {
     },
     // Windows 알림 센터에 뜬다 (앱 알림 등록 없이도 트레이 아이콘으로 보낼 수 있다)
     notify: (title: string, content: string, onClick?: () => void) => {
+      if (process.platform !== 'win32') {
+        // 풍선 알림은 Windows에만 있다
+        shown = new Notification({ title, body: content })
+        shown.on('click', onClick ?? actions.open)
+        shown.show()
+        return
+      }
       onBalloon = onClick ?? null
       ensure().displayBalloon({ title, content, iconType: 'none' })
     }
