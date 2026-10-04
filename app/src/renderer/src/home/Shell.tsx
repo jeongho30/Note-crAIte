@@ -51,6 +51,15 @@ export default function Shell({ onRestartWizard }: Props): React.JSX.Element {
   const seen = useRef<Map<string, string> | null>(null)
   const doneCount = jobs?.filter((j) => j.status === 'done').length ?? 0
   const [notesVersion, setNotesVersion] = useState(0) // 미리보기에서 노트 정보를 수정하면 앞 화면의 노트 목록을 다시 읽는다
+  const refreshNotes = useCallback(() => setNotesVersion((v) => v + 1), [])
+  // 미리보기를 닫거나 창으로 돌아오면 다시 읽는다 (밖에서 지우거나 옮긴 노트가 목록에 남지 않게)
+  useEffect(() => {
+    if (!preview) refreshNotes()
+  }, [preview, refreshNotes])
+  useEffect(() => {
+    window.addEventListener('focus', refreshNotes)
+    return () => window.removeEventListener('focus', refreshNotes)
+  }, [refreshNotes])
 
   const loadLlm = useCallback(() => {
     call<LlmStatus>('llm.status').then(setLlm, () => setLlm({ provider: null }))
