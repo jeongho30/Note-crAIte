@@ -1,7 +1,7 @@
 """벤치 전용: faster-whisper(CPU int8 배치)로 전사해 구간 JSON을 쓴다. 앱에는 들어가지 않는다.
 
 app/src/core/bench.ts가 `fw:<모델>:cpu` 설정에서 이 스크립트를 부른다.
-설치: py -3.14 -m venv tools/.venv && tools/.venv/Scripts/python -m pip install -r tools/requirements-bench.txt
+설치: py -3.14 -m venv dev/.venv && dev/.venv/Scripts/python -m pip install -r dev/requirements-bench.txt
 """
 
 import argparse

@@ -7,7 +7,7 @@
   -Full        10분 샘플(600초부터) 대신 녹음 전체로 잰다. -Configs로 후보만 골라서 쓴다.
   -Threads     0이면 물리 코어 - 2
 
-벤치는 앱과 같은 app/src/core 코드를 Node로 실행한다. fw(faster-whisper) 설정만 tools/.venv의 Python을 쓴다.
+벤치는 앱과 같은 app/src/core 코드를 Node로 실행한다. fw(faster-whisper) 설정만 dev/.venv의 Python을 쓴다.
 gpu0 설정은 GPU가 없으면 CPU로 돈다. 결과표의 backend 열로 실제로 무엇을 썼는지 확인한다.
 결과는 %LOCALAPPDATA%\lecture-notes\bench\<시각>\results.csv 에 남는다.
 #>
@@ -26,7 +26,7 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = (Resolve-Path "$PSScriptRoot\..").Path
 $App = Join-Path $Root "app"
-$Venv = Join-Path $Root "tools\.venv"
+$Venv = Join-Path $Root "dev\.venv"
 $Py = Join-Path $Venv "Scripts\python.exe"
 
 function Invoke-Checked([string]$What, [scriptblock]$Block) {
@@ -52,7 +52,7 @@ if (($Configs -match "^fw:").Count -gt 0 -and -not (Test-Path $Py)) {
     $base = (py -3.14 -c "import sys; print(sys.base_prefix)")
     if ($base -match "WindowsApps") { throw "Microsoft Store판 Python입니다. python.org에서 3.14를 설치하세요." }
     Invoke-Checked "venv 생성" { py -3.14 -m venv $Venv }
-    Invoke-Checked "faster-whisper 설치" { & $Py -m pip install -q -r (Join-Path $Root "tools\requirements-bench.txt") }
+    Invoke-Checked "faster-whisper 설치" { & $Py -m pip install -q -r (Join-Path $Root "dev\requirements-bench.txt") }
 }
 
 $cli = @("--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", (Join-Path $App "src\cli\cli.ts"))

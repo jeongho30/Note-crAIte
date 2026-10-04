@@ -72,9 +72,9 @@ npm 11은 의존 패키지의 설치 스크립트를 막아 `npm ci`만으로는
 
 `build_whisper.ps1`의 결과는 `.cache/whisper/bin/`에, `fetch_ffmpeg.ps1`(BtbN LGPL 빌드, 고정 태그·sha256)의 결과는 `.cache/ffmpeg/bin/`에 모인다. 개발 중에는 `.cache/whisper/bin`의 `whisper-cli.exe`와 PATH의 `ffmpeg`를 쓴다. 설치본은 둘 다 `resources/bin/`(electron-builder의 `extraResources`)에서 찾는다. 설치 파일은 `dist/installer/`에 생긴다. CI(`.github/workflows/installer.yml`, 수동 실행 또는 `v*` 태그)는 whisper 빌드(캐시) → ffmpeg → 타입 검사·테스트 → 설치 파일을 만들어 아티팩트 `Note-crAIte-windows`로 올린다(Release에는 올리지 않음). vite는 electron-vite 5가 지원하는 7로 고정돼 있다(8로 올리지 않는다).
 
-`scripts/s3_laptop.ps1`은 빌드 도구가 없는 노트북에서 데스크톱의 whisper-cli를 복사해 와 S3 벤치(`cli bench`)를 여러 설정으로 돌린다.
+`dev/s3_laptop.ps1`은 빌드 도구가 없는 노트북에서 데스크톱의 whisper-cli를 복사해 와 S3 벤치(`cli bench`)를 여러 설정으로 돌린다.
 
-벤치의 `fw:`(faster-whisper) 설정만 Python을 쓴다: `py -3.14 -m venv tools/.venv && tools/.venv/Scripts/python -m pip install -r tools/requirements-bench.txt`. 앱에는 Python이 들어가지 않는다.
+벤치의 `fw:`(faster-whisper) 설정만 Python을 쓴다: `py -3.14 -m venv dev/.venv && dev/.venv/Scripts/python -m pip install -r dev/requirements-bench.txt`. 앱에는 Python이 들어가지 않는다.
 
 ## Architecture (지금까지)
 

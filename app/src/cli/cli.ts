@@ -37,7 +37,7 @@ const USAGE = `사용법:
   cli.ts [--data-dir D] [--bin-dir B] models download <이름...>
   cli.ts [--data-dir D] [--bin-dir B] bench --audio A [--ref R] --config 엔진:모델:장치 [--config ...]
          [--start 초] [--duration 초] [--threads N] [--lang ko] [--chunk-s 600] [--python P]
-         엔진: wcpp(whisper.cpp) | fw(faster-whisper, tools/.venv 필요). 장치: cpu | gpu0 | gpu1 ...
+         엔진: wcpp(whisper.cpp) | fw(faster-whisper, dev/.venv 필요). 장치: cpu | gpu0 | gpu1 ...
   cli.ts [--data-dir D] llm models
          ChatKHU 모델 목록 (환경변수 LN_API_KEY). 응답 전체는 <데이터 폴더>/bench/chatkhu-models.json
   cli.ts [--data-dir D] llm bench --models a,b,c [--job 작업 ID | --text 전사.txt --minutes 90] [--notes 필기] [--subject 과목]
@@ -71,7 +71,7 @@ async function main(argv: string[]): Promise<void> {
       threads: { type: 'string', description: '기본: 물리 코어 - 2' },
       lang: { type: 'string', default: 'ko' },
       'chunk-s': { type: 'string', default: '600', description: 'whisper.cpp 조각 길이 (초). 0이면 나누지 않음' },
-      python: { type: 'string', default: join(REPO, 'tools', '.venv', 'Scripts', 'python.exe') },
+      python: { type: 'string', default: join(REPO, 'dev', '.venv', 'Scripts', 'python.exe') },
       out: { type: 'string', description: '노트를 저장할 폴더 (과목별 하위 폴더가 생김)' },
       subject: { type: 'string' },
       notes: { type: 'string' },
@@ -178,7 +178,7 @@ async function main(argv: string[]): Promise<void> {
       binDir,
       whisperDirs,
       python: v.python!,
-      fwScript: join(REPO, 'tools', 'fw_transcribe.py')
+      fwScript: join(REPO, 'dev', 'fw_transcribe.py')
     })
   } else {
     console.error(USAGE)
