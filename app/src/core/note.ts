@@ -34,14 +34,19 @@ export function timestamp(ms: number): string {
  * 옵시디언은 닫히지 않은 태그 뒤를 전부 HTML로 읽어, 그 줄 뒤의 callout이 접히지 않고 본문으로 쏟아진다 (10/4).
  * 낱말 앞의 `#`도 글자로 남긴다 (`#include` → `\#include`): 옵시디언이 본문의 `#낱말`을 태그로 만든다.
  * 코드(`…`)와 수식($…$) 안은 그대로 둔다.
+ * literalDollar면 `$`도 글자로 남기고 수식을 따로 두지 않는다 (전사문용): 받아쓴 `add_i$sp$$`의 `$$`를 옵시디언이
+ * 수식 블록의 시작으로 읽어, 다음 `$$`까지의 callout 제목 줄이 수식에 먹혀 접히지 않았다 (10/4).
  */
-export function escapeTags(text: string): string {
-  return text.split(/(`[^`\n]*`|\$[^$\n]*\$)/).map((part, i) => (i % 2 ? part
-    : part.replace(/(?<!\\)<(?=[A-Za-z/!?])/g, '\\<').replace(/(?<![\p{L}\p{N}\\&])#(?=[\p{N}_/-]*\p{L})/gu, '\\#'))).join('')
+export function escapeTags(text: string, literalDollar = false): string {
+  return text.split(literalDollar ? /(`[^`\n]*`)/ : /(`[^`\n]*`|\$[^$\n]*\$)/).map((part, i) => {
+    if (i % 2) return part
+    const s = part.replace(/(?<!\\)<(?=[A-Za-z/!?])/g, '\\<').replace(/(?<![\p{L}\p{N}\\&])#(?=[\p{N}_/-]*\p{L})/gu, '\\#')
+    return literalDollar ? s.replace(/(?<!\\)\$/g, '\\$') : s
+  }).join('')
 }
 
 function callout(title: string, lines: string[]): string {
-  return [`> [!quote]- ${title}`, ...lines.map((l) => (l ? `> ${escapeTags(l)}` : '>'))].join('\n')
+  return [`> [!quote]- ${title}`, ...lines.map((l) => (l ? `> ${escapeTags(l, true)}` : '>'))].join('\n')
 }
 
 /** 옵시디언 태그에는 공백·문장부호를 쓸 수 없다. */
