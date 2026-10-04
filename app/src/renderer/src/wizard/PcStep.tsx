@@ -1,19 +1,30 @@
 import { useEffect, useState } from 'react'
 import { call } from '../api'
-import { Banner, Button, Card, ProgressBar } from '../components'
+import { Banner, Button, Card, ProgressBar, RadioCardGroup } from '../components'
 import { gb, gpuLabel, mb, percent, useSetup, type StepProps } from './shared'
 import { Step } from './Step'
 import styles from './Wizard.module.css'
 
-type SystemInfo = { cpu: string; cores: number; ramGb: number; freeBytes: number }
+type SystemInfo = { cpu: string; cores: number; gpus: string[]; ramGb: number; freeBytes: number }
+type Choice = { id: string; size: number; downloaded: boolean }
+
+const MODEL_TEXT: Record<string, { title: string; description: string }> = {
+  'large-v3-turbo-q8_0': { title: '기본', description: 'turbo. 대부분의 PC에 맞아요.' },
+  'large-v3-q5_0': { title: '정확하게', description: 'large-v3. 그래픽카드 PC 권장.' },
+  'small-q5_1': { title: '가볍게', description: 'small. 느린 PC용, 정확도가 낮아요.' }
+}
 
 // 모델은 [받기 시작]을 눌러야 받는다(데이터 요금제에서 모르고 받지 않게). 건너뛰면 녹음을 넣을 때 받는다.
 export function PcStep({ next, back, headingRef }: StepProps): React.JSX.Element {
   const setup = useSetup()
   const [info, setInfo] = useState<SystemInfo | null>(null)
+  const [choices, setChoices] = useState<Choice[]>([])
+  // 모델 카드는 접어 둔다. [다른 모델 고르기]를 누르거나 이미 기본이 아닌 모델을 골랐으면 펼친다
+  const [picking, setPicking] = useState(false)
 
   useEffect(() => {
     call<SystemInfo>('system.info').then(setInfo, () => setInfo(null))
+    call<{ choices: Choice[] }>('stt.options').then((o) => setChoices(o.choices))
   }, [])
 
   const model = setup?.model
@@ -44,6 +55,12 @@ export function PcStep({ next, back, headingRef }: StepProps): React.JSX.Element
       <dl className={styles.facts}>
         <dt>프로세서</dt>
         <dd>{info ? `${info.cpu} · ${info.cores}코어` : '확인 중…'}</dd>
+        {info && info.gpus.length > 0 && (
+          <>
+            <dt>그래픽카드</dt>
+            <dd>{info.gpus.join(' · ')}</dd>
+          </>
+        )}
         <dt>메모리</dt>
         <dd>{info ? `${info.ramGb}GB` : '확인 중…'}</dd>
         <dt>남은 공간</dt>
@@ -56,6 +73,24 @@ export function PcStep({ next, back, headingRef }: StepProps): React.JSX.Element
             <span>받아쓰기 모델</span>
             <span className={styles.small}>{mb(model.total)}</span>
           </div>
+          {choices.length > 0 && !picking && setup.name === choices[0].id && (
+            <p className={styles.small}>
+              기본 모델을 써요. 대부분의 PC에 맞아요.{' '}
+              <Button variant="link" onClick={() => setPicking(true)}>
+                다른 모델 고르기
+              </Button>
+            </p>
+          )}
+          {choices.length > 0 && (picking || setup.name !== choices[0].id) && (
+            <RadioCardGroup
+              label="받아쓰기 모델"
+              columns={3}
+              value={setup.name}
+              disabled={model.state === 'downloading'}
+              onChange={(v) => void call('setup.pickModel', v)}
+              options={choices.map((c) => ({ value: c.id, title: MODEL_TEXT[c.id]?.title ?? c.id, description: MODEL_TEXT[c.id]?.description, meta: mb(c.size) }))}
+            />
+          )}
           {notStarted && (
             <>
               <p className={styles.small}>처음 한 번만 받아요. 와이파이에서 받는 걸 권해요.</p>

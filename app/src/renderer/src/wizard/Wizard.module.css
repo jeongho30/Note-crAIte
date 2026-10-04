@@ -106,3 +106,21 @@
   font-size: var(--font-size-sm);
   white-space: pre;
 }
+
+/* 키 발급 방법 창의 단계 목록 */
+.guide {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.shot {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin-top: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}

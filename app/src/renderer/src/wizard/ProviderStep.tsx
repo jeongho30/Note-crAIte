@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { ApiError, call } from '../api'
 import { Banner, Button, RadioCardGroup, TextField } from '../components'
 import type { LlmStatus, StepProps } from './shared'
+import { KeyGuideLink } from './KeyGuide'
 import { Step } from './Step'
 import styles from './Wizard.module.css'
 
@@ -42,6 +43,8 @@ export function ProviderStep({ next, back, headingRef }: StepProps): React.JSX.E
   const name = providers.find((p) => p.id === selected)?.name ?? ''
   const alreadyConnected = status?.provider === selected && !key
   const connected = check.state === 'ok' || alreadyConnected
+  // 키가 없고 아직 붙여 넣지도 않았으면 [다음] 대신 [키 발급 방법 보기]가 주 버튼이다
+  const needsKey = !connected && !key.trim()
 
   async function verify(): Promise<boolean> {
     setCheck({ state: 'checking' })
@@ -70,10 +73,13 @@ export function ProviderStep({ next, back, headingRef }: StepProps): React.JSX.E
       title="요약에 쓸 서비스를 연결해 주세요"
       description={
         <>
-          키는 이 PC에만 암호화해서 저장돼요. 요약할 때만 {name || '요약 서비스'}로 보내요.{' '}
-          <Button variant="link" onClick={() => void call('llm.openKeyGuide', selected)}>
-            키 발급 방법 보기
-          </Button>
+          키는 {name || '요약 서비스'}가 이 앱에 요약을 허락하는 암호예요. 이 PC에만 암호화해서 저장되고, 요약할 때만 {name || '요약 서비스'}로 보내요.
+          {!needsKey && (
+            <>
+              {' '}
+              <KeyGuideLink provider={selected} />
+            </>
+          )}
         </>
       }
       headingRef={headingRef}
@@ -84,12 +90,16 @@ export function ProviderStep({ next, back, headingRef }: StepProps): React.JSX.E
           </Button>
           {!connected && (
             <Button variant="ghost" onClick={next}>
-              키 없이 계속
+              요약 없이 계속
             </Button>
           )}
-          <Button variant="primary" size="lg" disabled={check.state === 'checking' || (!connected && !key.trim())} onClick={() => void onNext()}>
-            다음
-          </Button>
+          {needsKey ? (
+            <KeyGuideLink provider={selected} primary />
+          ) : (
+            <Button variant="primary" size="lg" disabled={check.state === 'checking'} onClick={() => void onNext()}>
+              다음
+            </Button>
+          )}
         </>
       }
     >

@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useRef, useState, type FormEvent } from 'react'
 import { ApiError, call } from '../api'
 import { Button, Dialog, RadioCardGroup, TextField, useToast } from '../components'
+import { KeyGuideLink } from '../wizard/KeyGuide'
 import type { LlmStatus } from '../wizard/shared'
 import { ModelPicker, type ModelOption } from './ModelPicker'
 import { Block, Row, Section, SettingsCard } from './parts'
@@ -200,9 +201,7 @@ export const ProviderSection = forwardRef<HTMLElement, Props>(function ProviderS
             <p className={styles.hint}>
               키는 이 PC에만 암호화해서 저장돼요. 요약할 때 전사문과 필기가 고른 서비스로 보내져요. 서비스를 바꾸면 요약 모델은 그 서비스의 기본 모델이 되고 전사문
               다듬기는 꺼져요.{' '}
-              <Button variant="link" onClick={() => void call('llm.openKeyGuide', selected)}>
-                키 발급 방법 보기
-              </Button>
+              <KeyGuideLink provider={selected} />
             </p>
           </Block>
         )}

@@ -16,7 +16,7 @@ export type ProviderId = 'chatkhu' | 'openai' | 'claude' | 'gemini'
 
 /** 화면에 보이는 요약 서비스 목록. available이 false면 "곧 지원"으로 흐리게 보인다. */
 export const PROVIDERS: { id: ProviderId; name: string; available: boolean; keyGuideUrl?: string }[] = [
-  { id: 'chatkhu', name: 'ChatKHU', available: true, keyGuideUrl: 'https://chat.khu.ac.kr/' },
+  { id: 'chatkhu', name: 'ChatKHU', available: true, keyGuideUrl: 'https://chat.khu.ac.kr/dashboard/developers' },
   { id: 'openai', name: 'OpenAI', available: true, keyGuideUrl: 'https://platform.openai.com/api-keys' },
   { id: 'claude', name: 'Claude', available: true, keyGuideUrl: 'https://platform.claude.com/settings/keys' },
   { id: 'gemini', name: 'Gemini', available: true, keyGuideUrl: 'https://aistudio.google.com/apikey' }

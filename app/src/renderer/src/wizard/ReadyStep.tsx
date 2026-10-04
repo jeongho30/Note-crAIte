@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { call } from '../api'
-import { Button, Card, ListRow } from '../components'
+import { Button, Card, Checkbox, ListRow } from '../components'
 import type { Settings } from '../../../core/settings'
 import type { FolderInfo } from '../../../core/vault'
 import { sttSummary, useSetup, type LlmStatus, type StepProps } from './shared'
@@ -13,9 +13,13 @@ export function ReadyStep({ back, goTo, headingRef, finish }: StepProps & { fini
   const setup = useSetup()
   const [llm, setLlm] = useState<LlmStatus | null>(null)
   const [folder, setFolder] = useState<FolderInfo | null>(null)
+  // 바탕화면 바로가기는 설치한 앱(Windows)에서만 만들 수 있다
+  const [canShortcut, setCanShortcut] = useState(false)
+  const [shortcut, setShortcut] = useState(true)
 
   useEffect(() => {
     call<LlmStatus>('llm.status').then(setLlm)
+    call<boolean>('desktopShortcut.supported').then(setCanShortcut)
     call<Settings>('settings.get').then((s) => {
       if (s.outDir) void call<FolderInfo>('folder.inspect', s.outDir).then(setFolder)
     })
@@ -32,7 +36,14 @@ export function ReadyStep({ back, goTo, headingRef, finish }: StepProps & { fini
           <Button variant="ghost" className={styles.back} onClick={back}>
             이전
           </Button>
-          <Button variant="primary" size="lg" onClick={() => void finish()}>
+          <Button
+            variant="primary"
+            size="lg"
+            onClick={async () => {
+              if (canShortcut && shortcut) await call('desktopShortcut.create').catch(() => {})
+              await finish()
+            }}
+          >
             첫 녹음 넣기
           </Button>
         </>
@@ -70,6 +81,7 @@ export function ReadyStep({ back, goTo, headingRef, finish }: StepProps & { fini
         />
         <ListRow title="저장 폴더" description={folder ? `${folder.path}${folder.vaultRoot ? ' (옵시디언 볼트)' : ''}` : '확인 중…'} />
       </Card>
+      {canShortcut && <Checkbox checked={shortcut} onChange={setShortcut} label="바탕화면에 바로가기 만들기" />}
       {modelMissing && <p className={styles.small}>모델을 받지 않아도 시작할 수 있어요. 녹음을 넣으면 그때 받아요.</p>}
     </Step>
   )

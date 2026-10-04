@@ -176,8 +176,8 @@ export function createSetup({ dataDir, model, whisperCli, sample, busy, emit, lo
     if (state.model.state === 'ready' && state.probe.state === 'idle') void runProbe()
   }
 
-  /** 받아쓰기 모델을 바꾼다. 없으면 받고, 있으면 (이 모델로 잰 적이 없을 때) 속도를 다시 잰다. */
-  async function setModel(next: string): Promise<void> {
+  /** 받아쓰기 모델을 바꾼다. 없으면 받고(마법사는 start를 꺼서 [받기 시작]을 기다린다), 있으면 (이 모델로 잰 적이 없을 때) 속도를 다시 잰다. */
+  async function setModel(next: string, start = true): Promise<void> {
     if (!MODELS.whisper[next]) throw new EngineError('input', `모르는 모델이에요: ${next}`)
     if (next === name) return
     if (state.model.state === 'downloading') throw new EngineError('input', '모델을 받는 중이에요. 다 받은 뒤 바꿔 주세요.')
@@ -186,8 +186,9 @@ export function createSetup({ dataDir, model, whisperCli, sample, busy, emit, lo
     state.model = modelState()
     state.probe = (await savedProbe()) ?? { state: 'idle' }
     update({})
-    if (state.model.state === 'missing') void download()
-    else if (state.probe.state === 'idle') void runProbe()
+    if (state.model.state === 'missing') {
+      if (start) void download()
+    } else if (state.probe.state === 'idle') void runProbe()
   }
 
   /** [속도 다시 재기] */

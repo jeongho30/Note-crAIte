@@ -644,7 +644,7 @@ const handlers: Record<string, (params: unknown) => unknown> = {
   'system.info': async () => {
     await mkdir(dataDir, { recursive: true })
     const [hw, fs] = await Promise.all([detect(), statfs(dataDir)])
-    return { cpu: hw.cpu, cores: hw.physicalCores, ramGb: hw.ramGb, freeBytes: fs.bavail * fs.bsize }
+    return { cpu: hw.cpu, cores: hw.physicalCores, gpus: hw.gpus, ramGb: hw.ramGb, freeBytes: fs.bavail * fs.bsize }
   },
 
   'setup.get': () => setup.get(),
@@ -679,6 +679,26 @@ const handlers: Record<string, (params: unknown) => unknown> = {
   },
   'llm.openKeyGuide': (p) => {
     const url = PROVIDERS.find((x) => x.id === p)?.keyGuideUrl
+  // 마법사에서 받아쓰기 모델만 고른다. 받기는 [받기 시작]을 눌러야 시작한다
+  'setup.pickModel': async (p) => {
+    const model = String(p)
+    if (!(STT_MODEL_CHOICES as readonly string[]).includes(model)) throw new EngineError('input', '고를 수 없는 모델이에요.')
+    await setup.setModel(model, false)
+    await updateSettings(dataDir, { sttModel: model })
+    log.write(`받아쓰기 모델 고름: ${model}`)
+    return setup.get()
+  },
+  'desktopShortcut.supported': () => app.isPackaged && process.platform === 'win32',
+  // 마법사 끝의 "바탕화면에 바로가기 만들기" (설치 파일은 바로가기를 만들지 않는다)
+  'desktopShortcut.create': () => {
+    if (!app.isPackaged || process.platform !== 'win32') return false
+    const ok = shell.writeShortcutLink(join(app.getPath('desktop'), `${PRODUCT_NAME}.lnk`), {
+      target: process.execPath,
+      appUserModelId: 'io.github.jeongho30.lecture-notes'
+    })
+    log.write(`바탕화면 바로가기: ${ok ? '만듦' : '만들지 못함'}`)
+    return ok
+  },
     // 목록에 있는 http(s) 주소만 연다.
     if (url?.startsWith('https://')) void shell.openExternal(url)
   },
