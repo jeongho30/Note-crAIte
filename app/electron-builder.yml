@@ -27,6 +27,13 @@ extraResources:
   - from: build/THIRD_PARTY_NOTICES.txt
     to: THIRD_PARTY_NOTICES.txt
 npmRebuild: false
+# Chromium 언어 파일(우클릭 메뉴 등 Chromium이 그리는 글자)은 이 언어만 넣는다. en-US는 맞는 언어가 없을 때의 기본값이라 빼지 않는다.
+electronLanguages:
+  - ko
+  - en-US
+  - zh-CN
+  - zh-TW
+  - ja
 win:
   target: nsis
   icon: resources/icon.ico

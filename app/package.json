@@ -21,18 +21,16 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.2.0",
+    "@vscode/markdown-it-katex": "^1.1.2",
     "electron": "^44.4.5",
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
+    "katex": "^0.16.47",
     "markdown-it": "^15.0.2",
     "markdown-it-cjk-friendly": "^3.0.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "typescript": "^7.0.2",
     "vite": "^7.3.6"
-  },
-  "dependencies": {
-    "@vscode/markdown-it-katex": "^1.1.2",
-    "katex": "^0.16.47"
   }
 }
