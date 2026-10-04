@@ -677,8 +677,6 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     }
     return { provider: id, keyHint: keyHint(apiKey), credits, summariesLeft: await summariesLeft(credits) }
   },
-  'llm.openKeyGuide': (p) => {
-    const url = PROVIDERS.find((x) => x.id === p)?.keyGuideUrl
   // 마법사에서 받아쓰기 모델만 고른다. 받기는 [받기 시작]을 눌러야 시작한다
   'setup.pickModel': async (p) => {
     const model = String(p)
@@ -699,6 +697,8 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     log.write(`바탕화면 바로가기: ${ok ? '만듦' : '만들지 못함'}`)
     return ok
   },
+  'llm.openKeyGuide': (p) => {
+    const url = PROVIDERS.find((x) => x.id === p)?.keyGuideUrl
     // 목록에 있는 http(s) 주소만 연다.
     if (url?.startsWith('https://')) void shell.openExternal(url)
   },
