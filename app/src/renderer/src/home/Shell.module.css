@@ -83,6 +83,10 @@
   font-weight: var(--font-weight-semibold);
 }
 
+.connect {
+  margin-top: var(--space-2);
+}
+
 /* 본문만 스크롤 */
 .main {
   overflow: auto;

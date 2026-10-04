@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { call } from '../api'
-import { useToast } from '../components'
+import { Button, useToast } from '../components'
 import { cx } from '../components/cx'
 import { NoteList } from '../notes/NoteList'
 import { NotePreview } from '../preview/NotePreview'
@@ -147,6 +147,9 @@ export default function Shell({ onRestartWizard }: Props): React.JSX.Element {
             <>
               <b>요약 서비스 없음</b>
               <span>전사문만 담은 노트를 만들어요</span>
+              <Button size="sm" className={styles.connect} onClick={onConnect}>
+                연결하기
+              </Button>
             </>
           )}
         </div>
