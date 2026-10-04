@@ -153,7 +153,8 @@ export function parseResponse(raw: string, fallbackTitle: string): Summary {
   const p = parsed as Record<string, unknown>
   return {
     title: restoreLatex(String(p['title'] || fallbackTitle)).trim(),
-    summary: dropEchoedGloss(restoreLatex(String(p['summary'] || ''))).trim(),
+    // 모델이 값의 앞뒤에 필드 이름으로 된 태그를 흘릴 때가 있다 (10/4: 요약 끝에 </summary>, 약 290개 중 1개)
+    summary: dropEchoedGloss(restoreLatex(String(p['summary'] || ''))).trim().replace(/^<summary>\s*|\s*<\/summary>$/g, ''),
     keywords: Array.isArray(p['keywords']) ? p['keywords'].map((k) => restoreLatex(String(k)).trim()).filter(Boolean) : [],
     corrections: Array.isArray(p['corrections']) ? p['corrections'].map(restoreCorrection) : [],
     parseFailed: false

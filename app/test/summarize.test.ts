@@ -46,6 +46,13 @@ test('restoreLatex는 JSON.parse가 제어 문자로 푼 LaTeX 명령을 되살�
   assert.equal(restoreLatex(broken), String.raw`각 $\theta$, $\frac{1}{2}$, SYN $\rightarrow$ ACK, $\beta$`)
 })
 
+test('parseResponse는 요약 앞뒤에 붙은 summary 태그를 지운다', () => {
+  const parse = (summary: string): string => parseResponse(JSON.stringify({ title: 't', summary, keywords: [], corrections: [] }), 't').summary
+  assert.equal(parse('개요다.\n\n- **A**: 설명됨</summary>\n'), '개요다.\n\n- **A**: 설명됨')
+  assert.equal(parse('<summary>\n개요다.</summary>'), '개요다.')
+  assert.equal(parse('HTML의 <summary> 태그를 다룬다.'), 'HTML의 <summary> 태그를 다룬다.', '본문 안의 것은 그대로')
+})
+
 test('dropEchoedGloss는 앞 말을 그대로 되풀이한 괄호만 지운다', () => {
   const fixed: [string, string][] = [
     ['- **Closure**(Closure): 점 바로 뒤에', '- **Closure**: 점 바로 뒤에'],
