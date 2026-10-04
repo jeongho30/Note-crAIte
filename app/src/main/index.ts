@@ -8,7 +8,7 @@ import { EngineError } from '../core/errors.ts'
 import { dirSize, readJson } from '../core/files.ts'
 import { defaultThreads, detect } from '../core/hardware.ts'
 import { editNote, parseNoteProps } from '../core/noteedit.ts'
-import { attachNotes, AUDIO_EXTS, NOTE_EXTS, pairInputs } from '../core/inputs.ts'
+import { attachNotes, AUDIO_EXTS, NOTE_EXTS, notesProblem, pairInputs } from '../core/inputs.ts'
 import { DEFAULT_BEAM_SIZE, DEFAULT_MODEL, jobsDir, listJobs, STT_MODEL_CHOICES, VAD_MODEL } from '../core/job.ts'
 import type { LlmSettings } from '../core/job.ts'
 import { MODELS } from '../core/models.ts'
@@ -388,6 +388,14 @@ async function prepare(paths: string[]): Promise<Prepared> {
     name: basename(p),
     reason: NOTE_EXTS.some((e) => p.toLowerCase().endsWith('.' + e)) ? '같은 이름의 녹음이 없는 필기예요' : '녹음 파일이 아니에요'
   }))
+  // 쓸 수 없는 PDF 필기(스캔본 등)는 녹음에서 떼고 이유를 알린다
+  for (const r of recordings) {
+    const why = r.notes ? await notesProblem(r.notes) : null
+    if (why) {
+      rejected.push({ name: basename(r.notes!), reason: why })
+      r.notes = null
+    }
+  }
   const [probe, settings, per90, stt, steps] = await Promise.all([loadProbe(), loadSettings(dataDir), jobCredits90(), sttService(), llmSteps()])
   const cloud = stt === 'chatkhu'
   // 이 PC에서 끝낸 작업이 있으면 그 실제 속도로 예상한다
@@ -737,14 +745,24 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     const win = BrowserWindow.getFocusedWindow()
     const opts = { properties: ['openFile'] as 'openFile'[], filters: [{ name: '필기', extensions: NOTE_EXTS }] }
     const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
-    return r.canceled || !r.filePaths[0] ? null : { path: r.filePaths[0], name: basename(r.filePaths[0]) }
+    if (r.canceled || !r.filePaths[0]) return null
+    const why = await notesProblem(r.filePaths[0])
+    if (why) throw new EngineError('input', `${basename(r.filePaths[0])}: ${why}`)
+    return { path: r.filePaths[0], name: basename(r.filePaths[0]) }
   },
   'inputs.prepare': (p) => prepare((p as unknown[]).map(String)),
   // 시작 전 확인에서 파일을 더 넣을 때: 이미 목록에 있는 녹음의 필기는 그 녹음에 붙이고, 나머지만 새로 확인한다
-  'inputs.attach': (p) => {
+  'inputs.attach': async (p) => {
     const { existing, picked } = p as { existing: unknown[]; picked: unknown[] }
     const { attached, rest } = attachNotes(existing.map(String), picked.map(String))
-    return { attached: attached.map((a) => ({ ...a, notesName: basename(a.notes) })), rest }
+    const ok: typeof attached = []
+    const rejected: { name: string; reason: string }[] = []
+    for (const a of attached) {
+      const why = await notesProblem(a.notes)
+      if (why) rejected.push({ name: basename(a.notes), reason: why })
+      else ok.push(a)
+    }
+    return { attached: ok.map((a) => ({ ...a, notesName: basename(a.notes) })), rest, rejected }
   },
   // 과목 목록(저장 폴더의 하위 폴더), 마지막 과목, 과목별 강의 언어
   'subjects.get': async () => {

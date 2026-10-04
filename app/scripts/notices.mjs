@@ -7,8 +7,8 @@ const APP = join(import.meta.dirname, '..')
 const REPO = join(APP, '..')
 const OUT = join(APP, 'build', 'THIRD_PARTY_NOTICES.txt')
 
-// 화면 번들(out/renderer)에 들어가는 패키지. 메인·preload는 Node·Electron 기능만 쓴다.
-const ROOTS = ['react', 'react-dom', 'markdown-it', 'markdown-it-cjk-friendly', '@vscode/markdown-it-katex']
+// 번들에 들어가는 패키지. 화면(out/renderer)은 React·markdown-it, 메인(out/main)은 PDF 필기를 읽는 unpdf뿐이다.
+const ROOTS = ['react', 'react-dom', 'markdown-it', 'markdown-it-cjk-friendly', '@vscode/markdown-it-katex', 'unpdf']
 // markdown-it의 argparse는 명령줄 도구에서만 써서 번들에 들어가지 않는다
 const SKIP = new Set(['argparse'])
 
@@ -61,6 +61,11 @@ parts.push(`Pretendard (화면 글꼴) — SIL Open Font License 1.1
 https://github.com/orioncactus/pretendard
 
 ${read(join(APP, 'src', 'renderer', 'src', 'assets', 'fonts', 'LICENSE-Pretendard.txt'))}`)
+
+parts.push(`PDF.js (unpdf에 들어 있음, PDF 필기의 글자 뽑기) — Apache License 2.0
+https://github.com/mozilla/pdf.js
+
+${read(join(APP, 'scripts', 'licenses', 'LICENSE-pdf.js.txt'))}`)
 
 parts.push(`실행 중에 내려받는 모델 (설치 파일에는 없음)
 - Whisper 모델 가중치 — MIT, OpenAI (https://github.com/openai/whisper)

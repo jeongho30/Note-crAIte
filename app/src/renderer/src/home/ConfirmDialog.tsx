@@ -290,7 +290,11 @@ export function ConfirmDialog({ paths, llm, onClose }: Props): React.JSX.Element
       const picked = await call<string[]>('inputs.pick')
       if (!picked.length) return
       // 이미 목록에 있는 녹음과 이름이 같은 필기는 그 녹음에 붙이고, 나머지만 새로 확인한다
-      const { attached, rest } = await call<{ attached: { audio: string; notes: string; notesName: string }[]; rest: string[] }>('inputs.attach', {
+      const { attached, rest, rejected } = await call<{
+        attached: { audio: string; notes: string; notesName: string }[]
+        rest: string[]
+        rejected: { name: string; reason: string }[]
+      }>('inputs.attach', {
         existing: recs.map((r) => r.audio),
         picked
       })
@@ -301,6 +305,7 @@ export function ConfirmDialog({ paths, llm, onClose }: Props): React.JSX.Element
         )
         setDropped((d) => new Set([...d].filter((x) => !by.has(x))))
       }
+      if (rejected.length) setPrepared((p) => (p ? tidy({ ...p, rejected: [...p.rejected, ...rejected] }) : p))
       if (!rest.length) return
       const more = await call<Prepared>('inputs.prepare', rest)
       const home = subjectZones[0]?.id ?? NONE_ID

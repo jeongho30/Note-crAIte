@@ -1,11 +1,12 @@
-// 입력 파일: 녹음 옆의 같은 이름 필기(.md/.txt)를 찾고, 인코딩을 가려 읽는다.
+// 입력 파일: 녹음 옆의 같은 이름 필기(.md/.txt/.pdf)를 찾고, 인코딩을 가려 읽는다 (PDF는 pdf.ts가 글자를 뽑는다).
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { basename, extname, resolve } from 'node:path'
+import { pdfNotesProblem, readPdfNotes } from './pdf.ts'
 
 /** 받는 녹음 확장자. 영상 컨테이너(mp4·webm·3gp)는 소리만 쓴다. 실제로 소리가 있는지는 ffmpeg로 다시 본다. */
 export const AUDIO_EXTS = ['m4a', 'mp3', 'wav', 'ogg', 'flac', 'aac', 'mp4', '3gp', 'amr', 'webm', 'opus', 'wma']
-export const NOTE_EXTS = ['md', 'txt']
+export const NOTE_EXTS = ['md', 'txt', 'pdf']
 
 const extOf = (path: string): string => extname(path).slice(1).toLowerCase()
 const baseOf = (path: string): string => path.slice(0, path.length - extname(path).length)
@@ -66,8 +67,14 @@ export function findNotes(audio: string): string | null {
   return null
 }
 
-/** UTF-8로 읽히지 않으면 CP949(EUC-KR)로 다시 읽는다 (오래된 메모장 파일). */
+/** 필기로 쓸 수 없는 이유 (글자가 없거나 열리지 않는 PDF). 쓸 수 있으면 null. 텍스트 필기는 늘 쓸 수 있다 */
+export async function notesProblem(path: string): Promise<string | null> {
+  return extOf(path) === 'pdf' ? pdfNotesProblem(path) : null
+}
+
+/** UTF-8로 읽히지 않으면 CP949(EUC-KR)로 다시 읽는다 (오래된 메모장 파일). PDF는 쪽마다 뽑은 글자. */
 export async function readNotes(path: string): Promise<string> {
+  if (extOf(path) === 'pdf') return readPdfNotes(path)
   const buf = await readFile(path)
   try {
     return new TextDecoder('utf-8', { fatal: true }).decode(buf)

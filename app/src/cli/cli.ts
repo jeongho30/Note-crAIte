@@ -29,7 +29,7 @@ const USAGE = `사용법:
          [--lang ko] [--model large-v3-turbo-q8_0] [--device auto|cpu|gpu0] [--threads N]
          [--verify-model 모델] [--polish 다듬기 모델]
          auto는 probe 결과(장치, 예상 시간)를 쓴다. probe를 안 했으면 CPU.
-         필기를 주지 않으면 녹음 옆의 같은 이름 .md/.txt를 쓴다. 환경변수 LN_API_KEY(ChatKHU 키)가 없으면 요약 없이 전사만 담는다.
+         필기를 주지 않으면 녹음 옆의 같은 이름 .md/.txt/.pdf를 쓴다. 환경변수 LN_API_KEY(ChatKHU 키)가 없으면 요약 없이 전사만 담는다.
   cli.ts [--data-dir D] [--bin-dir B] resume <작업 ID>
   cli.ts [--data-dir D] jobs
   cli.ts [--data-dir D] [--bin-dir B] probe [--sample 16kHz 모노 WAV] [--threads N]

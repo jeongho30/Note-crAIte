@@ -179,7 +179,7 @@ export const AutoSection = forwardRef<HTMLElement>(function AutoSection(_props, 
               </Banner>
             )}
             <p className={styles.dialogText}>
-              하위 폴더 이름이 과목이 되고, 강의 언어는 과목 기본값을 써요. 바로 아래에 넣은 녹음은 미분류로 저장해요. 같은 이름의 필기(.md·.txt)도 함께 써요. 노트를 만든 녹음은 그 폴더의 "처리됨"으로 옮겨요.
+              하위 폴더 이름이 과목이 되고, 강의 언어는 과목 기본값을 써요. 바로 아래에 넣은 녹음은 미분류로 저장해요. 같은 이름의 필기(.md·.txt·.pdf)도 함께 써요. 노트를 만든 녹음은 그 폴더의 "처리됨"으로 옮겨요.
             </p>
             {draft.inspect.missingSubjects.length > 0 && (
               <Checkbox

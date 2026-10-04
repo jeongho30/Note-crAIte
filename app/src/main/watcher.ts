@@ -4,7 +4,7 @@ import { mkdir } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { EngineError } from '../core/errors.ts'
 import { writeJsonAtomic } from '../core/files.ts'
-import { findNotes } from '../core/inputs.ts'
+import { findNotes, notesProblem } from '../core/inputs.ts'
 import { jobsDir } from '../core/job.ts'
 import type { Job } from '../core/job.ts'
 import { loadSettings, updateSettings } from '../core/settings.ts'
@@ -86,10 +86,13 @@ export function createWatcher({ dataDir, start, log, emit }: Deps) {
           known.add(baselineKey(f)) // 같은 녹음을 이미 넘김 (이름·위치가 바뀌어도)
           continue
         }
+        // 쓸 수 없는 PDF 필기(스캔본 등)는 없는 것으로 보고 받아쓰기·요약은 그대로 한다
+        const found = findNotes(f.path)
+        const notes = found && !(await notesProblem(found)) ? found : null
         inputs.push({
           fp,
           file: f,
-          input: { audio: f.path, notes: findNotes(f.path), subject: f.subject, language: settings.subjectLanguage[f.subject ?? ''] ?? 'ko', from: 'watch' }
+          input: { audio: f.path, notes, subject: f.subject, language: settings.subjectLanguage[f.subject ?? ''] ?? 'ko', from: 'watch' }
         })
       }
       if (inputs.length) {
