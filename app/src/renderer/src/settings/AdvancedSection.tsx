@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useState } from 'react'
 import { ApiError, call } from '../api'
-import { Button, RadioCardGroup, Switch, TextField, useToast } from '../components'
+import { Button, Dialog, RadioCardGroup, Switch, TextField, useToast } from '../components'
 import type { Settings } from '../../../core/settings'
 import { cx } from '../components/cx'
 import { ModelPicker, type ModelOption } from './ModelPicker'
@@ -9,7 +9,7 @@ import type { SetupState } from '../../../main/setup'
 import { Block, Section, sizeLabel } from './parts'
 import styles from './Settings.module.css'
 
-type Choice = { id: string; size: number; downloaded: boolean; locked: string }
+type Choice = { id: string; size: number; downloaded: boolean; deletable: boolean; locked: string }
 type Options = { model: string; choices: Choice[]; defaultArgs: string; args: string; custom: boolean }
 type SampleTest = { sampleS: number; processS: number; chars: number; ok: boolean; reason?: string }
 
@@ -26,7 +26,9 @@ type Props = {
   setup: SetupState | null
   /** 요약 서비스가 연결돼 있어야 요약 세부설정을 바꿀 수 있다 */
   connected: boolean
-  /** 받아쓰기 모델을 바꾸면 저장 공간 크기가 바뀐다 */
+  /** 받은 모델의 크기 (저장 공간에서 모델을 지우면 모델 선택을 다시 불러온다) */
+  modelsBytes: number
+  /** 받아쓰기 모델을 바꾸거나 지우면 저장 공간 크기가 바뀐다 */
   onSaved: () => void
   /** 요약 세부설정을 바꾸면 남은 요약 횟수가 바뀐다 */
   onStepsSaved: () => void
@@ -53,7 +55,7 @@ function creditsLabel(v: number | null): string {
 }
 
 // 고급(기본은 접힘): 받아쓰기 세부설정(모델, 실제 명령, 고칠 수 있는 옵션, 샘플로 시험), 요약 세부설정(요약·전사문 다듬기를 요약 서비스로 할지 로컬 LLM으로 할지), 로컬 LLM(OllamaBlock), 실험 기능(ChatKHU 받아쓰기, 녹음 중 받아쓰기).
-export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedSection({ setup, connected, onSaved, onStepsSaved }, ref) {
+export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedSection({ setup, connected, modelsBytes, onSaved, onStepsSaved }, ref) {
   const toast = useToast()
   const [open, setOpen] = useState(false)
   const [steps, setSteps] = useState<Steps | null>(null)
@@ -101,9 +103,11 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
     state: 'idle'
   })
   const [saving, setSaving] = useState(false)
+  // 지울지 묻는 모델
+  const [deleting, setDeleting] = useState<Choice | null>(null)
 
-  // 펼칠 때와, 속도를 다시 재서 기본 옵션(장치·스레드)이 바뀌었을 때 불러온다
-  const probeKey = `${setup?.name}:${setup?.probe.state}:${setup?.probe.gpuDevice}:${setup?.model.state}`
+  // 펼칠 때와, 속도를 다시 재서 기본 옵션(장치·스레드)이 바뀌었을 때, 받은 모델이 바뀌었을 때 불러온다
+  const probeKey = `${setup?.name}:${setup?.probe.state}:${setup?.probe.gpuDevice}:${setup?.model.state}:${modelsBytes}`
   useEffect(() => {
     if (!open) return
     call<Options>('stt.options').then((o) => {
@@ -124,6 +128,21 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
       setTest({ state: 'done', result: await call<SampleTest>('stt.test', { model, args }) })
     } catch (e) {
       setTest({ state: 'error', message: e instanceof ApiError ? e.message : '시험하지 못했어요.' })
+    }
+  }
+
+  async function deleteModel(): Promise<void> {
+    const target = deleting
+    setDeleting(null)
+    if (!target) return
+    try {
+      await call('models.delete', target.id)
+      setOpts(await call<Options>('stt.options'))
+      setTest({ state: 'idle' })
+      toast(`${target.id} 모델을 지웠어요.`, 'success')
+      onSaved()
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : '지우지 못했어요.', 'danger')
     }
   }
 
@@ -169,11 +188,38 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                       value: c.id,
                       title: MODEL_TEXT[c.id]?.title ?? c.id,
                       description: MODEL_TEXT[c.id]?.description(gpu),
-                      meta: `${sizeLabel(c.size)} · ${c.downloaded ? '받음' : '받아야 해요'}`,
+                      meta: (
+                        <>
+                          {sizeLabel(c.size)} · {c.downloaded ? '받음' : '받아야 해요'}
+                          {c.deletable && (
+                            <>
+                              {' · '}
+                              <Button variant="link" onClick={() => setDeleting(c)}>
+                                지우기
+                              </Button>
+                            </>
+                          )}
+                        </>
+                      ),
                       disabled: c.id === 'large-v3-q5_0' && !gpu && opts.model !== c.id
                     }))}
                   />
                   <p className={styles.hint}>모델을 바꾸면 받은 뒤 이 PC의 속도를 다시 재고, 예상 시간도 바뀌어요.</p>
+                  <Dialog
+                    open={!!deleting}
+                    onClose={() => setDeleting(null)}
+                    title={`${deleting?.id} 모델을 지울까요?`}
+                    actions={
+                      <>
+                        <Button onClick={() => setDeleting(null)}>취소</Button>
+                        <Button variant="danger" onClick={() => void deleteModel()}>
+                          지우기
+                        </Button>
+                      </>
+                    }
+                  >
+                    <p className={styles.dialogText}>다시 쓰려면 다시 받아야 해요. 지금 쓰는 모델은 그대로예요.</p>
+                  </Dialog>
 
                   <div className={styles.field}>
                     <span className={styles.fieldLabel}>실제로 부르는 명령</span>

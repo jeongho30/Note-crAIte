@@ -11,7 +11,7 @@ import { Row, Section, SettingsCard, sizeLabel } from './parts'
 import { ProviderSection } from './ProviderSection'
 import styles from './Settings.module.css'
 
-type Storage = { modelsBytes: number; models: string[]; jobsBytes: number; done: number; stopped: number; recordings: number; recordingsBytes: number }
+type Storage = { modelsBytes: number; models: string[]; unused: { id: string; bytes: number }[]; jobsBytes: number; done: number; stopped: number; recordings: number; recordingsBytes: number }
 // 과목 없이 저장한 노트가 가는 폴더 이름 (core/note.ts의 saveNote). 과목 목록에는 폴더로 나온다
 const UNFILED = '미분류'
 
@@ -61,6 +61,7 @@ export function Settings({ llm, doneCount, openKey, onLlmChange, onRestartWizard
   const [subjects, setSubjects] = useState<Subjects | null>(null)
   const [storage, setStorage] = useState<Storage | null>(null)
   const [version, setVersion] = useState('')
+  const [confirmModels, setConfirmModels] = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)
   const [confirmRecordings, setConfirmRecordings] = useState(false)
   const [allSubjects, setAllSubjects] = useState(false)
@@ -123,6 +124,17 @@ export function Settings({ llm, doneCount, openKey, onLlmChange, onRestartWizard
       await call('folder.use', path)
       await loadFolder()
       toast('저장 폴더를 바꿨어요. 새 노트부터 이 폴더에 저장돼요.', 'success')
+    } catch (e) {
+      fail(e)
+    }
+  }
+
+  async function clearModels(): Promise<void> {
+    setConfirmModels(false)
+    try {
+      const n = await call<number>('models.delete')
+      toast(`안 쓰는 받아쓰기 모델 ${n}개를 지웠어요.`, 'success')
+      await loadStorage()
     } catch (e) {
       fail(e)
     }
@@ -309,6 +321,11 @@ export function Settings({ llm, doneCount, openKey, onLlmChange, onRestartWizard
             sub={
               !storage ? '' : storage.models.length ? `${sizeLabel(storage.modelsBytes)} · ${storage.models.join(', ')}, 음성 구간 감지 모델` : '받은 모델이 없어요'
             }
+            ctrl={
+              <Button size="sm" variant="outline" disabled={!storage?.unused.length} onClick={() => setConfirmModels(true)}>
+                안 쓰는 모델 지우기
+              </Button>
+            }
           />
           <Row
             title="작업 기록"
@@ -336,7 +353,14 @@ export function Settings({ llm, doneCount, openKey, onLlmChange, onRestartWizard
         </SettingsCard>
       </Section>
 
-      <AdvancedSection ref={refFor('고급')} setup={setup} connected={!!llm?.provider} onSaved={() => void loadStorage()} onStepsSaved={onLlmChange} />
+      <AdvancedSection
+        ref={refFor('고급')}
+        setup={setup}
+        connected={!!llm?.provider}
+        modelsBytes={storage?.modelsBytes ?? 0}
+        onSaved={() => void loadStorage()}
+        onStepsSaved={onLlmChange}
+      />
 
       <Section ref={refFor('정보')} title="정보">
         <SettingsCard>
@@ -383,6 +407,25 @@ export function Settings({ llm, doneCount, openKey, onLlmChange, onRestartWizard
           />
         </SettingsCard>
       </Section>
+
+      <Dialog
+        open={confirmModels}
+        onClose={() => setConfirmModels(false)}
+        title={`안 쓰는 받아쓰기 모델 ${storage?.unused.length ?? 0}개를 지울까요?`}
+        actions={
+          <>
+            <Button onClick={() => setConfirmModels(false)}>취소</Button>
+            <Button variant="danger" onClick={() => void clearModels()}>
+              지우기
+            </Button>
+          </>
+        }
+      >
+        <p className={styles.dialogText}>
+          {storage?.unused.map((m) => m.id).join(', ')} · {sizeLabel(storage?.unused.reduce((n, m) => n + m.bytes, 0) ?? 0)}를 지워요. 지금 쓰는 모델({setup?.name})은
+          그대로예요. 지운 모델을 다시 쓰려면 다시 받아야 해요.
+        </p>
+      </Dialog>
 
       <Dialog
         open={confirmClear}

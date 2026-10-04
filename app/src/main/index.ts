@@ -1,6 +1,6 @@
 import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, nativeTheme, screen, session, shell } from 'electron'
 import { existsSync } from 'node:fs'
-import { mkdir, readFile, stat, statfs } from 'node:fs/promises'
+import { mkdir, readFile, rm, stat, statfs } from 'node:fs/promises'
 import { basename, isAbsolute, join, relative } from 'path'
 import { probe as probeAudio } from '../core/audio.ts'
 import { PRODUCT_NAME } from '../core/brand.ts'
@@ -545,6 +545,26 @@ async function haveModel(name: string): Promise<boolean> {
   return stat(modelFile(name)).then((s) => s.size === MODELS.whisper[name].size, () => false)
 }
 
+/**
+ * 지워도 되는 받아쓰기 모델(받다 만 .part 포함)과 차지한 크기.
+ * 지금 설정의 모델과, 받아쓰다 멈춘 작업이 이어서 쓸 모델은 뺀다(받아쓰기 전인 작업은 시작할 때 설정의 모델로 맞춰진다).
+ */
+async function unusedModels(): Promise<{ id: string; bytes: number }[]> {
+  const keep = new Set([setup.model()])
+  for (const j of await listJobs(dataDir)) {
+    const stt = j.stages.stt.status
+    if (j.status !== 'done' && j.settings.sttService !== 'chatkhu' && (stt === 'running' || stt === 'failed')) keep.add(j.settings.model)
+  }
+  const size = (path: string): Promise<number> => stat(path).then((s) => s.size, () => 0)
+  const found = []
+  for (const id of Object.keys(MODELS.whisper)) {
+    if (keep.has(id)) continue
+    const bytes = (await size(modelFile(id))) + (await size(modelFile(id) + '.part'))
+    if (bytes) found.push({ id, bytes })
+  }
+  return found
+}
+
 /** 설정 > 고급 > 받아쓰기 세부설정에 보여 줄 것 */
 async function sttOptions() {
   const settings = await loadSettings(dataDir)
@@ -555,11 +575,13 @@ async function sttOptions() {
     gpuDevice: probe.gpuDevice ?? null,
     vad: true
   }).join(' ')
+  const unused = new Set((await unusedModels()).map((m) => m.id))
   const choices = await Promise.all(
     STT_MODEL_CHOICES.map(async (id) => ({
       id,
       size: MODELS.whisper[id].size,
       downloaded: await haveModel(id),
+      deletable: unused.has(id),
       // 명령 중 앱이 정하는 부분 (강의 언어는 과목마다 달라 한국어로 보인다)
       locked: previewCommand(MODELS.whisper[id].file, MODELS.vad[VAD_MODEL].file, 'ko', []).locked
     }))
@@ -947,12 +969,25 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     return {
       modelsBytes: await dirSize(join(dataDir, 'models')),
       models: downloaded,
+      unused: await unusedModels(),
       jobsBytes: await dirSize(jobsDir(dataDir)),
       done: jobs.filter((j) => j.status === 'done').length,
       stopped: jobs.filter((j) => j.status === 'failed' || j.status === 'cancelled').length,
       recordings: recordings.length,
       recordingsBytes: recordings.reduce((n, r) => n + r.bytes, 0)
     }
+  },
+  // 안 쓰는 받아쓰기 모델을 지운다. 이름을 주면 그 모델만(설정 > 고급의 모델 선택), 없으면 모두(설정 > 저장 공간). 다시 쓰려면 다시 받는다
+  'models.delete': async (p) => {
+    const unused = await unusedModels()
+    const targets = p == null ? unused : unused.filter((m) => m.id === p)
+    if (p != null && !targets.length) throw new EngineError('input', '지금 쓰는 모델은 지울 수 없어요.')
+    for (const m of targets) {
+      await rm(modelFile(m.id), { force: true })
+      await rm(modelFile(m.id) + '.part', { force: true })
+    }
+    if (targets.length) log.write(`받아쓰기 모델 지움: ${targets.map((m) => m.id).join(', ')}`)
+    return targets.length
   },
   'jobs.clearDone': async () => {
     const n = await runner.clearDone()
