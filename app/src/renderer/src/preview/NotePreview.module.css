@@ -146,6 +146,17 @@
   max-width: 100%;
 }
 
+/* 찾기(FindBar)가 칠하는 곳: 찾은 곳 전부와 지금 보는 곳 */
+::highlight(note-find) {
+  background-color: var(--color-warning-soft);
+  color: var(--color-text);
+}
+
+::highlight(note-find-current) {
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
 /* 주요 키워드: 칩 (.body ul의 들여쓰기를 덮어쓰게 .body를 붙인다) */
 .body .keywords {
   display: flex;

@@ -1,0 +1,39 @@
+/* 창 오른쪽 위에 떠 있는 찾기 막대 (본문을 스크롤해도 그 자리) */
+.bar {
+  position: fixed;
+  top: calc(var(--titlebar-h) + var(--space-3));
+  right: var(--space-6);
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-1);
+}
+
+.input {
+  width: 180px;
+  height: var(--control-h-sm);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--font-size-sm);
+}
+
+.input::placeholder {
+  color: var(--color-text-3);
+}
+
+.count {
+  min-width: 48px;
+  color: var(--color-text-3);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}

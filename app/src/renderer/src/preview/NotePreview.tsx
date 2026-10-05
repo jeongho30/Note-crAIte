@@ -6,6 +6,7 @@ import type { LlmStatus } from '../wizard/shared'
 import 'katex/dist/katex.min.css'
 import { NoteDeleteDialog } from '../notes/NoteDeleteDialog'
 import { NotePropsDialog } from '../notes/NotePropsDialog'
+import { FindBar } from './FindBar'
 import { md, parseNote, type Segment } from './markdown'
 import styles from './NotePreview.module.css'
 
@@ -60,6 +61,7 @@ export function NotePreview({ path, jobs, llm, onBack, onConnect, onMoved, onDel
   const [starting, setStarting] = useState(false)
   const [editing, setEditing] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const bodyRef = useRef<HTMLDivElement>(null)
 
   const load = useCallback(() => {
     call<NoteData>('notes.read', path).then(
@@ -214,7 +216,8 @@ export function NotePreview({ path, jobs, llm, onBack, onConnect, onMoved, onDel
         </Banner>
       )}
 
-      <div className={styles.body} onClick={onBodyClick}>
+      <FindBar root={bodyRef} content={parsed} />
+      <div ref={bodyRef} className={styles.body} onClick={onBodyClick}>
         {parsed.segments.map((s, i) => (
           <SegmentView key={i} segment={s} />
         ))}

@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import { renderNote } from '../src/core/note.ts'
 import { filterNotes } from '../src/renderer/src/notes/filter.ts'
 import { md, parseNote } from '../src/renderer/src/preview/markdown.ts'
+import { findMatches } from '../src/renderer/src/preview/find.ts'
 
 const NOTE = renderNote({
   title: 'Lexical Analysis',
@@ -75,4 +76,11 @@ test('노트 목록: 제목·과목의 낱말로 찾고, 과목·미분류로 �
   assert.deepEqual(titles(filterNotes(notes, 'lex 컴파', { kind: 'all' }, 'modified')), ['Lexical Analysis'])
   assert.deepEqual(titles(filterNotes(notes, '', { kind: 'subject', name: '컴파일러' }, 'date')), ['Parsing', 'Lexical Analysis'])
   assert.deepEqual(titles(filterNotes(notes, '', { kind: 'none' }, 'modified')), ['메모'])
+})
+
+test('찾기: 대소문자를 가리지 않고 겹치지 않게 찾는다', () => {
+  assert.deepEqual(findMatches('Token과 token, TOKEN', 'token'), [0, 7, 14])
+  assert.deepEqual(findMatches('aaaa', 'aa'), [0, 2])
+  assert.deepEqual(findMatches('토큰', ''), [])
+  assert.deepEqual(findMatches('토큰', '파서'), [])
 })
