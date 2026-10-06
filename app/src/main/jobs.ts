@@ -219,11 +219,13 @@ export function createJobRunner(d: Deps) {
         }
         probeCache = await d.probe()
         const jobDir = dirOf(job.id)
-        // 받아쓰기 전이면 지금 설정의 모델·옵션과 잰 장치·스레드로 맞춘다
-        // (모델 없이 넣은 작업은 만들 때 장치를 몰랐고, 기다리는 동안 설정에서 모델을 바꿨을 수 있다)
-        if (job.stages.stt.status === 'pending') {
+        // 받아쓰기가 남았으면 지금 설정의 옵션과 잰 장치·스레드로 맞춘다
+        // (모델 없이 넣은 작업은 만들 때 장치를 몰랐고, 멈춘 작업은 설정에서 옵션을 고친 뒤 다시 시작했을 수 있다: 남은 조각에 쓰인다)
+        // 모델은 받아쓰기 전일 때만 맞춘다. 받아쓰다 멈춘 작업은 끝난 조각과 같은 모델로 이어서 한다.
+        const sttStatus = job.stages.stt.status
+        if (sttStatus !== 'done' && sttStatus !== 'skipped') {
           const stt = await d.stt()
-          job.settings.model = stt.model
+          if (sttStatus === 'pending') job.settings.model = stt.model
           job.settings.args = stt.args
           if (probeCache) {
             job.settings.gpuDevice = probeCache.gpuDevice
