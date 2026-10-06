@@ -21,6 +21,10 @@ export type Settings = {
   summaryModel: string | null
   /** 전사문 다듬기 모델. null이면 다듬지 않는다(기본) */
   polishModel: string | null
+  /** 요약 프롬프트 뒤에 붙는 사용자 추가 지시. null이면 없음 (설정 > 고급 > 요약 세부설정) */
+  summaryExtra: string | null
+  /** 통째로 고친 요약 프롬프트. null이면 앱 기본(core/prompts.ts의 SUMMARY_UNIFIED). 프롬프트 칸을 10번 눌러야 고칠 수 있다 */
+  summaryPrompt: string | null
   /** 받아쓰기 모델 (설정 > 고급 > 받아쓰기 세부설정) */
   sttModel: string
   /** 고친 whisper-cli 옵션. null이면 앱 기본(이 PC에서 잰 장치·스레드) */
@@ -54,7 +58,7 @@ export type Language = 'ko' | 'en'
 
 export const DEFAULT_SETTINGS: Settings = {
   wizardStep: 0, wizardDone: false, outDir: null, provider: null, lastSubject: null, subjectLanguage: {},
-  summaryModel: null, polishModel: null, sttModel: DEFAULT_MODEL, sttArgs: null, theme: 'system',
+  summaryModel: null, polishModel: null, summaryExtra: null, summaryPrompt: null, sttModel: DEFAULT_MODEL, sttArgs: null, theme: 'system',
   watch: { enabled: false, folder: null, paused: false }, sttWhileRecording: false, chatkhuStt: false,
   ollama: { summary: false, polish: false, summaryModel: null, polishModel: null, summaryRequest: null, polishRequest: null }
 }

@@ -5,6 +5,7 @@ import type { Settings } from '../../../core/settings'
 import { cx } from '../components/cx'
 import { ModelPicker, type ModelOption } from './ModelPicker'
 import { OllamaBlock } from './OllamaBlock'
+import { SummaryPrompt } from './SummaryPrompt'
 import type { SetupState } from '../../../main/setup'
 import { Block, Section, sizeLabel } from './parts'
 import styles from './Settings.module.css'
@@ -371,6 +372,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                   </p>
                 </>
               )}
+              <SummaryPrompt />
             </Block>
 
             <OllamaBlock

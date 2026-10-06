@@ -278,6 +278,14 @@
   color: var(--color-text);
 }
 
+/* 요약 프롬프트(읽기 전용): 긴 글이라 줄바꿈을 살리고 칸 안에서 스크롤한다 */
+.prompt {
+  max-height: 220px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  font-family: inherit;
+}
+
 .mono {
   font-family: var(--font-mono);
   font-size: 12.5px;

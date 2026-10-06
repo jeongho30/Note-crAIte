@@ -4,7 +4,7 @@ import { EngineError } from './errors.ts'
 import { chat } from './llm.ts'
 import type { Message, Usage } from './llm.ts'
 import type { OllamaRequest } from './ollama.ts'
-import { SUMMARY_UNIFIED } from './prompts.ts'
+import { SUMMARY_EXTRA_HEADER, SUMMARY_UNIFIED } from './prompts.ts'
 
 export const SCHEMA = {
   type: 'object',
@@ -41,9 +41,28 @@ export type Summary = {
   parseFailed: boolean
 }
 
-export function buildMessages(transcript: string, notes: string, subject: string | null): Message[] {
+/**
+ * 사용자가 고친 요약 프롬프트 (설정 > 고급 > 요약 세부설정).
+ * extra는 기본 프롬프트 뒤에 붙는 추가 지시, custom은 기본 프롬프트를 통째로 바꾼 글. 없으면(null) 앱 기본이다.
+ */
+export type PromptOverride = { extra: string | null; custom: string | null }
+
+/** 설정에 저장할 값으로 다듬는다: 빈 글과, 기본 프롬프트와 같은 고친 프롬프트는 없는 것으로 둔다 (앱이 기본 프롬프트를 고치면 따라가게) */
+export function cleanPrompt(extra: unknown, custom: unknown): PromptOverride {
+  const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null)
+  const edited = text(custom)
+  return { extra: text(extra), custom: edited === SUMMARY_UNIFIED.trim() ? null : edited }
+}
+
+/** 요약 호출의 시스템 프롬프트. 고친 것이 없으면 SUMMARY_UNIFIED 그대로다 */
+export function systemPrompt(p?: PromptOverride | null): string {
+  const base = p?.custom ?? SUMMARY_UNIFIED
+  return p?.extra ? `${base.trimEnd()}\n\n${SUMMARY_EXTRA_HEADER}\n${p.extra}\n` : base
+}
+
+export function buildMessages(transcript: string, notes: string, subject: string | null, prompt?: PromptOverride | null): Message[] {
   const user = `[과목]\n${subject || '(미지정)'}\n\n[필기노트]\n${notes || '(없음)'}\n\n[전사]\n${transcript}`
-  return [{ role: 'system', content: SUMMARY_UNIFIED }, { role: 'user', content: user }]
+  return [{ role: 'system', content: systemPrompt(prompt) }, { role: 'user', content: user }]
 }
 
 function strip(raw: string, prefix: string, suffix = ''): string {
@@ -172,6 +191,8 @@ export type SummarizeOptions = {
   service?: string
   /** 있으면 로컬 LLM(Ollama)으로 요약한다. 요약이 작업의 마지막 호출이라 끝나면 모델을 내린다 */
   ollama?: OllamaRequest
+  /** 사용자가 고친 요약 프롬프트 */
+  prompt?: PromptOverride | null
   signal?: AbortSignal
 }
 
@@ -180,7 +201,7 @@ export async function summarize(transcript: string, notes: string, subject: stri
   const responseFormat = o.useSchema === false
     ? undefined
     : { type: 'json_schema', json_schema: { name: 'lecture_note', strict: true, schema: SCHEMA } }
-  const [content, usage] = await chat(o.endpoint, o.apiKey, o.model, buildMessages(transcript, notes, subject),
+  const [content, usage] = await chat(o.endpoint, o.apiKey, o.model, buildMessages(transcript, notes, subject, o.prompt),
                                       { maxTokens: o.maxTokens ?? (o.ollama ? undefined : SUMMARY_MAX_TOKENS), responseFormat, service: o.service, ollama: o.ollama, signal: o.signal, unloadAfter: true })
   if (usage?.['done_reason'] === 'length') {
     throw new EngineError('llm', o.ollama

@@ -24,6 +24,7 @@ import { chargedCredits, ChatkhuStt } from './stt/chatkhu.ts'
 import { WhisperCpp } from './stt/whispercpp.ts'
 import { polishParagraphs } from './polish.ts'
 import { summarize } from './summarize.ts'
+import type { PromptOverride } from './summarize.ts'
 import { verifyCorrections } from './verify.ts'
 
 // S3 결정(docs/decisions.md): whisper.cpp, CPU·GPU 모두 large-v3-turbo-q8_0 + greedy
@@ -134,6 +135,8 @@ export type JobContext = {
   apiKey: string | null // 연결된 요약 서비스의 키. job.json에는 저장하지 않는다
   /** ChatKHU 게이트웨이 주소 (ChatKHU 받아쓰기를 쓰는 작업만) */
   chatkhuBase?: string
+  /** 사용자가 고친 요약 프롬프트. 요약을 시작할 때 읽는다 (받아쓰는 동안 설정에서 고친 것도 쓰이게) */
+  summaryPrompt?: () => Promise<PromptOverride>
   onProgress?: (stage: StageName, frac: number) => void
   signal?: AbortSignal
 }
@@ -313,8 +316,9 @@ const RUNNERS: Record<StageName, Runner> = {
     // 단가를 아는 모델은 응답의 토큰 수로 크레딧을 계산하고, 모르는 모델만 요약 전후 잔액 차이로 잰다
     const priced = llm.model in PRICES
     const before = credited(llm) && !priced && llm.creditsUrl ? await creditsRemaining(llm.creditsUrl, ctx.apiKey!) : null
+    const prompt = await ctx.summaryPrompt?.()
     const result = await unloadOnError(llm, () => summarize(text, notes, job.input.subject, {
-      endpoint: llm.endpoint, apiKey: ctx.apiKey, model: llm.model, fallbackTitle: stem(job.input.audio), service: llm.service, ollama: llm.ollama, signal: ctx.signal
+      endpoint: llm.endpoint, apiKey: ctx.apiKey, model: llm.model, fallbackTitle: stem(job.input.audio), service: llm.service, ollama: llm.ollama, prompt, signal: ctx.signal
     }))
     job.usage = { ...job.usage, summary: tokenCount(result.usage?.prompt_tokens, result.usage?.completion_tokens) }
     // 앞 단계(다듬기·ChatKHU 받아쓰기)의 크레딧은 그대로 둔다

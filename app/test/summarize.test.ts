@@ -2,7 +2,9 @@ import assert from 'node:assert/strict'
 import { afterEach, mock, test } from 'node:test'
 import { EngineError } from '../src/core/errors.ts'
 import { chat } from '../src/core/llm.ts'
-import { buildMessages, dropEchoedGloss, parseResponse, restoreLatex, summarize, SUMMARY_MAX_TOKENS } from '../src/core/summarize.ts'
+import { SUMMARY_EXTRA_HEADER, SUMMARY_UNIFIED } from '../src/core/prompts.ts'
+import { buildMessages, cleanPrompt, dropEchoedGloss, parseResponse, restoreLatex, summarize, SUMMARY_MAX_TOKENS } from '../src/core/summarize.ts'
+import type { PromptOverride } from '../src/core/summarize.ts'
 
 const GOOD = { title: '렉시컬 분석', summary: '요약', keywords: ['Token', ' '], corrections: [{ wrong: 'a', right: 'b' }] }
 
@@ -101,6 +103,25 @@ test('parseResponse는 요약·키워드·교정의 깨진 수식을 되살리�
 test('buildMessages는 빠진 입력을 표시한다', () => {
   const user = buildMessages('전사', '', null)[1].content
   assert.ok(user.includes('[과목]\n(미지정)') && user.includes('[필기노트]\n(없음)') && user.endsWith('[전사]\n전사'))
+})
+
+test('요약 프롬프트: 고친 것이 없으면 기본 그대로, 추가 지시는 뒤에 붙고, 고친 프롬프트는 기본을 대신한다', () => {
+  const system = (p?: PromptOverride): string => buildMessages('전사', '', null, p)[0].content
+  assert.equal(system(), SUMMARY_UNIFIED)
+  assert.equal(system({ extra: null, custom: null }), SUMMARY_UNIFIED)
+  const added = system({ extra: '세 줄로 써 주세요.', custom: null })
+  assert.ok(added.startsWith(SUMMARY_UNIFIED.trimEnd()), '기본 프롬프트는 그대로 앞에 있다')
+  assert.ok(added.endsWith(`\n\n${SUMMARY_EXTRA_HEADER}\n세 줄로 써 주세요.\n`))
+  assert.equal(system({ extra: null, custom: '내 프롬프트' }), '내 프롬프트')
+  assert.equal(system({ extra: '짧게', custom: '내 프롬프트' }), `내 프롬프트\n\n${SUMMARY_EXTRA_HEADER}\n짧게\n`)
+})
+
+test('cleanPrompt: 빈 글과 기본 프롬프트와 같은 글은 없는 것으로 둔다', () => {
+  assert.deepEqual(cleanPrompt('  ', null), { extra: null, custom: null })
+  // 화면이 기본 프롬프트를 그대로 돌려보내도 고친 것으로 저장하지 않는다
+  assert.deepEqual(cleanPrompt(' 짧게 \n', `\n${SUMMARY_UNIFIED}\n`), { extra: '짧게', custom: null })
+  assert.deepEqual(cleanPrompt(undefined, `${SUMMARY_UNIFIED}- 한 줄 더`), { extra: null, custom: `${SUMMARY_UNIFIED}- 한 줄 더` })
+  assert.deepEqual(cleanPrompt(3, {}), { extra: null, custom: null })
 })
 
 test('summarize는 json_schema를 보내고 usage를 돌려준다', async () => {

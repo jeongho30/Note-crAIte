@@ -13,6 +13,7 @@ import { estimateSttSeconds, polishRate, sttSpeed, summarySeconds } from '../cor
 import type { SttSpeed } from '../core/probe.ts'
 import type { ProbeResult } from '../core/probe.ts'
 import type { Language } from '../core/settings.ts'
+import type { PromptOverride } from '../core/summarize.ts'
 
 export type JobInput = { audio: string; notes: string | null; subject: string | null; language: Language; from?: 'watch' }
 
@@ -68,6 +69,8 @@ type Deps = {
   /** 지금 설정에서 요약과 전사문 다듬기가 부를 서비스·모델 (안 하면 null), 실행할 때의 API 키 */
   llm: () => Promise<{ summary: LlmSettings | null; polish: LlmSettings | null }>
   apiKey: () => Promise<string | null>
+  /** 지금 설정의 고친 요약 프롬프트 (추가 지시·전체 수정) */
+  summaryPrompt: () => Promise<PromptOverride>
   outDir: () => Promise<string>
   emit: (jobs: JobView[]) => void
   /** 작업이 끝났을 때 (자동 처리로 들어온 녹음을 "처리됨"으로 옮기는 데 쓴다) */
@@ -245,6 +248,7 @@ export function createJobRunner(d: Deps) {
           modelPath: async (kind, name) => join(d.dataDir, 'models', MODELS[kind][name].file),
           apiKey: await d.apiKey(),
           chatkhuBase: d.chatkhuBase,
+          summaryPrompt: d.summaryPrompt,
           signal: controller.signal,
           onProgress: (stage, frac) => {
             if (!current) return

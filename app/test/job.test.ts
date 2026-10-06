@@ -95,6 +95,21 @@ test('요약이 실패한 뒤 재개하면 STT를 다시 돌리지 않고 요약
   assert.match(md, /교정 내역 \(1건\)\n> - 안녕하세요 → 안녕하십니까 \(1회\)/)
 })
 
+test('고친 요약 프롬프트는 요약을 시작할 때 읽어 요청에 넣는다', { skip }, async () => {
+  const dir = await tempDir()
+  const jobDir = await createJob(join(dir, 'data'), await recording(dir), null, null, settings(join(dir, 'out'), true))
+  const bodies: string[] = []
+  mock.method(globalThis, 'fetch', async (_url: string, init: RequestInit) => {
+    bodies.push(String(init.body))
+    const content = JSON.stringify({ title: '인사', summary: '인사를 했다.', keywords: [], corrections: [] })
+    return new Response(JSON.stringify({ choices: [{ message: { content } }], usage: { prompt_tokens: 100, completion_tokens: 10 } }), { status: 200 })
+  })
+  const job = await runJob(jobDir, { ...context(dir, 'key'), summaryPrompt: async () => ({ extra: '세 줄로 써 주세요.', custom: null }) })
+
+  assert.equal(job.status, 'done')
+  assert.ok(JSON.parse(bodies[0]).messages[0].content.endsWith('세 줄로 써 주세요.\n'))
+})
+
 test('교정 검증: 검증에서 버린 교정은 적용하지 않고, 검증 크레딧을 따로 적는다', { skip }, async () => {
   const dir = await tempDir()
   const jobDir = await createJob(join(dir, 'data'), await recording(dir), null, null, { ...settings(join(dir, 'out'), true), verifyModel: 'gpt-6-luna' })

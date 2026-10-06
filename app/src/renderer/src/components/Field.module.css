@@ -47,6 +47,15 @@
   border-color: var(--color-danger);
 }
 
+/* 여러 줄 입력칸: 높이는 rows가 정하고 아래로만 늘릴 수 있다 */
+.area {
+  display: block;
+  height: auto;
+  padding: var(--space-2) var(--space-3);
+  line-height: var(--line-height-body);
+  resize: vertical;
+}
+
 .selectWrap {
   position: relative;
 }

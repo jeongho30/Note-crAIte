@@ -23,7 +23,9 @@ import { chatkhuSttCredits } from '../core/stt/chatkhu.ts'
 import type { ProviderId } from '../core/providers.ts'
 import { listNotes, recentNotes } from '../core/recent.ts'
 import { forgetProcessed, isRecording, listRecordings, markProcessed, recordingsDir, repairRecordings, unprocessedRecordings } from '../core/recordings.ts'
+import { SUMMARY_UNIFIED } from '../core/prompts.ts'
 import { loadSettings, updateSettings } from '../core/settings.ts'
+import { cleanPrompt } from '../core/summarize.ts'
 import { checkArgs } from '../core/stt/whispercpp.ts'
 import { defaultArgs, parseArgs, previewCommand } from '../core/sttargs.ts'
 import type { Language, Settings, Theme } from '../core/settings.ts'
@@ -125,6 +127,10 @@ const runner = createJobRunner({
   apiKey: async () => {
     const { provider } = await loadSettings(dataDir)
     return provider ? readKey(dataDir, provider) : null
+  },
+  summaryPrompt: async () => {
+    const { summaryExtra, summaryPrompt } = await loadSettings(dataDir)
+    return { extra: summaryExtra, custom: summaryPrompt }
   },
   outDir,
   emit: (jobs) => {
@@ -514,6 +520,12 @@ async function llmStatus(): Promise<{
     summariesLeft: await summariesLeft(credits),
     ...views
   }
+}
+
+/** 설정 > 고급 > 요약 세부설정의 요약 프롬프트: 앱 기본, 추가 지시, 통째로 고친 프롬프트(없으면 null) */
+async function promptState() {
+  const { summaryExtra, summaryPrompt } = await loadSettings(dataDir)
+  return { base: SUMMARY_UNIFIED.trim(), extra: summaryExtra, custom: summaryPrompt }
 }
 
 /** 로컬 LLM 블록: Ollama가 켜져 있는지, 설치된 모델, 단계별로 고른 모델과 요청 옵션 */
@@ -919,6 +931,17 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     }
     await updateSettings(dataDir, patch)
     log.write(`요약 세부설정: ${JSON.stringify(patch)}`)
+  },
+  // 요약 프롬프트: 앱 기본(읽기 전용으로 보임), 사용자가 더한 지시, 통째로 고친 프롬프트
+  'prompt.get': () => promptState(),
+  // 빈 글과 기본 프롬프트와 같은 글은 없는 것으로 저장한다. 다음 요약(요약 다시 만들기 포함)부터 쓰인다
+  'prompt.save': async (p) => {
+    const { extra, custom } = (p ?? {}) as { extra?: unknown; custom?: unknown }
+    const next = cleanPrompt(extra, custom)
+    await updateSettings(dataDir, { summaryExtra: next.extra, summaryPrompt: next.custom })
+    // 내용은 적지 않는다 (길이만)
+    log.write(`요약 프롬프트: ${next.custom ? `고친 프롬프트 ${next.custom.length}자` : '기본'} · 추가 지시 ${next.extra ? `${next.extra.length}자` : '없음'}`)
+    return promptState()
   },
 
   // ── 설정 > 고급 > 로컬 LLM (Ollama) ──
