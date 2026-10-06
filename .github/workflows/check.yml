@@ -1,0 +1,58 @@
+# push마다 타입 검사와 테스트만 돌린다. 설치 파일은 만들지 않는다(installer.yml).
+# ffmpeg가 PATH에 없으면 조각 나누기와 작업을 끝까지 돌리는 테스트가 건너뛰어져, 설치본에 넣는 것과 같은 ffmpeg를 받아 둔다.
+name: check
+
+on:
+  push:
+    # 태그는 installer.yml이 같은 검사를 하므로 브랜치만 본다. 문서만 바뀐 push는 돌리지 않는다
+    branches: ['**']
+    paths-ignore: ['docs/**', '*.md']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 같은 브랜치에 다시 올리면 앞의 실행은 그만둔다
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        # macOS는 feat/mac에서 통과한 뒤에 더한다
+        os: [windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: ffmpeg 받기 (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: ./scripts/fetch_ffmpeg.ps1
+
+      # 폴더가 없으면 여기서 멈춘다 (ffmpeg 없이 테스트가 건너뛰어진 채 통과하지 않게)
+      - name: ffmpeg를 PATH에
+        shell: pwsh
+        run: Add-Content -Path $env:GITHUB_PATH -Value (Resolve-Path .cache/ffmpeg/bin).Path
+
+      - name: 의존성
+        working-directory: app
+        run: npm ci
+
+      - name: 타입 검사
+        working-directory: app
+        run: npm run typecheck
+
+      - name: 테스트
+        working-directory: app
+        run: npm test
