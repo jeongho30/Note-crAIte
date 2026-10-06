@@ -576,12 +576,17 @@ async function unusedModels(): Promise<{ id: string; bytes: number }[]> {
 async function sttOptions() {
   const settings = await loadSettings(dataDir)
   const probe = setup.get().probe
-  const defaults = defaultArgs({
-    threads: probe.threads ?? defaultThreads(await detect()),
-    beamSize: DEFAULT_BEAM_SIZE,
-    gpuDevice: probe.gpuDevice ?? null,
-    vad: true
-  }).join(' ')
+  // 그래픽카드를 쓸지는 속도를 재야 안다. 재기 전·재는 중에는 기본 옵션을 정하지 않는다(null).
+  // 그동안 그래픽카드가 없는 것으로 쳐서 -ng를 보이면 안 된다 (작업도 속도 재기가 끝나야 받아쓰기를 시작한다).
+  const measured = probe.state === 'done' || probe.state === 'error'
+  const defaults = measured
+    ? defaultArgs({
+        threads: probe.threads ?? defaultThreads(await detect()),
+        beamSize: DEFAULT_BEAM_SIZE,
+        gpuDevice: probe.gpuDevice ?? null,
+        vad: true
+      }).join(' ')
+    : null
   const unused = new Set((await unusedModels()).map((m) => m.id))
   const choices = await Promise.all(
     STT_MODEL_CHOICES.map(async (id) => ({
@@ -593,14 +598,19 @@ async function sttOptions() {
       locked: previewCommand(MODELS.whisper[id].file, MODELS.vad[VAD_MODEL].file, 'ko', []).locked
     }))
   )
-  return { model: setup.model(), choices, defaultArgs: defaults, args: settings.sttArgs ?? defaults, custom: settings.sttArgs !== null }
+  // args는 사용자가 고쳐 저장한 옵션. null이면 기본 옵션을 쓴다.
+  return { model: setup.model(), choices, defaultArgs: defaults, args: settings.sttArgs }
 }
 
-/** 고른 모델과 옵션을 검사한다. 옵션은 whisper-cli에 한 번 읽혀 봐서 모르는 옵션·빠진 값을 저장 전에 거른다. */
-async function sttInput(p: unknown): Promise<{ model: string; args: string[] }> {
+/**
+ * 고른 모델과 옵션을 검사한다. 옵션은 whisper-cli에 한 번 읽혀 봐서 모르는 옵션·빠진 값을 저장 전에 거른다.
+ * 옵션에 손대지 않은 화면은 args를 null로 보낸다(기본 옵션).
+ */
+async function sttInput(p: unknown): Promise<{ model: string; args: string[] | null }> {
   const { model, args } = p as { model: unknown; args: unknown }
   const name = String(model)
   if (!(STT_MODEL_CHOICES as readonly string[]).includes(name)) throw new EngineError('input', '고를 수 없는 모델이에요.')
+  if (args === null) return { model: name, args: null }
   const parsed = parseArgs(String(args ?? ''))
   if (!parsed.length) throw new EngineError('input', '옵션이 비었어요. [기본값으로 되돌리기]를 눌러 주세요.')
   const problem = await checkArgs([findWhisperCli(whisperDirs)], parsed)
@@ -961,6 +971,7 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     if (!(await haveModel(model))) throw new EngineError('input', '이 모델을 받은 뒤 시험할 수 있어요. [저장]하면 받아요.')
     if (runner.transcribing()) throw new EngineError('input', '받아쓰기 중에는 시험할 수 없어요. 작업이 끝난 뒤 해 주세요.')
     if (setup.get().probe.state === 'running') throw new EngineError('input', '속도를 재는 중이에요. 끝난 뒤 시험해 주세요.')
+    if (!args) throw new EngineError('input', '시험할 옵션이 없어요. 속도를 잰 뒤 다시 해 주세요.')
     const scriptPath = probeSample.replace(/\.wav$/, '.txt')
     // 대본 파일의 첫 빈 줄 뒤가 읽은 글이다
     const script = existsSync(scriptPath) ? (await readFile(scriptPath, 'utf8')).split(/\r?\n\r?\n/).slice(1).join(' ') || null : null
@@ -977,14 +988,16 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     log.write(`샘플 시험: ${model} · ${args.join(' ')} · ${result.processS.toFixed(1)}초 · ${result.ok ? '정상' : result.reason}`)
     return result
   },
-  // 모델과 옵션을 저장한다. 모델을 바꾸면 받은 뒤 속도를 다시 잰다. 기본 옵션과 같으면 기본으로 둔다(장치가 바뀌면 따라가게).
+  // 모델과 옵션을 저장한다. 모델을 바꾸면 받은 뒤 속도를 다시 잰다.
+  // 옵션에 손대지 않았거나(null) 기본 옵션과 같으면 기본으로 둔다(장치가 바뀌면 따라가게).
   'stt.save': async (p) => {
     const { model, args } = await sttInput(p)
-    const text = args.join(' ')
+    const text = args?.join(' ') ?? null
     const { defaultArgs: defaults } = await sttOptions()
-    await updateSettings(dataDir, { sttModel: model, sttArgs: text === defaults ? null : text })
+    const custom = text === defaults ? null : text
+    await updateSettings(dataDir, { sttModel: model, sttArgs: custom })
     await setup.setModel(model)
-    log.write(`받아쓰기 설정: ${model} · ${text === defaults ? '기본 옵션' : text}`)
+    log.write(`받아쓰기 설정: ${model} · ${custom ?? '기본 옵션'}`)
     return sttOptions()
   },
 

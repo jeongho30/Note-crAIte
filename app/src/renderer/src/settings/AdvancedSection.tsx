@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useState } from 'react'
+import { forwardRef, useEffect, useRef, useState } from 'react'
 import { ApiError, call } from '../api'
 import { Button, Dialog, RadioCardGroup, Switch, TextField, useToast } from '../components'
 import type { Settings } from '../../../core/settings'
@@ -10,7 +10,8 @@ import { Block, Section, sizeLabel } from './parts'
 import styles from './Settings.module.css'
 
 type Choice = { id: string; size: number; downloaded: boolean; deletable: boolean; locked: string }
-type Options = { model: string; choices: Choice[]; defaultArgs: string; args: string; custom: boolean }
+// defaultArgs는 속도를 재기 전이면 null(쓸 장치를 아직 모름), args는 고쳐 저장한 옵션이 없으면 null
+type Options = { model: string; choices: Choice[]; defaultArgs: string | null; args: string | null }
 type SampleTest = { sampleS: number; processS: number; chars: number; ok: boolean; reason?: string }
 
 const MODEL_TEXT: Record<string, { title: string; description: (gpu: boolean) => string }> = {
@@ -98,7 +99,8 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
   const polish90 = steps?.models.find((m) => m.id === polishModel)?.credits90 ?? null
   const [opts, setOpts] = useState<Options | null>(null)
   const [model, setModel] = useState('')
-  const [args, setArgs] = useState('')
+  // 옵션 입력칸에 쓴 글. null이면 손대지 않은 것: 기본 옵션을 보이고, 저장해도 고친 옵션으로 남기지 않는다.
+  const [args, setArgs] = useState<string | null>(null)
   const [test, setTest] = useState<{ state: 'idle' | 'running' } | { state: 'done'; result: SampleTest } | { state: 'error'; message: string }>({
     state: 'idle'
   })
@@ -108,24 +110,31 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
 
   // 펼칠 때와, 속도를 다시 재서 기본 옵션(장치·스레드)이 바뀌었을 때, 받은 모델이 바뀌었을 때 불러온다
   const probeKey = `${setup?.name}:${setup?.probe.state}:${setup?.probe.gpuDevice}:${setup?.model.state}:${modelsBytes}`
+  // 저장된 고친 옵션은 처음 불러올 때만 입력칸에 넣는다 (다시 불러올 때 넣으면 쓰던 글이 바뀐다)
+  const loaded = useRef(false)
   useEffect(() => {
     if (!open) return
     call<Options>('stt.options').then((o) => {
       setOpts(o)
       setModel((m) => m || o.model)
-      setArgs((a) => a || o.args)
+      if (!loaded.current) setArgs(o.args)
+      loaded.current = true
     })
   }, [open, probeKey])
 
   const choice = opts?.choices.find((c) => c.id === model)
   // 그래픽카드 없이 받아쓰는 PC에서는 large-v3를 고를 수 없다 (아주 느림)
   const gpu = setup?.probe.state !== 'done' || !!setup.probe.gpuName
-  const dirty = !!opts && (model !== opts.model || args.trim() !== opts.args)
+  // 입력칸에 보이는 옵션: 손대지 않았으면 기본 옵션 (속도를 재기 전이면 아직 없음)
+  const shown = args ?? opts?.defaultArgs ?? ''
+  // 저장할 고친 옵션: 손대지 않았거나 기본 옵션과 같으면 없음
+  const custom = args === null || args.trim() === opts?.defaultArgs ? null : args.trim()
+  const dirty = !!opts && (model !== opts.model || custom !== opts.args)
 
   async function runTest(): Promise<void> {
     setTest({ state: 'running' })
     try {
-      setTest({ state: 'done', result: await call<SampleTest>('stt.test', { model, args }) })
+      setTest({ state: 'done', result: await call<SampleTest>('stt.test', { model, args: shown }) })
     } catch (e) {
       setTest({ state: 'error', message: e instanceof ApiError ? e.message : '시험하지 못했어요.' })
     }
@@ -149,7 +158,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
   async function save(): Promise<void> {
     setSaving(true)
     try {
-      const o = await call<Options>('stt.save', { model, args })
+      const o = await call<Options>('stt.save', { model, args: custom })
       setOpts(o)
       setModel(o.model)
       setArgs(o.args)
@@ -224,7 +233,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                   <div className={styles.field}>
                     <span className={styles.fieldLabel}>실제로 부르는 명령</span>
                     <p className={styles.code}>
-                      {choice?.locked} <mark>{args.trim()}</mark>
+                      {choice?.locked} <mark>{shown.trim()}</mark>
                     </p>
                   </div>
                   <p className={styles.hint}>색칠된 옵션만 고칠 수 있어요. 파일·모델·언어·출력 형식은 앱이 정해요(강의 언어는 과목에서).</p>
@@ -234,7 +243,8 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                     className={styles.mono}
                     spellCheck={false}
                     autoComplete="off"
-                    value={args}
+                    hint={args === null && opts.defaultArgs === null ? '이 PC의 속도를 잰 뒤 기본 옵션이 정해져요. 그래픽카드를 쓸지는 재 봐야 알아요.' : undefined}
+                    value={shown}
                     onChange={(e) => {
                       setArgs(e.target.value)
                       setTest({ state: 'idle' })
@@ -265,9 +275,9 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                     <Button
                       size="sm"
                       variant="ghost"
-                      disabled={args.trim() === opts.defaultArgs}
+                      disabled={custom === null}
                       onClick={() => {
-                        setArgs(opts.defaultArgs)
+                        setArgs(null)
                         setTest({ state: 'idle' })
                       }}
                     >
@@ -275,13 +285,13 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                     </Button>
                     <Button
                       size="sm"
-                      disabled={!choice?.downloaded || test.state === 'running' || !args.trim()}
+                      disabled={!choice?.downloaded || test.state === 'running' || !shown.trim()}
                       title={choice?.downloaded ? undefined : '이 모델을 받은 뒤 시험할 수 있어요'}
                       onClick={() => void runTest()}
                     >
                       {test.state === 'running' ? '시험하는 중…' : '샘플로 시험하기'}
                     </Button>
-                    <Button size="sm" variant="primary" disabled={!dirty || saving || !args.trim()} onClick={() => void save()}>
+                    <Button size="sm" variant="primary" disabled={!dirty || saving || (args !== null && !args.trim())} onClick={() => void save()}>
                       저장
                     </Button>
                   </div>
