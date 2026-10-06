@@ -70,7 +70,7 @@ powershell -File ../scripts/fetch_ffmpeg.ps1
 
 npm 11은 의존 패키지의 설치 스크립트를 막아 `npm ci`만으로는 Electron 바이너리(`node_modules/electron/dist`·`path.txt`)가 안 생긴다. 그래서 `package.json`의 `postinstall`이 `node node_modules/electron/install.js`를 돌린다(10/1). 그래도 `npm run dev`가 `Error: Electron uninstall`로 멈추면 그 명령을 직접 돌린다.
 
-`build_whisper.ps1`의 결과는 `.cache/whisper/bin/`에, `fetch_ffmpeg.ps1`(BtbN LGPL 빌드, 고정 태그·sha256)의 결과는 `.cache/ffmpeg/bin/`에 모인다. 개발 중에는 `.cache/whisper/bin`의 `whisper-cli.exe`와 PATH의 `ffmpeg`를 쓴다. 설치본은 둘 다 `resources/bin/`(electron-builder의 `extraResources`)에서 찾는다. 설치 파일은 `dist/installer/`에 생긴다. CI(`.github/workflows/installer.yml`, 수동 실행 또는 `v*` 태그)는 whisper 빌드(캐시) → ffmpeg → 타입 검사·테스트 → 설치 파일을 만들어 아티팩트 `Note-crAIte-windows`로 올린다(Release에는 올리지 않음). `check.yml`은 브랜치에 push할 때마다(문서만 바뀐 push 제외) ffmpeg 받기 → 타입 검사 → 테스트만 돌린다(Windows와 macOS. macOS의 ffmpeg는 `build_ffmpeg.sh`로 만들어 캐시한다. macOS 쪽은 아직 통과한 적이 없다). vite는 electron-vite 5가 지원하는 7로 고정돼 있다(8로 올리지 않는다).
+`build_whisper.ps1`의 결과는 `.cache/whisper/bin/`에, `fetch_ffmpeg.ps1`(BtbN LGPL 빌드, 고정 태그·sha256)의 결과는 `.cache/ffmpeg/bin/`에 모인다. 개발 중에는 `.cache/whisper/bin`의 `whisper-cli.exe`와 PATH의 `ffmpeg`를 쓴다. 설치본은 둘 다 `resources/bin/`(electron-builder의 `extraResources`)에서 찾는다. 설치 파일은 `dist/installer/`에 생긴다. CI(`.github/workflows/installer.yml`, 수동 실행 또는 `v*` 태그)는 whisper 빌드(캐시) → ffmpeg → 타입 검사·테스트 → 설치 파일을 만들어 아티팩트 `Note-crAIte-windows`로 올린다(Release에는 올리지 않음). `check.yml`은 브랜치에 push할 때마다(문서만 바뀐 push 제외) ffmpeg 받기 → 타입 검사 → 테스트만 돌린다(Windows와 macOS. macOS의 ffmpeg는 `build_ffmpeg.sh`로 만들어 캐시한다). vite는 electron-vite 5가 지원하는 7로 고정돼 있다(8로 올리지 않는다).
 
 `dev/s3_laptop.ps1`은 빌드 도구가 없는 노트북에서 데스크톱의 whisper-cli를 복사해 와 S3 벤치(`cli bench`)를 여러 설정으로 돌린다.
 
