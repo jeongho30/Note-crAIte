@@ -57,7 +57,7 @@ ChatKHU 학생 크레딧은 한 달 4,000입니다. 90분 강의 한 개 기준�
 
 ## 실행
 
-Windows 64비트용입니다. 설치 파일은 GitHub Actions(`.github/workflows/installer.yml`)가 만들고, 공개 배포는 준비 중입니다. 지금은 소스에서 실행할 수 있습니다.
+Windows 64비트용입니다. macOS(Apple Silicon, macOS 13 이상)는 베타입니다: GitHub의 macOS 러너에서 빌드하고 앱을 띄워 노트를 만드는 데까지 확인했고, 실제 Mac에서는 아직 써 보지 못했습니다. 설치 파일은 GitHub Actions(`.github/workflows/installer.yml`)가 만들고, 공개 배포는 준비 중입니다. 지금은 소스에서 실행할 수 있습니다.
 
 필요한 것: Node 24 이상, PATH의 ffmpeg, [whisper.cpp](https://github.com/ggml-org/whisper.cpp)를 빌드할 도구(Visual Studio C++, CMake, Vulkan SDK). 빌드 스크립트가 고정한 커밋의 소스를 직접 받고, `-NoVulkan`을 붙이면 Vulkan 없이 빌드합니다.
 
@@ -65,6 +65,19 @@ Windows 64비트용입니다. 설치 파일은 GitHub Actions(`.github/workflows
 git clone https://github.com/jeongho30/Note-crAIte
 cd Note-crAIte
 powershell -File scripts/build_whisper.ps1
+cd app
+npm ci
+npm run dev
+```
+
+macOS에서는 Xcode 명령줄 도구와 CMake, pkg-config가 필요합니다. whisper는 Metal로, ffmpeg는 앱이 쓰는 기능만 넣어 LGPL로 빌드합니다.
+
+```bash
+git clone https://github.com/jeongho30/Note-crAIte
+cd Note-crAIte
+bash scripts/build_whisper.sh
+bash scripts/build_ffmpeg.sh
+export PATH="$PWD/.cache/ffmpeg/bin:$PATH"
 cd app
 npm ci
 npm run dev
@@ -81,6 +94,13 @@ npm run dev
 
 브라우저가 내려받을 때 "일반적으로 다운로드되지 않는 파일"이라고 막으면 **유지**를 고릅니다. 설치는 관리자 권한 없이 현재 사용자 계정에만 됩니다. 설치 파일은 이 저장소의 GitHub Actions가 소스에서 만든 것만 받으세요.
 
+macOS의 DMG도 Apple 개발자 서명과 공증이 없습니다(임시 서명). 앱을 응용 프로그램 폴더로 옮긴 뒤 처음 열면 macOS가 막습니다.
+
+1. 한 번 열어 경고 창을 닫습니다.
+2. **시스템 설정 > 개인정보 보호 및 보안**의 아래쪽에서 Note-crAIte 옆 **그래도 열기**를 누릅니다.
+
+macOS에서는 컴퓨터 소리 녹음(온라인 강의 녹음)이 되지 않습니다. 마이크 녹음과 파일로 넣기는 같습니다.
+
 그 밖의 명령(모두 `app/`에서):
 
 ```bash
@@ -88,6 +108,7 @@ npm test                 # 테스트
 npm run typecheck        # 타입 검사
 npm run cli -- run <녹음> --out <저장 폴더> --subject <과목>   # 화면 없이 노트 만들기
 npm run dist:win         # 설치 파일 (먼저 scripts/fetch_ffmpeg.ps1)
+npm run dist:mac         # macOS DMG (먼저 scripts/build_whisper.sh, build_ffmpeg.sh)
 ```
 
 ## 구조
@@ -125,7 +146,7 @@ Electron과 TypeScript 하나로 만들었습니다. 무거운 계산은 함께 
 
 - 요약 비교는 강의 4개, 정답 전사는 10분 구간 6개입니다. 요약 채점은 Claude가 했고 작성자가 일부만 검수했습니다.
 - 개발자가 아닌 사람이 설치부터 첫 노트까지 가는 테스트는 아직 하지 않았습니다. 설치 파일에 서명이 없어 Windows가 경고를 띄웁니다([넘어가는 법](#설치-파일로-설치할-때)).
-- Mac은 베타를 계획하고 있습니다.
+- Mac은 실제 기기에서 확인하지 못했습니다. GitHub의 macOS 러너(가상 머신)에서 빌드·테스트하고 앱을 띄워 첫 실행 마법사부터 노트 미리보기까지 자동으로 눌러 본 것이 전부입니다. 가상 머신에서는 그래픽 가속(Metal)이 프로세서보다 느려서, 실제 Mac에서의 받아쓰기 속도는 모릅니다. 마이크 녹음, 로그인할 때 자동 실행, 알림도 실제 Mac에서 봐야 합니다.
 
 ## 라이선스
 

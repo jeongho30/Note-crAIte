@@ -61,6 +61,10 @@ npm run dist:win
 ```
 
 ```bash
+npm run dist:mac
+```
+
+```bash
 powershell -File ../scripts/build_whisper.ps1 -SourceDir <whisper.cpp 체크아웃> [-NoVulkan]
 ```
 
@@ -68,9 +72,21 @@ powershell -File ../scripts/build_whisper.ps1 -SourceDir <whisper.cpp 체크아�
 powershell -File ../scripts/fetch_ffmpeg.ps1
 ```
 
+```bash
+bash ../scripts/build_whisper.sh
+```
+
+```bash
+bash ../scripts/build_ffmpeg.sh
+```
+
+```bash
+node e2e/first-run.mjs
+```
+
 npm 11은 의존 패키지의 설치 스크립트를 막아 `npm ci`만으로는 Electron 바이너리(`node_modules/electron/dist`·`path.txt`)가 안 생긴다. 그래서 `package.json`의 `postinstall`이 `node node_modules/electron/install.js`를 돌린다(10/1). 그래도 `npm run dev`가 `Error: Electron uninstall`로 멈추면 그 명령을 직접 돌린다.
 
-`build_whisper.ps1`의 결과는 `.cache/whisper/bin/`에, `fetch_ffmpeg.ps1`(BtbN LGPL 빌드, 고정 태그·sha256)의 결과는 `.cache/ffmpeg/bin/`에 모인다. 개발 중에는 `.cache/whisper/bin`의 `whisper-cli.exe`와 PATH의 `ffmpeg`를 쓴다. 설치본은 둘 다 `resources/bin/`(electron-builder의 `extraResources`)에서 찾는다. 설치 파일은 `dist/installer/`에 생긴다. CI(`.github/workflows/installer.yml`, 수동 실행 또는 `v*` 태그)는 whisper 빌드(캐시) → ffmpeg → 타입 검사·테스트 → 설치 파일을 만들어 아티팩트 `Note-crAIte-windows`로 올린다(Release에는 올리지 않음). `check.yml`은 브랜치에 push할 때마다(문서만 바뀐 push 제외) ffmpeg 받기 → 타입 검사 → 테스트만 돌린다(Windows와 macOS. macOS의 ffmpeg는 `build_ffmpeg.sh`로 만들어 캐시한다). vite는 electron-vite 5가 지원하는 7로 고정돼 있다(8로 올리지 않는다).
+`build_whisper.ps1`의 결과는 `.cache/whisper/bin/`에, `fetch_ffmpeg.ps1`(BtbN LGPL 빌드, 고정 태그·sha256)의 결과는 `.cache/ffmpeg/bin/`에 모인다. 개발 중에는 `.cache/whisper/bin`의 `whisper-cli.exe`와 PATH의 `ffmpeg`를 쓴다. 설치본은 둘 다 `resources/bin/`(electron-builder의 `extraResources`)에서 찾는다. 설치 파일은 `dist/installer/`에 생긴다. macOS(Apple Silicon)는 `build_whisper.sh`(같은 고정 커밋, Metal, 정적 링크)와 `build_ffmpeg.sh`(FFmpeg와 libopus를 고정 커밋으로 받아 LGPL로, 앱이 쓰는 기능만 넣어 약 6MB)가 같은 폴더에 만들고, `dist:mac`이 DMG를 임시(ad-hoc) 서명으로 만든다. CI(`.github/workflows/installer.yml`, 수동 실행 또는 `v*` 태그)는 whisper 빌드(캐시) → ffmpeg → 타입 검사·테스트 → 설치 파일을 만들어 아티팩트 `Note-crAIte-windows`로 올린다(Release에는 올리지 않음). macOS 작업은 같은 순서에 더해, 만든 whisper-cli·ffmpeg로 샘플을 실제로 받아써 보고(`cli probe`·`cli run`, 작은 모델), DMG를 만든 뒤 서명을 확인하고, 만든 앱을 띄워 `app/e2e/first-run.mjs`(Playwright: 첫 실행 마법사 → 녹음 고르기 → 작업 → 노트 미리보기 → 설정, 단계마다 화면 캡처)를 돌린다. 아티팩트는 `Note-crAIte-mac`(.dmg)와 `mac-screenshots`. 수동 실행의 `os` 입력으로 한쪽만 돌릴 수 있다(`gh workflow run installer.yml --ref <브랜치> -f os=macos`). `check.yml`은 브랜치에 push할 때마다(문서만 바뀐 push 제외) ffmpeg 받기 → 타입 검사 → 테스트만 돌린다(Windows와 macOS. macOS의 ffmpeg는 `build_ffmpeg.sh`로 만들어 캐시한다). vite는 electron-vite 5가 지원하는 7로 고정돼 있다(8로 올리지 않는다).
 
 `dev/s3_laptop.ps1`은 빌드 도구가 없는 노트북에서 데스크톱의 whisper-cli를 복사해 와 S3 벤치(`cli bench`)를 여러 설정으로 돌린다.
 
@@ -106,6 +122,13 @@ npm 11은 의존 패키지의 설치 스크립트를 막아 `npm ci`만으로는
 - 앱 아이콘(10/3): `app/resources/icon.ico`. 모양을 고치면 `node scripts/icon.mjs`로 다시 만들어 커밋한다(도구 없이 둥근 사각형을 직접 그림, 16·20·24px는 픽셀에 맞춘 그림이 따로 있음). 설치 파일(`electron-builder.yml`의 `win.icon`), 창, 트레이가 같은 파일을 쓰고 설치본에서는 `resources/icon.ico`에서 찾는다.
 - 작은 공용 모듈: `files.ts`(`writeJsonAtomic`: 임시 파일 뒤 rename, Windows 백신 잠금 때문에 재시도. 작업·설정 JSON은 이것으로 쓴다), `proc.ts`(`runCapture`: 외부 실행 파일을 창 없이 돌림), `vault.ts`(저장 폴더가 쓸 수 있는지·옵시디언 볼트 안인지·기존 과목 폴더), `hardware.ts`(물리 코어·전원 상태는 OS 명령으로 읽음), `errors.ts`(`EngineError`).
 - `src/cli/bench.ts`: S3용. RTF와, 기준 전사(기존 파이프라인의 large-v3 결과) 대비 CER을 잰다.
+- macOS(10/8, `feat/mac` 브랜치, Apple Silicon만): 목표는 Windows 앱과 같게 도는 것이고 실제 Mac에서는 아직 못 봤다(GitHub의 macOS 러너에서만).
+  - 받아쓰기: whisper-cli는 Metal로 돈다(백엔드 이름 `MTL0`). `probe.ts`는 macOS에서 장치 목록 없이 0번을 재 보고 이름은 로그의 `GPU name:` 줄에서 읽는다. GPU로 재는 시간이 CPU로 잰 시간의 5배(적어도 2분)를 넘으면 그만두고 그 GPU를 쓰지 않는다(OS 공통). `backendUsed`는 `whisper_backend_init_gpu:` 줄만 본다(macOS는 CPU로 돌 때도 `using BLAS backend`가 나온다). 스레드는 성능·효율 코어가 나뉜 Mac이면 성능 코어 수(`hardware.ts`의 `performanceCores`).
+  - 화면 문구: OS마다 다른 낱말(이 PC·이 Mac, 트레이·메뉴 막대, 그래픽카드·GPU, 마이크 권한을 켜는 곳)은 `renderer/src/platform.ts`에 모으고, 문구는 Windows 기준으로 쓴 뒤 그 낱말만 가져다 쓴다. 메인 쪽 낱말은 `main/index.ts`의 `MAC`·`PC_OBJ`·`TRAY_ICON`.
+  - 메인의 분기: 창 버튼(신호등)은 `trafficLightPosition`으로 띠 가운데 높이에 두고 `TitleBar`가 왼쪽을 비운다(`--titlebar-mac-controls-w`), 메뉴 막대 아이콘은 `resources/tray.png`(`.ico`를 못 읽음), 알림은 `Notification`, 설치본의 메뉴는 앱·편집·창(없애면 Cmd+V가 안 됨), Dock을 누르면 창을 다시 엶(`activate`), 로그인할 때 자동 실행은 인자 대신 `wasOpenedAtLogin`으로 창 없이 시작.
+  - 뺀 기능: 컴퓨터 소리 녹음(Electron의 `loopback`이 Windows만 지원해 선택지를 보이지 않는다), 바탕화면 바로가기(Windows의 것).
+  - 파일 이름: macOS는 Finder가 만든 이름을 자모를 풀어(NFD) 준다. 폴더에서 읽은 과목 이름은 `files.ts`의 `diskName`(macOS에서만 NFC), 녹음 이름에서 온 노트 제목·`source`와 노트 목록의 제목은 어디서나 NFC.
+  - 패키징: `electron-builder.yml`의 `mac`(arm64 DMG, `identity: "-"`로 임시 서명, `hardenedRuntime: false`, 마이크 쓰는 이유 문구). 앱 아이콘은 `resources/icon.icns`(`icon.mjs`가 함께 만든다: 1024 가운데 824만 채움). 오픈소스 고지(`notices.mjs`)는 빌드하는 OS에 맞춰 적는다.
 
 ## 지금 상태와 다음 할 일
 
@@ -122,7 +145,7 @@ S3(9/28): 로컬 STT는 whisper.cpp, CPU 기본 `large-v3-turbo-q8_0` + greedy(`
 
 1. (10/1 됨) 예상 시간 보정: 같은 모델·장치·스레드·옵션으로 끝낸 최근 작업 5개의 실제 받아쓰기 속도(중앙값)로 예상하고, 기록이 없으면 잰 속도 × 0.65(`core/probe.ts`의 `sttSpeed`). 이어서 한 받아쓰기는 `stages.stt.resumed`로 표시해 뺀다. 전사문 다듬기와 요약 시간도 같은 방식으로 기록에서 재서 더한다(`polishRate`·`summarySeconds`, 10/4). 설치본에서 화면의 예상 시간은 아직 못 봤다.
 2. (10/1 됨) GPU 없는 노트북에서 CI 설치 파일로 완주하는 1차 테스트: 82분 강의를 turbo(받아쓰기 29분 42초)와 small(10분 28초)로 끝까지 처리했다(`docs/decisions.md`의 "노트북 속도와 small 실험"). 설치본에서 아직 못 본 것: 자동 처리의 PC를 켜면 자동 실행 등록, 받아쓰기 중에 녹음을 시작하면 멈췄다 이어지는지, 실제 마이크 녹음.
-3. W3: 1차 테스트 수정, ChatKHU STT 선택지. W4: Mac 베타. OpenAI·Claude·Gemini는 10/2에 붙였지만 실제 키로 확인하지 못했다: 키가 생기면 서비스마다 연결(모델 목록), 요약 1회, 다듬기를 돌려 응답 형식·기본 모델 이름·모델 목록 걸러내기를 본다. Ollama(설정의 로컬 LLM)는 10/2에 됐다. 아직 못 본 것: 다듬기 로컬 + 요약 ChatKHU를 실제 키로(가짜 서버 테스트만 있음), 실제 강의 길이의 로컬 요약, think를 받지 않는 모델. 설계 모음의 설정 시안에는 반영했다(10/2: 요약 세부설정의 단계별 선택, 로컬 LLM 블록).
+3. W3: 1차 테스트 수정, ChatKHU STT 선택지. W4: Mac 베타(10/8에 `feat/mac`에서 러너 기준으로 됨: DMG가 만들어지고 만든 앱에서 마법사부터 노트 미리보기까지 자동 시험이 통과. 실제 Mac에서 못 본 것은 `docs/decisions.md` "구현 결정"의 10/8 줄: Metal의 실제 속도, 마이크 녹음, 알림, [그래도 열기], 로그인할 때 숨겨 시작. `main`에는 아직 합치지 않았다). OpenAI·Claude·Gemini는 10/2에 붙였지만 실제 키로 확인하지 못했다: 키가 생기면 서비스마다 연결(모델 목록), 요약 1회, 다듬기를 돌려 응답 형식·기본 모델 이름·모델 목록 걸러내기를 본다. Ollama(설정의 로컬 LLM)는 10/2에 됐다. 아직 못 본 것: 다듬기 로컬 + 요약 ChatKHU를 실제 키로(가짜 서버 테스트만 있음), 실제 강의 길이의 로컬 요약, think를 받지 않는 모델. 설계 모음의 설정 시안에는 반영했다(10/2: 요약 세부설정의 단계별 선택, 로컬 LLM 블록).
 4. 요약 프롬프트 다듬기: 기준·시험 방법·초안은 `docs/prompt-quality-plan.md`. 10/2에 채점 틀 고치기, 분량 시험, 모델 6종 × 다듬기 전후 비교를 했다(`docs/decisions.md`의 "요약 틀과 모델 다시 비교 (10/2, 노트북)", 자료는 저장소 밖 `s3-data\10.2 요약 비교\`). 기본 모델은 luna 그대로이고, 결과로 넷을 앱에 넣었다(`decisions.md` "구현 결정"의 10/2 줄): 요약 틀을 주제별 목록으로(`SUMMARY_UNIFIED`: 개요 + 굵은 소제목 아래 "개념: 한 줄", 개념 이름은 굵게, 10/4부터 개요는 '~한다'·목록 줄은 '~임/~함'이나 명사로 끝내고 다룬 주제를 빠뜨리지 않게 함(포함률 69 → 81%, 분량 26% 증가). 용어는 10/4부터 병기 없이 강의에서 말한 언어를 따름: 영어로 말한 것은 Closure·Production, 우리말로 말한 것은 돌연변이·내적), 깨진 LaTeX 되살리기(`summarize.ts`의 `restoreLatex`), 요약 출력 상한 16,000(`SUMMARY_MAX_TOKENS`), 추천에 gpt-6.1-sol을 넣고 grok을 빼고(추천 4개) deepseek·gemma를 맨 뒤로. 다듬기 추천은 luna·gemma만. 10/4~10/5에 단서 규칙, 긴 강의 나누기, 요약 검수, 여러 번 돌려 합치기를 재 봤고 넣지 않았다(`decisions.md`의 "요약 개선 시험: 넣지 않은 것들"). 아직 안 한 것: 설치본에서 긴 요약이 노트·미리보기에 어떻게 보이는지, 확인용 강의.
 5. (10/2 됨) 받아쓰기 정답 전사: 작성자가 10분 조각 6개를 들으며 고쳐 정답을 만들고 9/30 조건들·large-v3·small·다듬기·Soniox를 다시 채점했다. 결과는 `docs/decisions.md`의 "받아쓰기 정답 전사 채점 (10/2)"(small은 확실히 나쁨, turbo + 다듬기가 오류율·용어 모두 가장 좋음, 전처리·옵션은 효과 없음, Soniox는 정답이 Soniox에서 시작해 수치를 못 믿음). 설계는 `docs/stt-reference-plan.md`, 정답·스크립트는 저장소 밖 데스크톱의 `C:\ljh\2026-2\s3-data\정답 전사\`(`score.mjs`). 필기 용어로 코드가 직접 고치기는 재 봤고 나빠져 쓰지 않기로 했다(`decisions.md` "필기 용어로 코드가 직접 고치기 시험"). 이 정답으로 아직 안 해 본 개선(요약의 "놓친 오인식" 지표, 다듬기 프롬프트 개선 등)을 잴 수 있다.
 6. 느린 PC의 받아쓰기: turbo 속도가 일정 수준에 못 미치면 small을 기본으로 하고 small을 쓸 때의 품질을 올린다(작성자 방향, 10/1). small의 양자화·beam은 재 봤고 효과가 없어 그대로 둔다. 남은 후보(다듬기에 용어 목록·필기 주기, small 먼저·turbo 나중, 의심 구간만 turbo)와 안 재 본 속도 안(스레드 8, 조각 2개 동시)은 `docs/decisions.md`의 "노트북 속도와 small 실험". 기준 속도와 어느 안으로 갈지는 아직 안 정했다.
@@ -147,6 +170,10 @@ S3(9/28): 로컬 STT는 whisper.cpp, CPU 기본 `large-v3-turbo-q8_0` + greedy(`
 - Claude 데스크톱 앱(MSIX)에서 실행한 명령·앱이 `%LOCALAPPDATA%`에 새로 쓴 파일은 `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Local\lecture-notes\`로 가상화된다. Claude 안의 프로세스는 두 곳을 합쳐 보지만, 사용자가 자기 터미널에서 띄운 앱은 실제 폴더만 본다. 사용자 앱이 쓸 모델·데이터는 사용자 터미널에서 받거나 옮기게 하고, Claude 쪽에서는 실제 폴더에 쓸 수 없다. 앱이 켜질 때 로그에 모델 폴더와 파일 크기를 남긴다(`받아쓰기 모델: ...`).
 - 데스크톱의 `py -3.13`은 Microsoft Store판이라 `%LOCALAPPDATA%` 쓰기가 `...\Packages\PythonSoftwareFoundation...\LocalCache\`로 가상화된다. 벤치용 venv를 그 Python으로 만들지 않는다.
 - `.cache/ffmpeg`는 저장소에 없어 PC마다 `fetch_ffmpeg.ps1`로 받아야 한다. `dist:win`이나 `notices.mjs`를 돌리기 전에 먼저 받는다.
+- GitHub의 macOS 러너는 가상 머신이라 Metal(`Apple Paravirtual device`)이 CPU보다 느리다(10/8, 작은 모델로 39초 샘플: CPU 3.6초, Metal 20초). 러너에서 속도 재기가 CPU를 고르는 것은 정상이고, 실제 Mac의 Metal 속도는 러너로 알 수 없다. 러너 크기도 실행마다 다르다(5코어 M2 Pro, 3코어 M1).
+- whisper의 VAD는 `-t`와 상관없이 스레드 4개로 돈다(whisper.cpp 안에 고정). macOS 빌드는 OpenMP 없이 ggml의 스레드 풀을 쓰는데, 코어가 4개보다 적으면 VAD가 수백 배 느려진다(10/8, 3코어 러너: 39초 샘플의 VAD만 약 220초, 5코어 러너는 1초 안쪽). 받아쓰기 스레드 수를 바꿔도 같다. Apple Silicon Mac은 모두 코어가 8개 이상이라 해당하지 않지만, 3코어 러너에서는 설치 파일 작업의 받아쓰기 단계마다 몇 분씩 걸린다.
+- macOS 설치본은 서명이 임시(ad-hoc)라 받은 사람이 시스템 설정에서 [그래도 열기]를 눌러야 한다. Electron 44는 macOS 13부터다(`LSMinimumSystemVersion`). whisper·ffmpeg의 배포 대상은 12.0으로 그보다 낮게 둔다.
+- `scripts/*.sh`는 LF로 둔다(`.gitattributes`). CRLF면 macOS에서 실행되지 않는다. 스크립트를 고치면 CI의 캐시 키(스크립트 해시)가 바뀌어 다시 빌드한다(whisper 약 1분, ffmpeg 약 3분).
 
 ## Conventions
 

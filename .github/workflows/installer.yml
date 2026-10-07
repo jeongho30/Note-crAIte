@@ -144,20 +144,18 @@ jobs:
           path: ${{ runner.temp }}/ln-data/models
           key: models-${{ env.SMOKE_MODEL }}-${{ hashFiles('app/src/core/models.ts') }}
 
-      # 테스트는 가짜 whisper-cli를 쓴다. 여기서는 방금 만든 whisper-cli와 ffmpeg로 샘플을 실제로 받아써 본다:
-      # 속도 재기(CPU와 Metal)와, 녹음 하나를 노트로 만드는 작업 전체(요약은 키가 없어 건너뜀).
-      # 러너는 가상 머신이라 Metal이 CPU보다 느리거나 멈출 수 있다(그러면 속도 재기가 2분 뒤 그만두고 CPU를 고른다). CPU로 받아쓰기가 되면 통과다.
+      # 테스트는 가짜 whisper-cli를 쓴다. 여기서는 방금 만든 whisper-cli와 ffmpeg로 녹음 하나를 실제로 노트로 만들어 본다
+      # (화면 없이, 프로세서로, 요약은 키가 없어 건너뜀). 속도 재기와 Metal은 아래의 앱 시험에서 돈다.
+      # 코어가 3개인 러너에서는 몇 분 걸린다: whisper의 VAD가 스레드 4개로 돌아 코어보다 많으면 아주 느려진다.
       - name: 실제로 받아써 보기
         timeout-minutes: 30
         working-directory: app
         run: |
           export PATH="$GITHUB_WORKSPACE/.cache/ffmpeg/bin:$PATH"
           DATA="$RUNNER_TEMP/ln-data"
-          sysctl -n machdep.cpu.brand_string hw.physicalcpu hw.perflevel0.physicalcpu hw.perflevel1.physicalcpu 2>&1 || true
+          sysctl -n machdep.cpu.brand_string hw.physicalcpu
           npm run --silent cli -- --data-dir "$DATA" models download "$SMOKE_MODEL" silero-v6.2.0 > /dev/null
-          npm run --silent cli -- --data-dir "$DATA" probe --model "$SMOKE_MODEL"
-          cat "$DATA/probe.json"; echo
-          npm run --silent cli -- --data-dir "$DATA" run resources/probe-ko.wav --out "$RUNNER_TEMP/notes" --model "$SMOKE_MODEL"
+          npm run --silent cli -- --data-dir "$DATA" run resources/probe-ko.wav --out "$RUNNER_TEMP/notes" --model "$SMOKE_MODEL" --device cpu
           find "$RUNNER_TEMP/notes" -name '*.md' -print -exec head -c 600 {} \;
 
       - name: 설치 파일 만들기

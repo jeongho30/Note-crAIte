@@ -166,10 +166,12 @@ try {
       if (a.isPackaged) {
         // 개발 실행에서 켜면 빈 Electron이 등록되므로 만든 앱에서만. 켠 뒤 바로 끈다
         try {
+          const state = () => (({ openAtLogin, status, wasOpenedAtLogin }) => ({ openAtLogin, status, wasOpenedAtLogin }))(a.getLoginItemSettings())
+          result.loginBefore = state()
           a.setLoginItemSettings({ openAtLogin: true })
-          result.loginOn = a.getLoginItemSettings().openAtLogin
+          result.loginOn = state()
           a.setLoginItemSettings({ openAtLogin: false })
-          result.loginOff = a.getLoginItemSettings().openAtLogin
+          result.loginOff = state()
         } catch (e) {
           result.loginError = e.message
         }
