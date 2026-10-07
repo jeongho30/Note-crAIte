@@ -19,7 +19,8 @@ if (mode === 'fail') {
   process.stderr.write('error: failed to load model\n')
   process.exit(3)
 }
-if (mode === 'hang') {
+// metal-hang: GPU로 돌리면 멈춰 버리고 CPU(-ng)로는 된다
+if (mode === 'hang' || (mode === 'metal-hang' && !args.includes('-ng'))) {
   setTimeout(() => {}, 60_000)
 } else {
   // 실제 whisper-cli처럼 전사 구간을 stdout으로 대량 출력한다 (어댑터가 파이프를 안 비우면 여기서 멈춘다).
@@ -27,7 +28,7 @@ if (mode === 'hang') {
   for (let p = 0; p <= 100; p += 5) {
     process.stderr.write(`whisper_print_progress_callback: progress = ${String(p).padStart(3)}%\n`)
   }
-  if (mode === 'metal') {
+  if (mode === 'metal' || mode === 'metal-hang') {
     // macOS의 whisper-cli 로그 (whisper.cpp 소스의 문구): Metal로 돌면 MTL0, -ng면 GPU 없이 BLAS(CPU 쪽 가속)
     const gpu = !args.includes('-ng')
     process.stderr.write(

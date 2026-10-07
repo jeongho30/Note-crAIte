@@ -54,6 +54,13 @@ test('macOS: 장치 목록 없이 Metal(0번)을 재 보고, 이름은 그 로�
   const win = await probeDevices({ ...options, platform: 'win32' })
   assert.deepEqual(win.trials.map((x) => x.device), [null])
   assert.equal(win.gpuDevice, null)
+
+  // GPU 쪽이 멈춰 버리면 기다리지 않고 CPU를 고른다
+  process.env['FAKE_WHISPER_MODE'] = 'metal-hang'
+  const hung = await probeDevices({ ...options, platform: 'darwin', gpuTrialLimitMs: 500 })
+  assert.equal(hung.gpuDevice, null)
+  assert.equal(hung.trials[1].ok, false)
+  assert.match(hung.trials[1].reason ?? '', /너무 오래 걸려/)
 })
 
 test('defaultThreads: 물리 코어 2개를 남기고, 성능·효율 코어가 나뉜 Mac은 성능 코어만 쓴다', () => {

@@ -15,7 +15,7 @@ FFMPEG_TAG="n9.0.1"
 FFMPEG_COMMIT="bf1b838f2ab88b4f8fd83443325c782ea0e0f7fa"
 OPUS_TAG="v1.5.2"
 OPUS_COMMIT="ddbe48383984d56acd9e1ab6a090c54ca6b735a6"
-# 이 버전보다 옛 macOS에서는 실행되지 않는다. build_whisper.sh와 같게 둔다
+# 이 버전보다 옛 macOS에서는 실행되지 않는다. build_whisper.sh와 같게 둔다 (앱은 macOS 13부터)
 export MACOSX_DEPLOYMENT_TARGET="12.0"
 
 DECODERS="aac,aac_latm,mp3,mp3float,mp2,mp2float,vorbis,opus,flac,alac,ac3,eac3,amrnb,amrwb,wmav1,wmav2,wmapro,wmalossless,pcm_s16le,pcm_s16be,pcm_s24le,pcm_s24be,pcm_s32le,pcm_f32le,pcm_u8,pcm_alaw,pcm_mulaw,adpcm_ms,adpcm_ima_wav"

@@ -87,7 +87,7 @@ try {
     const start = button('받기 시작')
     if (await start.isVisible().catch(() => false)) await start.click()
     await page.getByText('다 받았어요.').waitFor({ timeout: 600_000 })
-    await page.getByText(/로 받아써요/).waitFor({ timeout: 300_000 })
+    await page.getByText(/로 받아써요/).waitFor({ timeout: 900_000 }) // 느린 러너에서는 CPU와 GPU를 재는 데 몇 분씩 걸린다
     await shot('pc')
     await button('다음').click()
   })
@@ -128,7 +128,7 @@ try {
     await page.getByRole('navigation', { name: '메뉴' }).getByText('작업 목록').click()
     await shot('jobs-running')
     screenShot('running') // 메뉴 막대(트레이) 아이콘이 보여야 한다
-    await button('노트 보기').waitFor({ timeout: 300_000 })
+    await button('노트 보기').waitFor({ timeout: 900_000 })
     await shot('jobs-done')
   })
 
@@ -151,6 +151,32 @@ try {
     await page.getByRole('navigation', { name: '메뉴' }).getByText('설정').click()
     await page.getByText(/로 받아써요/).first().waitFor()
     await shot('settings')
+  })
+
+  // 화면으로는 못 누르는 OS 기능을 메인 프로세스에서 직접 불러 본다. 결과만 적고, 안 돼도 실패로 치지 않는다
+  await step('OS 기능: 키 암호화, 로그인할 때 자동 실행', async () => {
+    const r = await app.evaluate(({ app: a, safeStorage, Notification }) => {
+      const result = { packaged: a.isPackaged, notification: Notification.isSupported() }
+      try {
+        result.encryption = safeStorage.isEncryptionAvailable()
+        result.roundTrip = safeStorage.decryptString(safeStorage.encryptString('키 시험')) === '키 시험'
+      } catch (e) {
+        result.encryptionError = e.message
+      }
+      if (a.isPackaged) {
+        // 개발 실행에서 켜면 빈 Electron이 등록되므로 만든 앱에서만. 켠 뒤 바로 끈다
+        try {
+          a.setLoginItemSettings({ openAtLogin: true })
+          result.loginOn = a.getLoginItemSettings().openAtLogin
+          a.setLoginItemSettings({ openAtLogin: false })
+          result.loginOff = a.getLoginItemSettings().openAtLogin
+        } catch (e) {
+          result.loginError = e.message
+        }
+      }
+      return result
+    })
+    console.log(`\n  ${JSON.stringify(r)}`)
   })
 
   console.log('끝까지 됨')

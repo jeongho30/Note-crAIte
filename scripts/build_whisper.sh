@@ -14,7 +14,7 @@
 set -euo pipefail
 
 COMMIT="1da4dc82fa7996d4edda05890dca65aeceaafd6d"
-# 이 버전보다 옛 macOS에서는 실행되지 않는다. Electron이 지원하는 최소 버전과 맞춘다
+# 이 버전보다 옛 macOS에서는 실행되지 않는다. 앱(Electron 44)이 macOS 13부터라 그보다 낮으면 된다
 export MACOSX_DEPLOYMENT_TARGET="12.0"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
