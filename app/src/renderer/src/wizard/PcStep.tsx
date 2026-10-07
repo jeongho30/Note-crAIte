@@ -10,9 +10,9 @@ type SystemInfo = { cpu: string; cores: number; gpus: string[]; ramGb: number; f
 type Choice = { id: string; size: number; downloaded: boolean }
 
 const MODEL_TEXT: Record<string, { title: string; description: string }> = {
-  'large-v3-turbo-q8_0': { title: '기본', description: 'turbo. 대부분의 PC에 맞아요.' },
+  'large-v3-turbo-q8_0': { title: '기본', description: `turbo. 대부분의 ${PC}에 맞아요.` },
   'large-v3-q5_0': { title: '정확하게', description: `large-v3. ${GPU_PC_ADVICE}`.trim() },
-  'small-q5_1': { title: '가볍게', description: 'small. 느린 PC용, 정확도가 낮아요.' }
+  'small-q5_1': { title: '가볍게', description: `small. 느린 ${PC}용, 정확도가 낮아요.` }
 }
 
 // 모델은 [받기 시작]을 눌러야 받는다(데이터 요금제에서 모르고 받지 않게). 건너뛰면 녹음을 넣을 때 받는다.
@@ -76,7 +76,7 @@ export function PcStep({ next, back, headingRef }: StepProps): React.JSX.Element
           </div>
           {choices.length > 0 && !picking && setup.name === choices[0].id && (
             <p className={styles.small}>
-              기본 모델을 써요. 대부분의 PC에 맞아요.{' '}
+              기본 모델을 써요. 대부분의 {PC}에 맞아요.{' '}
               <Button variant="link" onClick={() => setPicking(true)}>
                 다른 모델 고르기
               </Button>

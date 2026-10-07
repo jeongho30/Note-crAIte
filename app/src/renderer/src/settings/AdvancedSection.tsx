@@ -9,7 +9,7 @@ import { SummaryPrompt } from './SummaryPrompt'
 import type { SetupState } from '../../../main/setup'
 import { Block, Section, sizeLabel } from './parts'
 import styles from './Settings.module.css'
-import { GPU, GPU_PC_ADVICE, PC } from '../platform'
+import { GPU, GPU_PC_ADVICE, PC, PC_SUBJ } from '../platform'
 
 type Choice = { id: string; size: number; downloaded: boolean; deletable: boolean; locked: string }
 // defaultArgs는 속도를 재기 전이면 null(쓸 장치를 아직 모름), args는 고쳐 저장한 옵션이 없으면 null
@@ -17,12 +17,12 @@ type Options = { model: string; choices: Choice[]; defaultArgs: string | null; a
 type SampleTest = { sampleS: number; processS: number; chars: number; ok: boolean; reason?: string }
 
 const MODEL_TEXT: Record<string, { title: string; description: (gpu: boolean) => string }> = {
-  'large-v3-turbo-q8_0': { title: '기본 · large-v3-turbo-q8_0', description: () => '대부분의 PC에 맞아요. 속도와 정확도의 균형.' },
+  'large-v3-turbo-q8_0': { title: '기본 · large-v3-turbo-q8_0', description: () => `대부분의 ${PC}에 맞아요. 속도와 정확도의 균형.` },
   'large-v3-q5_0': {
     title: '더 정확하게 · large-v3',
     description: (gpu) => (gpu ? `${GPU_PC_ADVICE} 기본보다 약 2배 느려요.`.trim() : `${GPU}가 없는 이 ${PC}에서는 아주 느려요.`)
   },
-  'small-q5_1': { title: '가볍게 · small', description: () => '느린 PC용. 정확도가 낮아요.' }
+  'small-q5_1': { title: '가볍게 · small', description: () => `느린 ${PC}용. 정확도가 낮아요.` }
 }
 
 type Props = {
@@ -403,7 +403,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                   disabled={!exp}
                   onChange={(on) => void saveExp('sttWhileRecording', on)}
                   label="녹음하는 동안에도 받아쓰기"
-                  hint="끄면(기본) 앱에서 녹음하는 동안 앞서 넣은 녹음의 받아쓰기를 멈추고, 녹음이 끝나면 멈춘 곳부터 이어서 해요. 켜면 둘이 함께 돌아 PC가 느려질 수 있어요."
+                  hint={`끄면(기본) 앱에서 녹음하는 동안 앞서 넣은 녹음의 받아쓰기를 멈추고, 녹음이 끝나면 멈춘 곳부터 이어서 해요. 켜면 둘이 함께 돌아 ${PC_SUBJ} 느려질 수 있어요.`}
                 />
               </div>
             </Block>

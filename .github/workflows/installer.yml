@@ -184,20 +184,15 @@ jobs:
           du -sh "$APP" dist/installer/*.dmg
           spctl -a -vv "$APP" 2>&1 || true
 
-      # 만든 앱을 새 데이터 폴더로 띄워 첫 화면(마법사)을 찍는다. 화면은 사람이 아티팩트에서 본다
-      - name: 앱 띄워 보기
-        continue-on-error: true
-        run: |
-          APP="dist/installer/mac-arm64/Note-crAIte.app"
-          mkdir -p "$RUNNER_TEMP/shots"
-          LN_DATA_DIR="$RUNNER_TEMP/ln-app" "$APP/Contents/MacOS/Note-crAIte" > "$RUNNER_TEMP/shots/app-stdout.txt" 2>&1 &
-          PID=$!
-          sleep 20
-          screencapture -x "$RUNNER_TEMP/shots/wizard.png" || echo "화면을 찍지 못함"
-          if kill -0 "$PID" 2>/dev/null; then echo "앱이 떠 있음 (pid $PID)"; else echo "앱이 끝나 있음"; fi
-          cat "$RUNNER_TEMP"/ln-app/logs/*.log 2>/dev/null || echo "앱 기록 없음"
-          cat "$RUNNER_TEMP/shots/app-stdout.txt"
-          kill "$PID" 2>/dev/null || true
+      # 만든 앱을 새 데이터 폴더로 띄워 첫 실행 마법사부터 노트 미리보기까지 눌러 본다 (app/e2e/first-run.mjs).
+      # 화면 흐름이 macOS에서 실제로 도는지 보는 단계다. 단계마다 찍은 화면은 아티팩트 mac-screenshots에 남는다
+      - name: 앱에서 끝까지 해 보기
+        working-directory: app
+        env:
+          E2E_APP: ${{ github.workspace }}/dist/installer/mac-arm64/Note-crAIte.app/Contents/MacOS/Note-crAIte
+          E2E_MODELS: ${{ runner.temp }}/ln-data/models
+          E2E_OUT: ${{ runner.temp }}/shots
+        run: node e2e/first-run.mjs
 
       - uses: actions/upload-artifact@v7
         if: always()
@@ -208,6 +203,7 @@ jobs:
           retention-days: 7
 
       - uses: actions/upload-artifact@v7
+        if: always()
         with:
           name: Note-crAIte-mac
           path: dist/installer/*.dmg

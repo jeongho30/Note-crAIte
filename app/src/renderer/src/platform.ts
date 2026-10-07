@@ -5,6 +5,8 @@ export const isMac = navigator.userAgent.includes('Macintosh')
 export const PC = isMac ? 'Mac' : 'PC'
 /** 목적격 조사까지 ("PC를 켜면") */
 export const PC_OBJ = isMac ? 'Mac을' : 'PC를'
+/** 주격 조사까지 ("PC가 느려질 수 있어요") */
+export const PC_SUBJ = isMac ? 'Mac이' : 'PC가'
 export const OS = isMac ? 'macOS' : 'Windows'
 /** 받아쓰기에 쓰는 그래픽 장치. Apple Silicon은 카드가 아니라 칩 안에 있다 */
 export const GPU = isMac ? 'GPU' : '그래픽카드'

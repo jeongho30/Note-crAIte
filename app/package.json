@@ -29,6 +29,7 @@
     "katex": "^0.16.47",
     "markdown-it": "^15.0.2",
     "markdown-it-cjk-friendly": "^3.0.0",
+    "playwright-core": "^1.63.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "typescript": "^7.0.2",
