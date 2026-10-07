@@ -9,6 +9,7 @@ import { SummaryPrompt } from './SummaryPrompt'
 import type { SetupState } from '../../../main/setup'
 import { Block, Section, sizeLabel } from './parts'
 import styles from './Settings.module.css'
+import { GPU, GPU_PC_ADVICE, PC } from '../platform'
 
 type Choice = { id: string; size: number; downloaded: boolean; deletable: boolean; locked: string }
 // defaultArgs는 속도를 재기 전이면 null(쓸 장치를 아직 모름), args는 고쳐 저장한 옵션이 없으면 null
@@ -19,7 +20,7 @@ const MODEL_TEXT: Record<string, { title: string; description: (gpu: boolean) =>
   'large-v3-turbo-q8_0': { title: '기본 · large-v3-turbo-q8_0', description: () => '대부분의 PC에 맞아요. 속도와 정확도의 균형.' },
   'large-v3-q5_0': {
     title: '더 정확하게 · large-v3',
-    description: (gpu) => (gpu ? '그래픽카드 PC 권장. 기본보다 약 2배 느려요.' : '그래픽카드가 없는 이 PC에서는 아주 느려요.')
+    description: (gpu) => (gpu ? `${GPU_PC_ADVICE} 기본보다 약 2배 느려요.`.trim() : `${GPU}가 없는 이 ${PC}에서는 아주 느려요.`)
   },
   'small-q5_1': { title: '가볍게 · small', description: () => '느린 PC용. 정확도가 낮아요.' }
 }
@@ -163,7 +164,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
       setOpts(o)
       setModel(o.model)
       setArgs(o.args)
-      toast(o.choices.find((c) => c.id === o.model)?.downloaded ? '받아쓰기 설정을 저장했어요.' : '저장했어요. 모델을 받은 뒤 이 PC의 속도를 다시 재요.', 'success')
+      toast(o.choices.find((c) => c.id === o.model)?.downloaded ? '받아쓰기 설정을 저장했어요.' : `저장했어요. 모델을 받은 뒤 이 ${PC}의 속도를 다시 재요.`, 'success')
       onSaved()
     } catch (e) {
       toast(e instanceof ApiError ? e.message : '저장하지 못했어요.', 'danger')
@@ -214,7 +215,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                       disabled: c.id === 'large-v3-q5_0' && !gpu && opts.model !== c.id
                     }))}
                   />
-                  <p className={styles.hint}>모델을 바꾸면 받은 뒤 이 PC의 속도를 다시 재고, 예상 시간도 바뀌어요.</p>
+                  <p className={styles.hint}>모델을 바꾸면 받은 뒤 이 {PC}의 속도를 다시 재고, 예상 시간도 바뀌어요.</p>
                   <Dialog
                     open={!!deleting}
                     onClose={() => setDeleting(null)}
@@ -244,7 +245,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                     className={styles.mono}
                     spellCheck={false}
                     autoComplete="off"
-                    hint={args === null && opts.defaultArgs === null ? '이 PC의 속도를 잰 뒤 기본 옵션이 정해져요. 그래픽카드를 쓸지는 재 봐야 알아요.' : undefined}
+                    hint={args === null && opts.defaultArgs === null ? `이 ${PC}의 속도를 잰 뒤 기본 옵션이 정해져요. ${GPU}를 쓸지는 재 봐야 알아요.` : undefined}
                     value={shown}
                     onChange={(e) => {
                       setArgs(e.target.value)
@@ -319,7 +320,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                       {
                         value: 'local',
                         title: '로컬 LLM으로 요약',
-                        description: 'Ollama가 이 PC에서 요약해요. 키가 없어도 되고 크레딧이 들지 않아요.',
+                        description: `Ollama가 이 ${PC}에서 요약해요. 키가 없어도 되고 크레딧이 들지 않아요.`,
                         meta: steps.local.summaryModel ?? LOCAL_PICK_FIRST,
                         disabled: !steps.local.summaryModel
                       }
@@ -343,7 +344,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                       {
                         value: 'local',
                         title: '로컬 LLM으로 다듬기',
-                        description: 'Ollama가 이 PC에서 다듬어요. 크레딧이 들지 않아요.',
+                        description: `Ollama가 이 ${PC}에서 다듬어요. 크레딧이 들지 않아요.`,
                         meta: steps.local.polishModel ?? LOCAL_PICK_FIRST,
                         disabled: !steps.local.polishModel
                       }
@@ -391,7 +392,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                   label="받아쓰기(Speech-to-Text)에 ChatKHU Soniox 모델 쓰기"
                   hint={
                     <>
-                      이 PC의 whisper 대신 ChatKHU가 받아써요. 전문 용어를 훨씬 정확히 받아쓰지만 오디오 1분에 6크레딧(90분 강의 약 540)이 들고,
+                      이 {PC}의 whisper 대신 ChatKHU가 받아써요. 전문 용어를 훨씬 정확히 받아쓰지만 오디오 1분에 6크레딧(90분 강의 약 540)이 들고,
                       녹음이 ChatKHU로 보내져요. 말한 그대로 적어서 "어", "네" 같은 말도 들어가요.
                       {!connected && ' ChatKHU를 연결하면 켤 수 있어요.'}
                     </>

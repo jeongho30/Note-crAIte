@@ -9,6 +9,7 @@ import { NotePropsDialog } from '../notes/NotePropsDialog'
 import { FindBar } from './FindBar'
 import { md, parseNote, type Segment } from './markdown'
 import styles from './NotePreview.module.css'
+import { PC } from '../platform'
 
 type NoteData = {
   path: string
@@ -150,7 +151,7 @@ export function NotePreview({ path, jobs, llm, onBack, onConnect, onMoved, onDel
     typeof meta['subject'] === 'string' ? meta['subject'] : null,
     typeof meta['date'] === 'string' ? meta['date'] : null,
     note.job?.durationS ? lengthMinutes(note.job.durationS) : null,
-    typeof meta['stt'] === 'string' ? '이 PC 받아쓰기' : null,
+    typeof meta['stt'] === 'string' ? `이 ${PC} 받아쓰기` : null,
     hasSummary ? `${meta['llm']} 요약` : typeof meta['stt'] === 'string' ? '요약 없음' : null
   ].filter(Boolean)
 

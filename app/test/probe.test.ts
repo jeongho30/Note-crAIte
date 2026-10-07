@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { EngineError } from '../src/core/errors.ts'
+import { defaultThreads } from '../src/core/hardware.ts'
 import type { Job } from '../src/core/job.ts'
 import { join } from 'node:path'
 import { choose, estimateJobSeconds, estimateSttSeconds, parseMetalName, parseTimings, parseVulkanDevices, polishRate, probeDevices, sttSpeed, summarySeconds } from '../src/core/probe.ts'
@@ -53,6 +54,13 @@ test('macOS: 장치 목록 없이 Metal(0번)을 재 보고, 이름은 그 로�
   const win = await probeDevices({ ...options, platform: 'win32' })
   assert.deepEqual(win.trials.map((x) => x.device), [null])
   assert.equal(win.gpuDevice, null)
+})
+
+test('defaultThreads: 물리 코어 2개를 남기고, 성능·효율 코어가 나뉜 Mac은 성능 코어만 쓴다', () => {
+  const hw = { cpu: 'x', logicalCores: 16, ramGb: 16, gpus: [], powerPlugged: null }
+  assert.equal(defaultThreads({ ...hw, physicalCores: 8 }), 6)
+  assert.equal(defaultThreads({ ...hw, physicalCores: 2 }), 1)
+  assert.equal(defaultThreads({ ...hw, physicalCores: 8, performanceCores: 4 }), 4, 'M1: 성능 4 + 효율 4')
 })
 
 test('parseTimings는 로드·전체 시간을 읽는다', () => {

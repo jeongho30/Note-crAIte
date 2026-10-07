@@ -10,6 +10,7 @@ import { AutoSection } from './AutoSection'
 import { Row, Section, SettingsCard, sizeLabel } from './parts'
 import { ProviderSection } from './ProviderSection'
 import styles from './Settings.module.css'
+import { GPU, OS, PC } from '../platform'
 
 type Storage = { modelsBytes: number; models: string[]; unused: { id: string; bytes: number }[]; jobsBytes: number; done: number; stopped: number; recordings: number; recordingsBytes: number }
 // 과목 없이 저장한 노트가 가는 폴더 이름 (core/note.ts의 saveNote). 과목 목록에는 폴더로 나온다
@@ -171,27 +172,27 @@ export function Settings({ llm, doneCount, openKey, onLlmChange, onRestartWizard
   }
 
   // ── 받아쓰기 줄 ──
-  let sttTitle = '이 PC의 받아쓰기를 확인하는 중이에요'
+  let sttTitle = `이 ${PC}의 받아쓰기를 확인하는 중이에요`
   let sttSub = ''
   if (setup) {
     const { model, probe } = setup
     if (model.state === 'downloading') {
       sttTitle = `받아쓰기 모델 받는 중 ${percent(model.done, model.total)}%`
-      sttSub = '다 받으면 이 PC의 속도를 다시 재요'
+      sttSub = `다 받으면 이 ${PC}의 속도를 다시 재요`
     } else if (model.state !== 'ready') {
       sttTitle = '받아쓰기 모델을 아직 받지 않았어요'
       sttSub = model.error ?? `${sizeLabel(model.total)} · 처음 한 번만 받아요`
     } else if (probe.state === 'running') {
-      sttTitle = '이 PC의 받아쓰기 속도를 재는 중이에요'
+      sttTitle = `이 ${PC}의 받아쓰기 속도를 재는 중이에요`
       sttSub = '1분쯤 걸려요'
     } else if (probe.state === 'done') {
-      sttTitle = probe.gpuName ? `그래픽카드(${gpuLabel(probe.gpuName)})로 받아써요` : '이 PC의 프로세서로 받아써요'
+      sttTitle = probe.gpuName ? `${GPU}(${gpuLabel(probe.gpuName)})로 받아써요` : `이 ${PC}의 프로세서로 받아써요`
       sttSub = `90분 강의 약 ${probe.minutesFor90}분${probe.gpuName ? '' : ' · 처리는 뒤에서 진행돼요'}`
     } else if (probe.state === 'error') {
       sttTitle = '속도를 재지 못했어요 · 프로세서로 받아써요'
       sttSub = probe.error ?? ''
     } else {
-      sttTitle = '작업이 끝나면 이 PC의 속도를 다시 재요'
+      sttTitle = `작업이 끝나면 이 ${PC}의 속도를 다시 재요`
     }
   }
   const modelMissing = setup && (setup.model.state === 'missing' || setup.model.state === 'error')
@@ -215,7 +216,7 @@ export function Settings({ llm, doneCount, openKey, onLlmChange, onRestartWizard
         <SettingsCard>
           <Row
             title="색 모드"
-            sub="시스템은 Windows의 라이트·다크 설정을 따라요"
+            sub={`시스템은 ${OS}의 라이트·다크 설정을 따라요`}
             ctrl={<SegmentedControl label="색 모드" value={settings?.theme ?? 'system'} options={THEMES} onChange={(t) => void setTheme(t)} />}
           />
         </SettingsCard>

@@ -33,11 +33,15 @@ extraResources:
     to: THIRD_PARTY_NOTICES.txt
 npmRebuild: false
 # Chromium 언어 파일(우클릭 메뉴 등 Chromium이 그리는 글자)은 이 언어만 넣는다. en-US는 맞는 언어가 없을 때의 기본값이라 빼지 않는다.
+# 중국어는 Windows(zh-CN.pak)와 macOS(zh_CN.lproj)의 이름이 달라 둘 다 적는다.
 electronLanguages:
   - ko
   - en-US
+  - en
   - zh-CN
   - zh-TW
+  - zh_CN
+  - zh_TW
   - ja
 win:
   target: nsis

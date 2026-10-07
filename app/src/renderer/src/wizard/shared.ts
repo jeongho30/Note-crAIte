@@ -1,6 +1,7 @@
 import { useEffect, useState, type RefObject } from 'react'
 import { call } from '../api'
 import type { SetupState } from '../../../main/setup'
+import { GPU, PC } from '../platform'
 
 export type StepProps = {
   next: () => void
@@ -51,9 +52,9 @@ export function sttSummary(s: SetupState): string {
   if (model.state === 'downloading') return `모델 받는 중 ${percent(model.done, model.total)}% · 먼저 넣은 녹음은 다 받은 뒤 시작해요`
   if (model.state !== 'ready') return '모델을 아직 받지 않았어요'
   if (probe.state === 'done') {
-    const where = probe.gpuName ? `그래픽카드(${gpuLabel(probe.gpuName)})` : '이 PC의 프로세서'
+    const where = probe.gpuName ? `${GPU}(${gpuLabel(probe.gpuName)})` : `이 ${PC}의 프로세서`
     return `${where} · 90분 강의 약 ${probe.minutesFor90}분`
   }
   if (probe.state === 'error') return '속도를 재지 못했어요 · 프로세서로 받아써요'
-  return '이 PC의 받아쓰기 속도를 재는 중이에요'
+  return `이 ${PC}의 받아쓰기 속도를 재는 중이에요`
 }

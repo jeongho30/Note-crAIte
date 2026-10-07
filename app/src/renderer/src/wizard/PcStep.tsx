@@ -4,13 +4,14 @@ import { Banner, Button, Card, ProgressBar, RadioCardGroup } from '../components
 import { gb, gpuLabel, mb, percent, useSetup, type StepProps } from './shared'
 import { Step } from './Step'
 import styles from './Wizard.module.css'
+import { GPU, GPU_PC_ADVICE, PC, PC_OBJ } from '../platform'
 
 type SystemInfo = { cpu: string; cores: number; gpus: string[]; ramGb: number; freeBytes: number }
 type Choice = { id: string; size: number; downloaded: boolean }
 
 const MODEL_TEXT: Record<string, { title: string; description: string }> = {
   'large-v3-turbo-q8_0': { title: '기본', description: 'turbo. 대부분의 PC에 맞아요.' },
-  'large-v3-q5_0': { title: '정확하게', description: 'large-v3. 그래픽카드 PC 권장.' },
+  'large-v3-q5_0': { title: '정확하게', description: `large-v3. ${GPU_PC_ADVICE}`.trim() },
   'small-q5_1': { title: '가볍게', description: 'small. 느린 PC용, 정확도가 낮아요.' }
 }
 
@@ -35,7 +36,7 @@ export function PcStep({ next, back, headingRef }: StepProps): React.JSX.Element
 
   return (
     <Step
-      title="이 PC에 맞게 받아쓰기를 준비할게요"
+      title={`이 ${PC}에 맞게 받아쓰기를 준비할게요`}
       headingRef={headingRef}
       actions={
         <>
@@ -57,7 +58,7 @@ export function PcStep({ next, back, headingRef }: StepProps): React.JSX.Element
         <dd>{info ? `${info.cpu} · ${info.cores}코어` : '확인 중…'}</dd>
         {info && info.gpus.length > 0 && (
           <>
-            <dt>그래픽카드</dt>
+            <dt>{GPU}</dt>
             <dd>{info.gpus.join(' · ')}</dd>
           </>
         )}
@@ -114,16 +115,16 @@ export function PcStep({ next, back, headingRef }: StepProps): React.JSX.Element
 
       {lowDisk && <Banner tone="danger">남은 공간이 부족해요. 받아쓰기 모델에 {gb(need)}가 필요해요.</Banner>}
 
-      {model && model.state !== 'ready' && <p className={styles.small}>다 받으면 짧은 샘플로 이 PC의 받아쓰기 속도를 재요.</p>}
-      {probe?.state === 'running' && <p className={styles.small}>이 PC의 받아쓰기 속도를 재고 있어요. 잠시만 기다려 주세요.</p>}
+      {model && model.state !== 'ready' && <p className={styles.small}>다 받으면 짧은 샘플로 이 {PC}의 받아쓰기 속도를 재요.</p>}
+      {probe?.state === 'running' && <p className={styles.small}>이 {PC}의 받아쓰기 속도를 재고 있어요. 잠시만 기다려 주세요.</p>}
       {probe?.state === 'done' &&
         (probe.gpuName ? (
           <Banner tone="success">
-            그래픽카드({gpuLabel(probe.gpuName)})로 받아써요 · 90분 강의 약 {probe.minutesFor90}분
+            {GPU}({gpuLabel(probe.gpuName)})로 받아써요 · 90분 강의 약 {probe.minutesFor90}분
           </Banner>
         ) : (
           <Banner tone="success">
-            이 PC의 프로세서로 받아써요 · 90분 강의 약 {probe.minutesFor90}분. 처리는 뒤에서 진행돼요. PC를 계속 쓰셔도 돼요.
+            이 {PC}의 프로세서로 받아써요 · 90분 강의 약 {probe.minutesFor90}분. 처리는 뒤에서 진행돼요. {PC_OBJ} 계속 쓰셔도 돼요.
           </Banner>
         ))}
       {probe?.state === 'error' && (

@@ -1,5 +1,6 @@
 // 받아쓰기 세부설정: whisper-cli 명령 중 사용자가 고칠 수 있는 옵션.
 // 파일·모델·언어·출력 형식은 앱이 정하고(잠금), 나머지(스레드, 반복 억제, 탐색 폭, 장치, VAD 등)만 고칠 수 있다.
+import { sep } from 'node:path'
 import { EngineError } from './errors.ts'
 
 /** 앱이 정하는 옵션. 사용자 옵션에 들어 있으면 거절한다. */
@@ -35,9 +36,9 @@ export function parseArgs(text: string): string[] {
   return args
 }
 
-/** 설정 화면에 보여 줄 명령: 잠긴 부분과 고칠 수 있는 부분. WhisperCpp.command와 같은 순서다. */
-export function previewCommand(modelFile: string, vadFile: string | null, language: string, args: string[]): { locked: string; editable: string } {
-  const locked = ['whisper-cli', '-m', `models\\${modelFile}`, '-f', 'part_000.wav', '-l', language, '-oj', '-of', 'part_000.wav', '-pp', '-np']
-  if (vadFile) locked.push('-vm', `models\\${vadFile}`)
+/** 설정 화면에 보여 줄 명령: 잠긴 부분과 고칠 수 있는 부분. WhisperCpp.command와 같은 순서다. 경로 구분 글자는 OS를 따른다 */
+export function previewCommand(modelFile: string, vadFile: string | null, language: string, args: string[], pathSep = sep): { locked: string; editable: string } {
+  const locked = ['whisper-cli', '-m', `models${pathSep}${modelFile}`, '-f', 'part_000.wav', '-l', language, '-oj', '-of', 'part_000.wav', '-pp', '-np']
+  if (vadFile) locked.push('-vm', `models${pathSep}${vadFile}`)
   return { locked: locked.join(' '), editable: args.join(' ') }
 }

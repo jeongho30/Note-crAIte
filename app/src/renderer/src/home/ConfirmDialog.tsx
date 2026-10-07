@@ -6,6 +6,7 @@ import type { Language } from '../../../core/settings'
 import { mb, useSetup, type LlmStatus } from '../wizard/shared'
 import { aboutMinutes, lengthMinutes } from './shared'
 import styles from './ConfirmDialog.module.css'
+import { PC } from '../platform'
 
 type Recording = {
   audio: string
@@ -330,7 +331,7 @@ export function ConfirmDialog({ paths, llm, onClose }: Props): React.JSX.Element
   const sttLine = useMemo(() => {
     if (cloud) return `ChatKHU Soniox로 받아써요${sttCreditTotal !== null ? ` · 약 ${sttCreditTotal.toLocaleString()}크레딧 소모 예상` : ''}`
     if (!modelReady) return `받아쓰기 모델(${setup ? mb(setup.model.total) : '약 875MB'})을 받은 뒤 시작해요`
-    return sttTotal !== null ? aboutMinutes(sttTotal) : '이 PC의 속도를 잰 뒤 알려 드려요'
+    return sttTotal !== null ? aboutMinutes(sttTotal) : `이 ${PC}의 속도를 잰 뒤 알려 드려요`
   }, [cloud, sttCreditTotal, modelReady, sttTotal, setup])
 
   async function start(): Promise<void> {
@@ -551,7 +552,7 @@ export function ConfirmDialog({ paths, llm, onClose }: Props): React.JSX.Element
                       : total !== null && modelReady
                       ? aboutMinutes(total)
                       : modelReady
-                        ? '이 PC의 속도를 잰 뒤 알려 드려요'
+                        ? `이 ${PC}의 속도를 잰 뒤 알려 드려요`
                         : '모델을 받고 속도를 잰 뒤 알려 드려요'}
                   </dd>
                 </dl>

@@ -44,7 +44,7 @@ test('checkArgs는 whisper-cli가 모르는 옵션을 이유와 함께 알려 �
 })
 
 test('명령 미리보기는 잠긴 부분과 고칠 수 있는 부분으로 나뉜다', () => {
-  const p = previewCommand('ggml-x.bin', 'ggml-v.bin', 'ko', ['-t', '6'])
+  const p = previewCommand('ggml-x.bin', 'ggml-v.bin', 'ko', ['-t', '6'], '\\')
   assert.equal(p.locked, 'whisper-cli -m models\\ggml-x.bin -f part_000.wav -l ko -oj -of part_000.wav -pp -np -vm models\\ggml-v.bin')
   assert.equal(p.editable, '-t 6')
 })

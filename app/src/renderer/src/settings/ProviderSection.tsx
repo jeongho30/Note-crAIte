@@ -6,6 +6,7 @@ import type { LlmStatus } from '../wizard/shared'
 import { ModelPicker, type ModelOption } from './ModelPicker'
 import { Block, Row, Section, SettingsCard } from './parts'
 import styles from './Settings.module.css'
+import { PC } from '../platform'
 
 type Provider = { id: string; name: string; available: boolean; hasKey: boolean }
 type Models = { service: string; credits: boolean; selected: string; recommended: string; failed: boolean; available: string[]; models: ModelOption[] }
@@ -199,7 +200,7 @@ export const ProviderSection = forwardRef<HTMLElement, Props>(function ProviderS
               )}
             </form>
             <p className={styles.hint}>
-              키는 이 PC에만 암호화해서 저장돼요. 요약할 때 전사문과 필기가 고른 서비스로 보내져요. 서비스를 바꾸면 요약 모델은 그 서비스의 기본 모델이 되고 전사문
+              키는 이 {PC}에만 암호화해서 저장돼요. 요약할 때 전사문과 필기가 고른 서비스로 보내져요. 서비스를 바꾸면 요약 모델은 그 서비스의 기본 모델이 되고 전사문
               다듬기는 꺼져요.{' '}
               <KeyGuideLink provider={selected} />
             </p>
@@ -234,7 +235,7 @@ export const ProviderSection = forwardRef<HTMLElement, Props>(function ProviderS
           </>
         }
       >
-        <p className={styles.dialogText}>이 PC에 저장한 키를 지워요. 다시 연결하려면 키를 새로 붙여 넣어야 해요. 이미 만든 노트는 그대로예요.</p>
+        <p className={styles.dialogText}>이 {PC}에 저장한 키를 지워요. 다시 연결하려면 키를 새로 붙여 넣어야 해요. 이미 만든 노트는 그대로예요.</p>
       </Dialog>
     </Section>
   )

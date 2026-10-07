@@ -3,6 +3,7 @@ import { ApiError, call } from '../api'
 import { Button, Select, TextField, useToast } from '../components'
 import { Block, sizeLabel } from './parts'
 import styles from './Settings.module.css'
+import { PC } from '../platform'
 
 type Model = { id: string; bytes: number; parameters: string | null; quantization: string | null; contextLength: number | null }
 type Step = { model: string | null; request: string; defaultRequest: string }
@@ -185,7 +186,7 @@ export function OllamaBlock({ onSaved }: { onSaved: () => void }): React.JSX.Ele
             </Button>
           </p>
           <p className={styles.hint}>
-            이 PC의 Ollama({state.endpoint})를 불러요. 모델은 Ollama에서 미리 받아 두세요. 로컬 LLM으로 하는 단계는 크레딧이 들지 않고 그 내용이 PC 밖으로 나가지 않아요. 어느
+            이 {PC}의 Ollama({state.endpoint})를 불러요. 모델은 Ollama에서 미리 받아 두세요. 로컬 LLM으로 하는 단계는 크레딧이 들지 않고 그 내용이 {PC} 밖으로 나가지 않아요. 어느
             단계를 로컬로 할지는 위의 요약 세부설정에서 골라요.
           </p>
           {(['polish', 'summary'] as const).map((name) => (
