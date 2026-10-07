@@ -1,9 +1,17 @@
-# Windows 설치 파일: whisper.cpp 빌드(Vulkan) → ffmpeg(LGPL) 받기 → 테스트 → electron-builder.
-# 결과는 워크플로 실행의 아티팩트(Note-crAIte-windows)로 받는다. GitHub Release에 올리지는 않는다.
+# 설치 파일: whisper.cpp 빌드 → ffmpeg(LGPL) → 테스트 → electron-builder.
+#   Windows  whisper는 Vulkan, ffmpeg는 받는다. 결과는 아티팩트 Note-crAIte-windows (.exe)
+#   macOS    Apple Silicon만. whisper는 Metal, ffmpeg는 직접 빌드한다. 결과는 아티팩트 Note-crAIte-mac (.dmg)
+# GitHub Release에 올리지는 않는다.
 name: installer
 
 on:
   workflow_dispatch:
+    inputs:
+      os:
+        description: 만들 설치 파일
+        type: choice
+        options: [all, windows, macos]
+        default: all
   push:
     tags: ['v*']
 
@@ -12,6 +20,7 @@ permissions:
 
 jobs:
   windows:
+    if: github.event_name != 'workflow_dispatch' || inputs.os != 'macos'
     runs-on: windows-latest
     timeout-minutes: 60
     env:
@@ -73,5 +82,134 @@ jobs:
         with:
           name: Note-crAIte-windows
           path: dist/installer/*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  macos:
+    if: github.event_name != 'workflow_dispatch' || inputs.os != 'windows'
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      # 받아쓰기를 실제로 돌려 볼 때 쓰는 작은 모델 (앱 기본 모델은 874MB라 여기서는 받지 않는다)
+      SMOKE_MODEL: small-q5_1
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      # 빌드 스크립트(고정 커밋·옵션)가 같으면 전 결과를 쓴다
+      - name: whisper.cpp 캐시
+        id: whisper-cache
+        uses: actions/cache@v6
+        with:
+          path: .cache/whisper/bin
+          key: whisper-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build_whisper.sh') }}
+
+      - name: whisper.cpp 빌드
+        if: steps.whisper-cache.outputs.cache-hit != 'true'
+        run: bash scripts/build_whisper.sh
+
+      # check.yml과 같은 키라 그쪽에서 만든 것을 그대로 쓴다
+      - name: ffmpeg 캐시
+        id: ffmpeg-cache
+        uses: actions/cache@v6
+        with:
+          path: .cache/ffmpeg/bin
+          key: ffmpeg-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build_ffmpeg.sh') }}
+
+      - name: ffmpeg 빌드
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        run: |
+          command -v pkg-config >/dev/null || brew install pkgconf
+          bash scripts/build_ffmpeg.sh
+
+      - name: 의존성
+        working-directory: app
+        run: npm ci
+
+      - name: 타입 검사와 테스트
+        working-directory: app
+        run: |
+          export PATH="$GITHUB_WORKSPACE/.cache/ffmpeg/bin:$PATH"
+          npm run typecheck
+          npm test
+
+      - name: 받아쓰기 모델 캐시
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/ln-data/models
+          key: models-${{ env.SMOKE_MODEL }}-${{ hashFiles('app/src/core/models.ts') }}
+
+      # 테스트는 가짜 whisper-cli를 쓴다. 여기서는 방금 만든 whisper-cli와 ffmpeg로 샘플을 실제로 받아써 본다:
+      # 속도 재기(CPU와 Metal)와, 녹음 하나를 노트로 만드는 작업 전체(요약은 키가 없어 건너뜀).
+      # 러너는 가상 머신이라 Metal이 안 되거나 느릴 수 있다. CPU로 받아쓰기가 되면 통과다.
+      - name: 실제로 받아써 보기
+        working-directory: app
+        run: |
+          export PATH="$GITHUB_WORKSPACE/.cache/ffmpeg/bin:$PATH"
+          DATA="$RUNNER_TEMP/ln-data"
+          sysctl -n machdep.cpu.brand_string hw.physicalcpu hw.logicalcpu hw.perflevel0.physicalcpu hw.perflevel1.physicalcpu 2>&1 || true
+          npm run --silent cli -- --data-dir "$DATA" models download "$SMOKE_MODEL" silero-v6.2.0
+          echo "::group::whisper-cli 로그 (Metal, -dev 0)"
+          cp resources/probe-ko.wav "$RUNNER_TEMP/sample.wav"
+          (cd "$RUNNER_TEMP" && "$GITHUB_WORKSPACE/.cache/whisper/bin/whisper-cli" -m "ln-data/models/ggml-$SMOKE_MODEL.bin" -f sample.wav -l ko -mc 0 -bs 1 -dev 0 2>&1 >/dev/null | grep -v 'progress =' | head -120) || echo "whisper-cli(Metal) 실패: $?"
+          echo "::endgroup::"
+          echo "::group::whisper-cli 로그 (CPU, -ng)"
+          (cd "$RUNNER_TEMP" && "$GITHUB_WORKSPACE/.cache/whisper/bin/whisper-cli" -m "ln-data/models/ggml-$SMOKE_MODEL.bin" -f sample.wav -l ko -mc 0 -bs 1 -ng 2>&1 >/dev/null | grep -v 'progress =' | head -80) || echo "whisper-cli(CPU) 실패: $?"
+          echo "::endgroup::"
+          npm run --silent cli -- --data-dir "$DATA" probe --model "$SMOKE_MODEL"
+          cat "$DATA/probe.json"; echo
+          npm run --silent cli -- --data-dir "$DATA" run resources/probe-ko.wav --out "$RUNNER_TEMP/notes" --model "$SMOKE_MODEL"
+          find "$RUNNER_TEMP/notes" -name '*.md' -print -exec head -c 1500 {} \;
+
+      - name: 설치 파일 만들기
+        working-directory: app
+        run: npm run dist:mac -- --publish never
+
+      # 서명(임시 서명), 최소 macOS 버전, 함께 넣은 실행 파일이 앱 안에서 도는지 본다
+      - name: 만든 앱 확인
+        run: |
+          APP="dist/installer/mac-arm64/Note-crAIte.app"
+          ls -la dist/installer
+          codesign -dv --verbose=2 "$APP" 2>&1 | head -20
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          /usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' -c 'Print :CFBundleIdentifier' -c 'Print :NSMicrophoneUsageDescription' "$APP/Contents/Info.plist"
+          ls -la "$APP/Contents/Resources" "$APP/Contents/Resources/bin" "$APP/Contents/Resources/bin/whisper"
+          "$APP/Contents/Resources/bin/whisper/whisper-cli" --help >/dev/null 2>&1 && echo "whisper-cli 실행됨"
+          "$APP/Contents/Resources/bin/ffmpeg" -hide_banner -version | head -1
+          du -sh "$APP" dist/installer/*.dmg
+          spctl -a -vv "$APP" 2>&1 || true
+
+      # 만든 앱을 새 데이터 폴더로 띄워 첫 화면(마법사)을 찍는다. 화면은 사람이 아티팩트에서 본다
+      - name: 앱 띄워 보기
+        continue-on-error: true
+        run: |
+          APP="dist/installer/mac-arm64/Note-crAIte.app"
+          mkdir -p "$RUNNER_TEMP/shots"
+          LN_DATA_DIR="$RUNNER_TEMP/ln-app" "$APP/Contents/MacOS/Note-crAIte" > "$RUNNER_TEMP/shots/app-stdout.txt" 2>&1 &
+          PID=$!
+          sleep 20
+          screencapture -x "$RUNNER_TEMP/shots/wizard.png" || echo "화면을 찍지 못함"
+          if kill -0 "$PID" 2>/dev/null; then echo "앱이 떠 있음 (pid $PID)"; else echo "앱이 끝나 있음"; fi
+          cat "$RUNNER_TEMP"/ln-app/logs/*.log 2>/dev/null || echo "앱 기록 없음"
+          cat "$RUNNER_TEMP/shots/app-stdout.txt"
+          kill "$PID" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: mac-screenshots
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Note-crAIte-mac
+          path: dist/installer/*.dmg
           if-no-files-found: error
           retention-days: 30

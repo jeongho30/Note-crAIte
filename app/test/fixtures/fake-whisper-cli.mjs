@@ -27,6 +27,20 @@ if (mode === 'hang') {
   for (let p = 0; p <= 100; p += 5) {
     process.stderr.write(`whisper_print_progress_callback: progress = ${String(p).padStart(3)}%\n`)
   }
+  if (mode === 'metal') {
+    // macOS의 whisper-cli 로그 (whisper.cpp 소스의 문구): Metal로 돌면 MTL0, -ng면 GPU 없이 BLAS(CPU 쪽 가속)
+    const gpu = !args.includes('-ng')
+    process.stderr.write(
+      [
+        ...(gpu
+          ? ['ggml_metal_device_init: GPU name:   MTL0 (Apple M2)', 'whisper_backend_init_gpu: using MTL0 backend']
+          : ['whisper_backend_init_gpu: no GPU found']),
+        'whisper_backend_init: using BLAS backend',
+        'whisper_print_timings:     load time =   300.00 ms',
+        `whisper_print_timings:    total time =  ${gpu ? '1300.00' : '9300.00'} ms`
+      ].join('\n') + '\n'
+    )
+  }
   const out = args[args.indexOf('-of') + 1] + '.json'
   const data = {
     transcription: [

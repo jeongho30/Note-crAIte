@@ -18,6 +18,8 @@ test('backendUsed는 whisper 로그를 읽는다', () => {
   assert.equal(backendUsed(['whisper_init_with_params_no_state: use gpu    = 1',
                             'whisper_backend_init_gpu: using Vulkan0 backend']), 'Vulkan0')
   assert.equal(backendUsed(['whisper_backend_init_gpu: no GPU found']), 'CPU')
+  assert.equal(backendUsed(['whisper_backend_init_gpu: using MTL0 backend', 'whisper_backend_init: using BLAS backend']), 'MTL0')
+  assert.equal(backendUsed(['whisper_backend_init_gpu: no GPU found', 'whisper_backend_init: using BLAS backend']), 'CPU', 'macOS의 BLAS는 CPU 쪽 가속이다')
 })
 
 test('textInRange는 구간 시작 시각으로 고른다', () => {

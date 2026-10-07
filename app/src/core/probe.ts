@@ -10,6 +10,8 @@ import { backendUsed, WhisperCpp } from './stt/whispercpp.ts'
 import { wavDuration } from './wav.ts'
 
 const VK_DEVICE_RE = /ggml_vulkan: (\d+) = (.+?) \| uma: (\d)/
+// macOS(Metal): "ggml_metal_device_init: GPU name:   MTL0 (Apple M2)"
+const METAL_NAME_RE = /GPU name:\s+MTL\d+ \((.+)\)\s*$/
 const TIMING_RE = /whisper_print_timings:\s+(load|total) time =\s+([\d.]+) ms/
 
 // GPU 전사가 CPU 전사와 이만큼 다르면 깨진 것으로 본다. 정상이면 같은 모델이라 거의 같다.
@@ -50,6 +52,15 @@ export function parseVulkanDevices(log: string[]): GpuDevice[] {
   return [...devices.values()]
 }
 
+/** Metal로 돌린 로그에서 그래픽 장치 이름(Apple Silicon은 칩 이름)을 읽는다. 없으면 null */
+export function parseMetalName(log: string[]): string | null {
+  for (const line of log) {
+    const m = METAL_NAME_RE.exec(line)
+    if (m) return m[1].trim()
+  }
+  return null
+}
+
 export function parseTimings(log: string[]): { loadMs: number | null; totalMs: number | null } {
   let loadMs: number | null = null
   let totalMs: number | null = null
@@ -80,6 +91,7 @@ export type ProbeOptions = {
   sample: string // 16kHz 모노 WAV
   workDir: string // 샘플을 복사해 돌릴 폴더 (whisper가 샘플 옆에 결과 JSON을 쓴다)
   onTrial?: (name: string) => void
+  platform?: string // 테스트용. 기본은 이 PC
 }
 
 export async function probeDevices(o: ProbeOptions): Promise<ProbeResult> {
@@ -87,6 +99,8 @@ export async function probeDevices(o: ProbeOptions): Promise<ProbeResult> {
   const wav = join(o.workDir, 'sample.wav')
   await copyFile(o.sample, wav)
   const sampleS = await wavDuration(wav)
+  // macOS의 whisper-cli는 Vulkan이 아니라 Metal로 그래픽 장치를 쓴다 (백엔드 이름 MTL0)
+  const metal = (o.platform ?? process.platform) === 'darwin'
 
   async function trial(device: number | null, name: string, cpuText: string | null): Promise<[Trial, string, string[]]> {
     o.onTrial?.(name)
@@ -104,7 +118,7 @@ export async function probeDevices(o: ProbeOptions): Promise<ProbeResult> {
     const t: Trial = {
       device, name, processMs: (totalMs ?? 0) - (loadMs ?? 0), loadMs: loadMs ?? 0, chars: normalize(text).length, ok: true
     }
-    if (device !== null && backendUsed(engine.lastLog) !== `Vulkan${device}`) {
+    if (device !== null && backendUsed(engine.lastLog) !== `${metal ? 'MTL' : 'Vulkan'}${device}`) {
       Object.assign(t, { ok: false, reason: 'GPU를 쓰지 못하고 CPU로 돌았습니다' })
     } else if (cpuText !== null && cer(cpuText, text) > MAX_CER_VS_CPU) {
       Object.assign(t, { ok: false, reason: `전사가 CPU 결과와 크게 다릅니다 (CER ${cer(cpuText, text).toFixed(2)})` })
@@ -115,9 +129,14 @@ export async function probeDevices(o: ProbeOptions): Promise<ProbeResult> {
   }
 
   const [cpu, cpuText, cpuLog] = await trial(null, 'CPU', null)
-  const devices = parseVulkanDevices(cpuLog)
+  // Vulkan은 CPU로 돌 때도 장치 목록을 찍는다. Metal은 목록이 없어 0번(Apple Silicon의 GPU는 하나)을 재 보고, 이름은 그 로그에서 읽는다
+  const devices: GpuDevice[] = metal ? [{ index: 0, name: 'Metal', integrated: true }] : parseVulkanDevices(cpuLog)
   const trials = [cpu]
-  for (const d of devices) trials.push((await trial(d.index, d.name, cpuText))[0])
+  for (const d of devices) {
+    const [t, , log] = await trial(d.index, d.name, cpuText)
+    if (metal) d.name = t.name = parseMetalName(log) ?? d.name
+    trials.push(t)
+  }
   const chosen = choose(trials)
   return {
     checkedAt: new Date().toISOString(),
