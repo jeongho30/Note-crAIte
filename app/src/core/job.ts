@@ -13,7 +13,7 @@ import * as credits from './credits.ts'
 import { EngineError } from './errors.ts'
 import { readJson, writeJsonAtomic } from './files.ts'
 import { readNotes } from './inputs.ts'
-import { creditsFromTokens, PRICES } from './llmcatalog.ts'
+import { catalog, creditsFromTokens } from './llmcatalog.ts'
 import { renderNote, saveNote } from './note.ts'
 import { usesCredits } from './providers.ts'
 import { unload } from './ollama.ts'
@@ -321,7 +321,7 @@ const RUNNERS: Record<StageName, Runner> = {
     const text = transcriptText({ paragraphs, stats: { segmentsIn: 0, loopsCollapsed: 0, hallucinationsRemoved: 0, repeatsRemoved: 0 } })
     const notes = job.input.notes ? await readNotes(join(jobDir, job.input.notes)) : ''
     // 단가를 아는 모델은 응답의 토큰 수로 크레딧을 계산하고, 모르는 모델만 요약 전후 잔액 차이로 잰다
-    const priced = llm.model in PRICES
+    const priced = Object.hasOwn(catalog().prices, llm.model)
     const before = credited(llm) && !priced && llm.creditsUrl ? await creditsRemaining(llm.creditsUrl, ctx.apiKey!) : null
     const prompt = await ctx.summaryPrompt?.()
     const result = await unloadOnError(llm, () => summarize(text, notes, job.input.subject, {

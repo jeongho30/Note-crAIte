@@ -15,7 +15,8 @@ import { MODELS } from '../core/models.ts'
 import { defaultDataDir, findFfmpeg, findWhisperCli } from '../core/paths.ts'
 import { estimateJobSeconds, estimateSttSeconds, polishRate, sttSpeed, summarySeconds, testSample } from '../core/probe.ts'
 import type { ProbeResult } from '../core/probe.ts'
-import { DEFAULT_STEP_MODEL, estimateCredits90, estimateStepCredits90, POLISH_RECOMMENDED, RANKED, RECOMMENDED_COUNT } from '../core/llmcatalog.ts'
+import { loadCachedCatalog, refreshCatalog } from '../core/catalogsync.ts'
+import { catalog, DEFAULT_STEP_MODEL, estimateCredits90, estimateStepCredits90, newModels } from '../core/llmcatalog.ts'
 import type { ModelItem } from '../core/llmcatalog.ts'
 import * as ollama from '../core/ollama.ts'
 import { CHATKHU_BASE, CREDITS_PER_90MIN_SUMMARY, creditsPer90ByModel, listModels, OLLAMA_NAME, PRESETS, PROVIDERS, resolveSteps, usesCredits, verifyKey } from '../core/providers.ts'
@@ -55,6 +56,21 @@ const trayIconPath = process.platform !== 'darwin' ? iconPath : app.isPackaged ?
 const dataDir = process.env['LN_DATA_DIR'] || defaultDataDir()
 const log = createLog(join(dataDir, 'logs'))
 const RELEASES_URL = 'https://github.com/jeongho30/Note-crAIte/releases'
+
+// 모델 카탈로그(단가·추천 순서)를 저장소에서 받는다: 앱을 켤 때, 그 뒤로는 모델 목록을 볼 때 6시간에 한 번.
+// 화면을 기다리게 하지 않는다. 받은 것은 다음에 모델 목록을 열 때 보인다.
+const CATALOG_EVERY_MS = 6 * 3600_000
+let catalogTriedAt = 0
+function syncCatalog(): void {
+  if (Date.now() - catalogTriedAt < CATALOG_EVERY_MS) return
+  catalogTriedAt = Date.now()
+  refreshCatalog(dataDir).then(
+    (changed) => {
+      if (changed) log.write(`모델 카탈로그 받음: ${catalog().updated}`)
+    },
+    (e) => log.write(`모델 카탈로그 받기 실패: ${(e as Error).message}`)
+  )
+}
 
 // Windows 알림에 보이는 앱 이름. 정하지 않으면 "electron.app.…"으로 뜬다.
 // 설치본은 설치 파일이 만든 바로 가기의 ID(electron-builder.yml의 appId)와 같아야 그 바로 가기의 이름·아이콘으로 보이고,
@@ -835,8 +851,10 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     log.write('요약 서비스 연결 끊음')
   },
   // 요약 모델과 모델별 90분 요약 크레딧: 써 본 기록(measured)이 있으면 그것, 없으면 단가표로 어림(estimate).
-  // 보이는 것은 추천 순서(RANKED)의 모델과 고른 모델뿐이다. available은 [직접 모델 입력]의 확인용(서비스의 글 모델 전체).
+  // 보이는 것은 카탈로그의 추천 순서(ranked)에 있는 모델, 카탈로그가 모르는 새 모델(isNew), 고른 모델이다.
+  // available은 [직접 모델 입력]의 확인용(서비스의 글 모델 전체).
   'llm.models': async () => {
+    syncCatalog()
     const { provider, summaryModel } = await loadSettings(dataDir)
     const recommended = PRESETS[provider ?? 'chatkhu'].model
     const selected = summaryModel ?? recommended
@@ -849,8 +867,10 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     const owners = new Map(items.map((m) => [m.id, m.owner]))
     const available = new Set(items.map((m) => m.id))
     // 목록을 불러왔으면 목록에 없는 모델은 뺀다 (서비스에서 내려간 모델)
-    const ranked = RANKED.filter((r) => failed || !items.length || available.has(r.id))
-    const ids = [...new Set([...ranked.map((r) => r.id), selected])]
+    const { ranked: order, recommendedCount } = catalog()
+    const ranked = order.filter((r) => failed || !items.length || available.has(r.id))
+    const fresh = newModels(items.map((m) => m.id))
+    const ids = [...new Set([...ranked.map((r) => r.id), ...fresh, selected])]
     return {
       service: PROVIDERS.find((x) => x.id === (provider ?? 'chatkhu'))!.name,
       credits: true,
@@ -859,14 +879,15 @@ const handlers: Record<string, (params: unknown) => unknown> = {
       failed,
       available: [...available],
       models: ids.map((id) => {
-        const rank = RANKED.findIndex((x) => x.id === id)
+        const rank = order.findIndex((x) => x.id === id)
         const estimate = estimateCredits90(id)
         return {
           id,
           owner: owners.get(id) ?? null,
           rank: rank >= 0 ? rank + 1 : null,
-          recommended: rank >= 0 && rank < RECOMMENDED_COUNT,
-          note: RANKED[rank]?.note || null,
+          recommended: rank >= 0 && rank < recommendedCount,
+          note: order[rank]?.note || null,
+          isNew: fresh.includes(id),
           credits90: measured[id] ?? estimate,
           source: measured[id] != null ? 'measured' : estimate != null ? 'estimate' : null
         }
@@ -882,6 +903,7 @@ const handlers: Record<string, (params: unknown) => unknown> = {
   },
   // 설정 > 고급 > 요약 세부설정: 전사문 다듬기 모델. llm.models와 같은 형식으로, 다듬기 추천 모델을 앞에 두고 나머지는 요약 추천 순서
   'llm.steps': async () => {
+    syncCatalog()
     const { provider, polishModel, ollama: local } = await loadSettings(dataDir)
     const key = provider ? await readKey(dataDir, provider) : null
     let items: ModelItem[] = []
@@ -894,8 +916,10 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     }
     const owners = new Map(items.map((m) => [m.id, m.owner]))
     const available = new Set(items.map((m) => m.id))
-    const order = [...new Set([...POLISH_RECOMMENDED, ...RANKED.map((r) => r.id)])].filter((id) => failed || !items.length || available.has(id))
-    const ids = [...new Set([...order, ...(polishModel ? [polishModel] : [])])]
+    const { ranked, polishRecommended } = catalog()
+    const order = [...new Set([...polishRecommended, ...ranked.map((r) => r.id)])].filter((id) => failed || !items.length || available.has(id))
+    const fresh = newModels(items.map((m) => m.id))
+    const ids = [...new Set([...order, ...fresh, ...(polishModel ? [polishModel] : [])])]
     return {
       polishModel,
       // 단계를 로컬 LLM으로 하는지와, 로컬에서 고른 모델 (없으면 로컬을 고를 수 없다)
@@ -912,8 +936,9 @@ const handlers: Record<string, (params: unknown) => unknown> = {
           id,
           owner: owners.get(id) ?? null,
           rank: rank >= 0 ? rank + 1 : null,
-          recommended: POLISH_RECOMMENDED.includes(id),
+          recommended: polishRecommended.includes(id),
           note: null,
+          isNew: fresh.includes(id),
           credits90,
           source: credits90 != null ? 'estimate' : null
         }
@@ -1351,6 +1376,8 @@ app.whenReady().then(async () => {
   log.write(`앱 시작 ${app.getVersion()} · ${process.platform} ${process.arch}${app.isPackaged ? '' : ' · 개발 실행'}`)
   const settings = await loadSettings(dataDir)
   nativeTheme.themeSource = settings.theme
+  if (await loadCachedCatalog(dataDir)) log.write(`모델 카탈로그: 받아 둔 것 (${catalog().updated})`)
+  syncCatalog()
   sttWhileRecording = settings.sttWhileRecording
   // 앱이 꺼져 녹음 중 파일로 남은 앱 녹음을 녹음 파일로 만든다 (홈의 "처리하지 않은 녹음"에 뜬다)
   // ffmpeg를 못 찾아도(findFfmpeg가 던짐) 창은 떠야 한다
