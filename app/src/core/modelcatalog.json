@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-10-08",
+  "updated": "2026-10-09",
   "prices": {
     "gpt-6.1-sol": { "input": 2, "output": 10 },
     "gpt-6-sol": { "input": 2, "output": 10 },
@@ -87,7 +87,10 @@
     "glm-5.3-flash",
     "seed-2-0-pro-260328",
     "sonar-pro",
-    "sonar-reasoning-pro"
+    "sonar-reasoning-pro",
+    "gpt-6-astra",
+    "accounts/fireworks/models/gpt-oss-120b",
+    "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8"
   ],
   "summaryCredits90": {
     "gpt-6-luna": 3.9,
