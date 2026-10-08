@@ -5,7 +5,7 @@ import { EngineError } from './errors.ts'
 import type { Job, LlmSettings } from './job.ts'
 import { anthropicHeaders } from './anthropic.ts'
 import { headers, raiseForStatus, request } from './llm.ts'
-import { parseModelList } from './llmcatalog.ts'
+import { catalog, parseModelList } from './llmcatalog.ts'
 import type { ModelItem } from './llmcatalog.ts'
 import { DEFAULT_REQUEST, OLLAMA_BASE, parseRequest } from './ollama.ts'
 import type { Settings } from './settings.ts'
@@ -42,28 +42,7 @@ const TEXT_MODEL: Record<string, (id: string) => boolean> = {
 export const CREDITS_PER_90MIN_SUMMARY = 12
 
 /**
- * 써 보기 전에도 알고 있는 모델별 90분 요약 크레딧: 강의 2~4개의 토큰 × 단가를 90분으로 환산한 평균.
- * luna·flash·sol·grok·deepseek·gemma는 주제별 틀로 바꾼 뒤(10/2), 나머지는 그 전(9/29 2차 비교)에 잰 값이라 조금 낮게 본다.
- * 나머지는 써 본 기록, 그것도 없으면 단가표로 어림한다(llmcatalog.ts).
- */
-const KNOWN_CREDITS_PER_90MIN: Record<string, number> = {
-  'gpt-6-luna': 3.9,
-  'gemini-3.8-flash': 17.4,
-  'gpt-6.1-sol': 65,
-  'gpt-6-sol': 49,
-  'claude-sonnet-5-5': 88,
-  'grok-4-1-fast': 3.9,
-  'solar-pro4': 5.9,
-  'deepseek-v4-flash': 6.8,
-  'claude-haiku-4-5-20251001': 38,
-  'gemini-3.1-pro-preview': 44,
-  'seed-2-0-lite-260428': 10.7,
-  'google/gemma-4-31B-it': 2.7,
-  'gemini-3.5-flash-lite': 7.5
-}
-
-/**
- * 모델별 90분 요약 크레딧: 끝난 작업의 기록을 90분으로 환산한 평균, 기록이 없으면 알려진 값.
+ * 모델별 90분 요약 크레딧: 끝난 작업의 기록을 90분으로 환산한 평균, 기록이 없으면 알려진 값(카탈로그의 summaryCredits90).
  * 9/29 전 기록(source 없음, 잔액 차이)은 늦은 차감이 섞여 틀어진 것이 있어 쓰지 않는다.
  */
 export function creditsPer90ByModel(jobs: Job[]): Record<string, number> {
@@ -77,7 +56,7 @@ export function creditsPer90ByModel(jobs: Job[]): Record<string, number> {
     s.total += (used / durationS) * 5400
     s.n++
   }
-  const out: Record<string, number> = { ...KNOWN_CREDITS_PER_90MIN }
+  const out: Record<string, number> = { ...catalog().summaryCredits90 }
   for (const [model, s] of Object.entries(sums)) out[model] = Math.round((s.total / s.n) * 10) / 10
   return out
 }
