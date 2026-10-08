@@ -43,13 +43,21 @@ const parts = [
   `Note-crAIte 오픈소스 고지 (Third-party notices)
 
 이 프로그램은 아래 오픈소스 소프트웨어를 포함하거나 실행 중에 내려받는다. 각 항목의 라이선스를 따른다.
-Electron과 Chromium의 고지는 설치 폴더의 LICENSE.electron.txt, LICENSES.chromium.html에 있다.`
+Electron과 Chromium의 고지는 ${WIN ? '설치 폴더' : '앱 안(Contents/Resources)'}의 LICENSE.electron.txt, LICENSES.chromium.html에 있다.`
 ]
 
 parts.push(`whisper.cpp / ggml (resources/bin/whisper) — MIT
 https://github.com/ggml-org/whisper.cpp
 
 ${read(join(REPO, '.cache', 'whisper', 'bin', 'LICENSE-whisper.cpp.txt'))}`)
+
+// Vulkan으로 빌드한 whisper(ggml-vulkan.dll)에는 Khronos의 Vulkan 헤더가 컴파일돼 들어 있다 (Apache-2.0 OR MIT 중 MIT)
+if (existsSync(join(REPO, '.cache', 'whisper', 'bin', 'ggml-vulkan.dll'))) {
+  parts.push(`Vulkan-Headers / Vulkan-Hpp (resources/bin/whisper/ggml-vulkan.dll에 들어 있음) — MIT
+https://github.com/KhronosGroup/Vulkan-Headers
+
+${read(join(APP, 'scripts', 'licenses', 'LICENSE-vulkan-headers.txt'))}`)
+}
 
 parts.push(`FFmpeg (resources/bin/ffmpeg${WIN ? '.exe' : ''}) — LGPL v2.1 이상
 라이선스 전문: resources/bin/LICENSE-ffmpeg.txt
