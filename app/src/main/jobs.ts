@@ -367,7 +367,7 @@ export function createJobRunner(d: Deps) {
     void loop()
   }
 
-  /** 요약을 건너뛰고 전사문만 담은 노트를 저장한다 (크레딧 부족·너무 긴 전사). 받아쓰기가 끝난 작업만. */
+  /** 요약을 건너뛰고 전사문만 담은 노트를 저장한다 (크레딧 부족·너무 긴 전사·인터넷 없음). 받아쓰기가 끝난 작업만. */
   async function transcriptOnly(id: string): Promise<void> {
     autoRetryAt.delete(id)
     const job = await loadJob(dirOf(id))

@@ -176,7 +176,8 @@ function JobRow({ job: j, now, open, onToggle, act, onConnect, onSettings, onPre
     if (code === 'auth') actions.push(button('키 다시 넣기', onConnect))
     // 다시 시도하면 지금 설정의 요약 모델로 한다(main/jobs.ts retry)
     if (code === 'timeout') actions.push(button('요약 모델 바꾸기', onSettings))
-    if ((code === 'credits' || code === 'too_large') && sttDone) actions.push(button('전사만 저장', () => void act('jobs.transcriptOnly', j.id)))
+    // network: 인터넷이 없어 요약 서비스에 닿지 못해도 전사문 노트는 받을 수 있게 한다
+    if ((code === 'credits' || code === 'too_large' || code === 'network') && sttDone) actions.push(button('전사만 저장', () => void act('jobs.transcriptOnly', j.id)))
     // ChatKHU 받아쓰기에서 멈췄으면 이 PC에서 받아쓸 수 있다 (크레딧이 들지 않음)
     if (j.sttService === 'chatkhu' && !sttDone) actions.push(button(`이 ${PC}에서 받아쓰기`, () => void act('jobs.localStt', j.id)))
     if (code !== 'too_large') actions.push(button('이어서 다시 시도', () => void act('jobs.retry', j.id)))
