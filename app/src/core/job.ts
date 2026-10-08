@@ -143,6 +143,13 @@ export type JobContext = {
 
 const now = (): string => new Date().toISOString()
 
+// 작업을 만든 시각. 한 번에 넣은 녹음들이 같은 밀리초에 만들어져도(빠른 디스크) 넣은 순서가 남게, 앞 작업보다 적어도 1ms 뒤로 적는다
+let lastCreatedMs = 0
+function createdNow(): string {
+  lastCreatedMs = Math.max(Date.now(), lastCreatedMs + 1)
+  return new Date(lastCreatedMs).toISOString()
+}
+
 function newId(): string {
   const d = new Date()
   const p = (n: number): string => String(n).padStart(2, '0')
@@ -175,7 +182,7 @@ export async function createJob(dataDir: string, audio: string, notes: string | 
   }
   const stages = Object.fromEntries(STAGES.map((s) => [s, { status: 'pending' }])) as Record<StageName, StageState>
   await saveJob(jobDir, {
-    id, createdAt: now(), input: { audio, notes: notesFile, subject, ...(from ? { from } : {}) }, settings, stages, status: 'queued'
+    id, createdAt: createdNow(), input: { audio, notes: notesFile, subject, ...(from ? { from } : {}) }, settings, stages, status: 'queued'
   })
   return jobDir
 }
