@@ -87,7 +87,7 @@ try {
     const start = button('받기 시작')
     if (await start.isVisible().catch(() => false)) await start.click()
     await page.getByText('다 받았어요.').waitFor({ timeout: 600_000 })
-    await page.getByText(/로 받아써요/).waitFor({ timeout: 900_000 }) // 느린 러너에서는 CPU와 GPU를 재는 데 몇 분씩 걸린다
+    await page.getByText(/로 받아쓰기해요/).waitFor({ timeout: 900_000 }) // 느린 러너에서는 CPU와 GPU를 재는 데 몇 분씩 걸린다
     await shot('pc')
     await button('다음').click()
   })
@@ -149,7 +149,7 @@ try {
 
   await step('설정 화면', async () => {
     await page.getByRole('navigation', { name: '메뉴' }).getByText('설정').click()
-    await page.getByText(/로 받아써요/).first().waitFor()
+    await page.getByText(/로 받아쓰기해요/).first().waitFor()
     await shot('settings')
   })
 

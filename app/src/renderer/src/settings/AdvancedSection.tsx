@@ -392,7 +392,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                   label="받아쓰기(Speech-to-Text)에 ChatKHU Soniox 모델 쓰기"
                   hint={
                     <>
-                      이 {PC}의 whisper 대신 ChatKHU가 받아써요. 전문 용어를 훨씬 정확히 받아쓰지만 오디오 1분에 6크레딧(90분 강의 약 540)이 들고,
+                      이 {PC}의 whisper 대신 ChatKHU가 받아쓰기해요. 전문 용어를 훨씬 정확히 받아쓰지만 오디오 1분에 6크레딧(90분 강의 약 540)이 들고,
                       녹음이 ChatKHU로 보내져요. 말한 그대로 적어서 "어", "네" 같은 말도 들어가요.
                       {!connected && ' ChatKHU를 연결하면 켤 수 있어요.'}
                     </>

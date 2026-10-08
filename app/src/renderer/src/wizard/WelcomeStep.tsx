@@ -18,7 +18,7 @@ export function WelcomeStep({ next, headingRef }: StepProps): React.JSX.Element 
     >
       <dl className={styles.facts}>
         <dt>이 {PC}에서</dt>
-        <dd>녹음을 받아써요. 녹음 파일은 {PC} 밖으로 나가지 않아요.</dd>
+        <dd>녹음을 글로 받아써요. 녹음 파일은 {PC} 밖으로 나가지 않아요.</dd>
         <dt>요약 서비스로</dt>
         <dd>요약할 때 전사문과 필기만 보내요.</dd>
       </dl>

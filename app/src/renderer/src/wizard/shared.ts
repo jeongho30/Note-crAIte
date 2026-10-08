@@ -55,6 +55,6 @@ export function sttSummary(s: SetupState): string {
     const where = probe.gpuName ? `${GPU}(${gpuLabel(probe.gpuName)})` : `이 ${PC}의 프로세서`
     return `${where} · 90분 강의 약 ${probe.minutesFor90}분`
   }
-  if (probe.state === 'error') return '속도를 재지 못했어요 · 프로세서로 받아써요'
+  if (probe.state === 'error') return '속도를 재지 못했어요 · 프로세서로 받아쓰기해요'
   return `이 ${PC}의 받아쓰기 속도를 재는 중이에요`
 }

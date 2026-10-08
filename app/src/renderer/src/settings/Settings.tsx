@@ -186,10 +186,10 @@ export function Settings({ llm, doneCount, openKey, onLlmChange, onRestartWizard
       sttTitle = `이 ${PC}의 받아쓰기 속도를 재는 중이에요`
       sttSub = '1분쯤 걸려요'
     } else if (probe.state === 'done') {
-      sttTitle = probe.gpuName ? `${GPU}(${gpuLabel(probe.gpuName)})로 받아써요` : `이 ${PC}의 프로세서로 받아써요`
+      sttTitle = probe.gpuName ? `${GPU}(${gpuLabel(probe.gpuName)})로 받아쓰기해요` : `이 ${PC}의 프로세서로 받아쓰기해요`
       sttSub = `90분 강의 약 ${probe.minutesFor90}분${probe.gpuName ? '' : ' · 처리는 뒤에서 진행돼요'}`
     } else if (probe.state === 'error') {
-      sttTitle = '속도를 재지 못했어요 · 프로세서로 받아써요'
+      sttTitle = '속도를 재지 못했어요 · 프로세서로 받아쓰기해요'
       sttSub = probe.error ?? ''
     } else {
       sttTitle = `작업이 끝나면 이 ${PC}의 속도를 다시 재요`
