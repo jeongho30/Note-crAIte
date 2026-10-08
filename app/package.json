@@ -1,6 +1,6 @@
 {
   "name": "lecture-notes",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "강의 녹음을 요약·키워드·전사문 마크다운 노트로 만드는 PC 앱",
   "author": "LeeJeongho",
   "license": "MIT",
