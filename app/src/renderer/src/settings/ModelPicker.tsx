@@ -8,7 +8,7 @@ export type ModelOption = {
   owner: string | null
   /** 추천 순서(1부터). null이면 목록 밖 모델(새로 나온 모델, 직접 입력해 고른 모델) */
   rank: number | null
-  /** 추천 순서를 정한 뒤에 서비스에 새로 나온 모델: [전체 모델 보기] 끝에 따로 보인다 */
+  /** 추천 순서를 정한 뒤에 서비스에 새로 나온 모델: [더 많은 모델 보기] 끝에 따로 보인다 */
   isNew?: boolean
   /** 앞쪽 추천 모델이면 true: 선택 칸의 "추천 모델 목록"에 보인다 */
   recommended: boolean
@@ -65,7 +65,7 @@ type Props = {
   credits?: boolean
 }
 
-// 요약·다듬기 모델: 추천 모델 목록을 먼저 보이고, [전체 모델 보기] 창에서 추천 순서대로 고르거나, [직접 모델 입력]으로 이름을 넣는다.
+// 요약·다듬기 모델: 추천 모델 목록을 먼저 보이고, [더 많은 모델 보기] 창에서 추천 순서대로 고르거나, [직접 모델 입력]으로 이름을 넣는다.
 export function ModelPicker({ kind = 'summary', models, selected, available, disabled, failed, onPick, service = 'ChatKHU', credits: billed = true }: Props): React.JSX.Element {
   const text = TEXT[kind]
   const [open, setOpen] = useState<'all' | 'custom' | null>(null)
@@ -152,7 +152,7 @@ export function ModelPicker({ kind = 'summary', models, selected, available, dis
             <option value={current.id}>{label(current)}</option>
           </optgroup>
         )}
-        {ranked.length + fresh.length > recommended.length && <option value={ALL}>전체 모델 보기… ({ranked.length + fresh.length}개)</option>}
+        {ranked.length + fresh.length > recommended.length && <option value={ALL}>더 많은 모델 보기… ({ranked.length + fresh.length}개)</option>}
         {models && <option value={CUSTOM}>직접 모델 입력…</option>}
       </Select>
 

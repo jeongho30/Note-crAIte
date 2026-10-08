@@ -486,7 +486,7 @@ async function readNote(path: string) {
 
 /**
  * 크레딧을 쓰지 않는 서비스(OpenAI·Claude·Gemini)의 모델 선택지: 추천 순서가 없어 서비스의 글 모델 목록을 그대로 보인다.
- * 기본 모델만 "추천"으로 선택 칸에 바로 보이고 나머지는 [전체 모델 보기]에 있다.
+ * 기본 모델만 "추천"으로 선택 칸에 바로 보이고 나머지는 [더 많은 모델 보기]에 있다.
  */
 function plainModels(provider: ProviderId, items: ModelItem[], failed: boolean, selected: string, recommended: string) {
   const ids = [...new Set([...(items.some((m) => m.id === recommended) || !items.length ? [recommended] : []), ...items.map((m) => m.id), selected])]
