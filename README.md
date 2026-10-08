@@ -44,12 +44,12 @@
 
 | 시작 전 확인 | 작업 목록 |
 |---|---|
-| <img src="docs/images/confirm-light.png" alt="시작 전 확인 창: 과목 칸으로 녹음을 나누고 예상 시간과 크레딧을 봄" width="420"> | <img src="docs/images/jobs-light.png" alt="작업 목록: 진행 중인 작업과 끝난 작업" width="420"> |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/confirm-dark.png"><img src="docs/images/confirm-light.png" alt="시작 전 확인 창: 과목 칸으로 녹음을 나누고 예상 시간과 크레딧을 봄" width="420"></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/jobs-dark.png"><img src="docs/images/jobs-light.png" alt="작업 목록: 진행 중인 작업과 끝난 작업" width="420"></picture> |
 | 녹음을 과목 칸으로 끌어 나누고, 걸릴 시간과 크레딧을 확인합니다. | 한 번에 하나씩 처리하고, 창을 닫아도 계속됩니다. |
 
 | 노트 미리보기 | 노트 목록 |
 |---|---|
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/preview-dark.png"><img src="docs/images/preview-light.png" alt="노트 미리보기: 개요와 주제별 목록으로 된 요약" width="420"></picture> | <img src="docs/images/notes-light.png" alt="노트 목록: 찾기, 과목별 보기, 정렬" width="420"> |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/preview-dark.png"><img src="docs/images/preview-light.png" alt="노트 미리보기: 개요와 주제별 목록으로 된 요약" width="420"></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/notes-dark.png"><img src="docs/images/notes-light.png" alt="노트 목록: 찾기, 과목별 보기, 정렬" width="420"></picture> |
 | 개요와, 주제마다 "개념: 한 줄"로 된 요약을 봅니다. | 제목이나 과목으로 찾고, 수정하거나 삭제합니다. |
 
 ## 쓰는 법
@@ -70,7 +70,7 @@
 | 원문 정리본 | 고치기 전 글과 문단마다의 시각 (접혀 있음) |
 | 교정 내역 | 무엇을 무엇으로 몇 번 바꿨는지 (접혀 있음) |
 
-<img src="docs/images/preview2-light.png" alt="노트 아래쪽: 수식, 주요 키워드, 접힌 전사문" width="760">
+<picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/preview2-dark.png"><img src="docs/images/preview2-light.png" alt="노트 아래쪽: 수식, 주요 키워드, 접힌 전사문" width="760"></picture>
 
 ## 설치
 
