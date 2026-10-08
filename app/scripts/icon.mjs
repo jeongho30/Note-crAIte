@@ -66,13 +66,14 @@ function inside([x, y, w, h, r], px, py) {
 /**
  * size×size RGBA (곱하지 않은 알파).
  * inset이 있으면 가장자리를 그 비율만큼 비우고 가운데에 그린다 (macOS 아이콘의 여백). 이때는 픽셀에 맞춘 작은 그림을 쓰지 않는다.
+ * glyph를 주면 그 도형(16×16 기준)만 그린다 (메뉴 막대 아이콘).
  */
-function render(size, inset = 0) {
+function render(size, inset = 0, glyph) {
   const buf = Buffer.alloc(size * size * 4)
-  const shapes = (!inset && SMALL[size]) || SHAPES
+  const shapes = glyph ?? ((!inset && SMALL[size]) || SHAPES)
   const ss = inset && size >= 256 ? 4 : SS // macOS용 큰 그림은 덜 나눠도 가장자리가 부드럽다 (1024px를 8로 나누면 오래 걸린다)
   const margin = size * inset
-  const step = (shapes === SHAPES ? 120 : size) / (size - 2 * margin) / ss
+  const step = (glyph ? 16 : shapes === SHAPES ? 120 : size) / (size - 2 * margin) / ss
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       let r = 0
@@ -169,9 +170,12 @@ images.forEach(({ size, data }, i) => {
 writeFileSync(OUT, Buffer.concat([dir, ...images.map((i) => i.data)]))
 console.log(`${OUT} (${SIZES.join(', ')}px)`)
 
-// macOS 메뉴 막대 아이콘 (.ico를 못 읽는다). 16px와 고해상도 화면용 32px
-for (const [name, size] of [['tray.png', 16], ['tray@2x.png', 32]]) {
-  writeFileSync(join(import.meta.dirname, '..', 'resources', name), png(size, render(size)))
+// macOS 메뉴 막대 아이콘 (.ico를 못 읽는다). 16px와 고해상도 화면용 32px.
+// 템플릿 이미지다: 바탕 없이 파형과 글줄만 검정으로 그리면 macOS가 메뉴 막대 색(밝은·어두운)에 맞춰 칠한다.
+// 파일 이름이 Template으로 끝나야 Electron이 템플릿으로 다룬다.
+const GLYPH = SMALL[16].slice(2).map(([x, y, w, h, r]) => [x, y, w, h, r, [0, 0, 0]])
+for (const [name, size] of [['trayTemplate.png', 16], ['trayTemplate@2x.png', 32]]) {
+  writeFileSync(join(import.meta.dirname, '..', 'resources', name), png(size, render(size, 0, GLYPH)))
 }
 
 // macOS 앱 아이콘(resources/icon.icns). macOS 아이콘은 1024 가운데 824만 채우고 둘레를 비운다 (다른 앱 아이콘과 크기가 맞게).

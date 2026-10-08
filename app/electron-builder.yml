@@ -21,10 +21,10 @@ extraResources:
   - from: resources/icon.ico
     to: icon.ico
   # macOS 메뉴 막대 아이콘 (Windows는 icon.ico를 쓴다)
-  - from: resources/tray.png
-    to: tray.png
-  - from: resources/tray@2x.png
-    to: tray@2x.png
+  - from: resources/trayTemplate.png
+    to: trayTemplate.png
+  - from: resources/trayTemplate@2x.png
+    to: trayTemplate@2x.png
   # 글꼴 파일은 renderer 번들(asar)에 들어가고, OFL은 라이선스를 함께 배포하게 한다.
   - from: src/renderer/src/assets/fonts/LICENSE-Pretendard.txt
     to: LICENSE-Pretendard.txt

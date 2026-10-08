@@ -50,8 +50,8 @@ const whisperDirs = app.isPackaged
 const probeSample = app.isPackaged ? join(process.resourcesPath, 'probe-ko.wav') : join(app.getAppPath(), 'resources', 'probe-ko.wav')
 // 창과 트레이의 아이콘 (scripts/icon.mjs가 만든다). 설치본의 실행 파일 아이콘은 electron-builder가 같은 파일로 넣는다
 const iconPath = app.isPackaged ? join(process.resourcesPath, 'icon.ico') : join(app.getAppPath(), 'resources', 'icon.ico')
-// macOS는 .ico를 읽지 못해 메뉴 막대 아이콘은 PNG로 둔다 (옆의 tray@2x.png는 Electron이 고해상도 화면에서 알아서 쓴다)
-const trayIconPath = process.platform !== 'darwin' ? iconPath : app.isPackaged ? join(process.resourcesPath, 'tray.png') : join(app.getAppPath(), 'resources', 'tray.png')
+// macOS는 .ico를 읽지 못해 메뉴 막대 아이콘은 PNG로 둔다 (이름이 Template으로 끝나 macOS가 메뉴 막대 색에 맞춰 칠하고, 옆의 trayTemplate@2x.png는 Electron이 고해상도 화면에서 알아서 쓴다)
+const trayIconPath = process.platform !== 'darwin' ? iconPath : app.isPackaged ? join(process.resourcesPath, 'trayTemplate.png') : join(app.getAppPath(), 'resources', 'trayTemplate.png')
 // LN_DATA_DIR: 개발 중 첫 실행 상태를 따로 시험할 때만 쓴다 (CLI의 --data-dir과 같은 역할)
 const dataDir = process.env['LN_DATA_DIR'] || defaultDataDir()
 const log = createLog(join(dataDir, 'logs'))
@@ -331,9 +331,29 @@ function onJobs(jobs: JobView[]): void {
 }
 
 /** 창을 보이고 화면을 옮긴다 (트레이 알림을 눌렀을 때) */
-function navigate(to: { view: 'home' | 'jobs' } | { view: 'preview'; path: string }): void {
+function navigate(to: { view: 'home' | 'jobs' | 'settings' } | { view: 'preview'; path: string }): void {
   showWindow()
   emit('navigate', to)
+}
+
+// macOS 앱 메뉴. 기본 메뉴(role: 'appMenu')에 Mac 앱이면 있는 "설정…"(Cmd+,)을 더한 것
+function macAppMenu(): Electron.MenuItemConstructorOptions {
+  return {
+    label: app.name,
+    submenu: [
+      { role: 'about' },
+      { type: 'separator' },
+      { label: '설정…', accelerator: 'Cmd+,', click: () => navigate({ view: 'settings' }) },
+      { type: 'separator' },
+      { role: 'services' },
+      { type: 'separator' },
+      { role: 'hide' },
+      { role: 'hideOthers' },
+      { role: 'unhide' },
+      { type: 'separator' },
+      { role: 'quit' }
+    ]
+  }
 }
 
 async function quitFromTray(): Promise<void> {
@@ -1399,7 +1419,7 @@ app.whenReady().then(async () => {
   // 설치본에는 기본 메뉴 줄(File·Edit·View…)을 두지 않는다. 개발 실행에서는 새로 고침·개발자 도구 단축키 때문에 남긴다.
   // macOS는 복사·붙여넣기·끝내기 단축키가 앱 메뉴에 달려 있어 없애면 안 되므로 앱·편집·창 메뉴만 둔다.
   if (app.isPackaged) {
-    Menu.setApplicationMenu(process.platform === 'darwin' ? Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]) : null)
+    Menu.setApplicationMenu(process.platform === 'darwin' ? Menu.buildFromTemplate([macAppMenu(), { role: 'editMenu' }, { role: 'windowMenu' }]) : null)
   }
   // PC를 켜면서 자동 실행된 경우: 자동 처리가 켜져 있으면 창 없이 트레이로만 시작한다
   const startHidden = openedAtLogin() && settings.wizardDone && settings.watch.enabled

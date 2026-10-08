@@ -15,11 +15,6 @@
   -webkit-app-region: drag;
 }
 
-/* macOS: 왼쪽 위의 창 버튼(신호등) 자리 */
-.mac {
-  padding-left: var(--titlebar-mac-controls-w);
-}
-
 .icon {
   width: var(--space-4);
   height: var(--space-4);
