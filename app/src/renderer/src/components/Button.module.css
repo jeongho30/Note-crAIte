@@ -87,6 +87,8 @@
   padding: 0;
   background: none;
   color: var(--color-primary);
+  /* 문장 안에 놓이므로 둘러싼 글의 크기를 따른다 */
+  font-size: inherit;
   font-weight: var(--font-weight-regular);
   text-decoration: underline;
   text-underline-offset: 3px;
