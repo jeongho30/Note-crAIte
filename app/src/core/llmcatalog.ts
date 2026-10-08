@@ -26,12 +26,15 @@ export function parseModelList(data: unknown): ModelItem[] {
 /**
  * 모델 카탈로그 (modelcatalog.json). 새 모델이 나오면 이 파일만 고쳐 main에 올리면 설치된 앱에도 반영된다.
  * - prices: 모델별 단가 (크레딧 / 1K 토큰). 목록에 있어도 여기 없으면 예상 크레딧을 모른다.
- *   https://docs.mindlogic.ai/docs/khu/baze/product/model-credits (2026-09-16 기준. gpt-6.1-sol만 2026-09-30 기준 문서에서 더함)
+ *   https://docs.mindlogic.ai/docs/khu/baze/product/model-credits (2026-10-08 기준 표의 46개 전부. 표에 없는 모델은 단가가 없다)
  * - ranked: 요약 모델 추천 순서 (9/29 2차 비교와 10/2 다시 비교, docs/decisions.md). 앞의 recommendedCount개가 설정의 "추천 모델 목록",
  *   전체가 [더 많은 모델 보기].
  *   10/2: gpt-6-sol 자리에 gpt-6.1-sol(잰 것 중 요약이 가장 빠짐없고 교정을 하나도 망가뜨리지 않음). deepseek-v4-flash(틀린 서술이 가장 많고
  *   출력이 길어 상한에 걸림)와 gemma(수식이 깨지고 교정을 자주 망가뜨림)는 맨 뒤로 내렸다. grok-4-1-fast는 요약이 가장 짧고 담는 내용이
  *   가장 적어 추천에서 뺐다(추천은 4개). 10/2에 다시 잰 것은 luna·flash·sol·grok·deepseek·gemma뿐이다.
+ *   10/9: 작성자가 순서를 다시 정했다(luna, gpt-6.1-sol, flash, sonnet, claude-haiku-5-5, gemini-3.1-pro, opus-5-5, grok-4-1-fast, solar-pro4,
+ *   gemma, fable-5-1, gpt-6-astra). 이 12개 말고 서비스의 글 모델은 모두 hidden. claude-haiku-5-5는 10/9에 재서 luna보다 낮았다
+ *   (포함률 61% 대 83%, docs/decisions.md). opus-5-5·fable-5-1·gpt-6-astra는 재 보지 않았다.
  * - polishRecommended: 전사문 다듬기 추천 모델. 90분 약 20크레딧 안팎인 모델. 10/2 작성자 결정으로 grok-4-1-fast와 deepseek-v4-flash를 뺐다
  *   ([더 많은 모델 보기]에서는 고를 수 있다). 다듬기 품질을 재 본 것은 gpt-6-luna와 로컬 gemma 12B뿐이다(docs/decisions.md).
  * - hidden: 알지만 목록에 보이지 않는 모델(시간 초과가 잦은 모델 등). [직접 모델 입력]으로만 고른다.

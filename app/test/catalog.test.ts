@@ -58,26 +58,26 @@ test('카탈로그 형식이 하나라도 다르면 쓰지 않고, 모르는 필
 test('서비스 목록에만 있는 모델은 새 모델이고, 추천 순서나 숨김 목록의 모델은 아니다', () => {
   const ranked = BUILTIN.ranked[0].id
   const hidden = BUILTIN.hidden[0]
-  assert.deepEqual(newModels([ranked, 'claude-haiku-5-5', hidden, 'claude-haiku-5-5', 'gpt-7-luna']), ['claude-haiku-5-5', 'gpt-7-luna'])
+  assert.deepEqual(newModels([ranked, 'claude-haiku-9', hidden, 'claude-haiku-9', 'gpt-7-luna']), ['claude-haiku-9', 'gpt-7-luna'])
   assert.deepEqual(newModels([]), [])
 })
 
 test('받아 온 카탈로그로 단가·추천·알려진 크레딧이 바뀌고, 데이터 폴더에 남아 다음 실행 때 쓰인다', async () => {
   const dir = await tempDir()
   const next = later({
-    prices: { ...BUILTIN.prices, 'claude-haiku-5-5': { input: 0.1, output: 0.5 } },
-    ranked: [{ id: 'claude-haiku-5-5', note: '새 추천' }, ...BUILTIN.ranked],
-    summaryCredits90: { ...BUILTIN.summaryCredits90, 'claude-haiku-5-5': 4.2 }
+    prices: { ...BUILTIN.prices, 'claude-haiku-9': { input: 0.1, output: 0.5 } },
+    ranked: [{ id: 'claude-haiku-9', note: '새 추천' }, ...BUILTIN.ranked],
+    summaryCredits90: { ...BUILTIN.summaryCredits90, 'claude-haiku-9': 4.2 }
   })
   const urls = serve(next)
-  assert.equal(estimateCredits90('claude-haiku-5-5'), null)
+  assert.equal(estimateCredits90('claude-haiku-9'), null)
 
   assert.equal(await refreshCatalog(dir), true)
   assert.deepEqual(urls, [CATALOG_URL])
-  assert.equal(catalog().ranked[0].id, 'claude-haiku-5-5')
-  assert.equal(estimateCredits90('claude-haiku-5-5'), estimateCredits90('gpt-6-luna'))
-  assert.equal(creditsPer90ByModel([])['claude-haiku-5-5'], 4.2)
-  assert.deepEqual(newModels(['claude-haiku-5-5']), [])
+  assert.equal(catalog().ranked[0].id, 'claude-haiku-9')
+  assert.equal(estimateCredits90('claude-haiku-9'), estimateCredits90('gpt-6-luna'))
+  assert.equal(creditsPer90ByModel([])['claude-haiku-9'], 4.2)
+  assert.deepEqual(newModels(['claude-haiku-9']), [])
   assert.equal(await refreshCatalog(dir), false) // 같은 것을 다시 받음
 
   setCatalog(BUILTIN)
