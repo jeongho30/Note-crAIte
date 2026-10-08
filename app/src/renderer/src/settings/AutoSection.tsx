@@ -4,6 +4,7 @@ import { Banner, Button, Checkbox, Dialog, SegmentedControl, useToast } from '..
 import type { WatchStatus } from '../../../main/watcher'
 import { Row, Section, SettingsCard } from './parts'
 import styles from './Settings.module.css'
+import { PC_OBJ, TRAY, TRAY_MENU, TRAY_WHERE } from '../platform'
 
 type Status = WatchStatus & { login: { supported: boolean; openAtLogin: boolean } }
 type Inspect = { existing: number; missingSubjects: string[]; insideOut: boolean }
@@ -97,7 +98,7 @@ export const AutoSection = forwardRef<HTMLElement>(function AutoSection(_props, 
     <Section
       ref={ref}
       title="자동 처리"
-      hint={on ? '노트를 만든 녹음은 그 폴더의 "처리됨"으로 옮겨요. 창을 닫아도 트레이에서 계속 살펴요.' : undefined}
+      hint={on ? `노트를 만든 녹음은 그 폴더의 "처리됨"으로 옮겨요. 창을 닫아도 ${TRAY}에서 계속 살펴요.` : undefined}
     >
       <SettingsCard>
         <Row
@@ -129,18 +130,18 @@ export const AutoSection = forwardRef<HTMLElement>(function AutoSection(_props, 
           </div>
         )}
         <Row
-          title="PC를 켜면 자동으로 실행"
+          title={`${PC_OBJ} 켜면 자동으로 실행`}
           sub={
             !login?.supported
               ? '설치한 앱에서만 쓸 수 있어요'
               : on
-                ? '창 없이 트레이에서 시작해 폴더를 살펴요'
+                ? `창 없이 ${TRAY}에서 시작해 폴더를 살펴요`
                 : '폴더 감시를 켠 경우에만 필요해요'
           }
           dim={!on || !login?.supported}
           ctrl={
             <SegmentedControl
-              label="PC를 켜면 자동으로 실행"
+              label={`${PC_OBJ} 켜면 자동으로 실행`}
               value={login?.openAtLogin ? 'on' : 'off'}
               options={ON_OFF}
               disabled={!on || !login?.supported || busy}
@@ -207,10 +208,10 @@ export const AutoSection = forwardRef<HTMLElement>(function AutoSection(_props, 
               checked={draft.openAtLogin}
               disabled={!status?.login.supported}
               onChange={(openAtLogin) => setDraft({ ...draft, openAtLogin })}
-              label="PC를 켜면 자동으로 실행"
-              hint={status?.login.supported ? '창 없이 트레이에서 시작해 폴더를 살펴요' : '설치한 앱에서만 쓸 수 있어요'}
+              label={`${PC_OBJ} 켜면 자동으로 실행`}
+              hint={status?.login.supported ? `창 없이 ${TRAY}에서 시작해 폴더를 살펴요` : '설치한 앱에서만 쓸 수 있어요'}
             />
-            <p className={styles.hint}>창을 닫아도 트레이(작업 표시줄 오른쪽 아이콘)에서 계속 살펴요. 트레이 메뉴에서 잠시 멈출 수 있어요.</p>
+            <p className={styles.hint}>창을 닫아도 {TRAY_WHERE}에서 계속 살펴요. {TRAY_MENU}에서 잠시 멈출 수 있어요.</p>
           </div>
         )}
       </Dialog>

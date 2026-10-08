@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { EngineError } from '../src/core/errors.ts'
+import { defaultThreads } from '../src/core/hardware.ts'
 import type { Job } from '../src/core/job.ts'
-import { choose, estimateJobSeconds, estimateSttSeconds, parseTimings, parseVulkanDevices, polishRate, sttSpeed, summarySeconds } from '../src/core/probe.ts'
+import { join } from 'node:path'
+import { choose, estimateJobSeconds, estimateSttSeconds, parseMetalName, parseTimings, parseVulkanDevices, polishRate, probeDevices, sttSpeed, summarySeconds } from '../src/core/probe.ts'
 import type { ProbeResult } from '../src/core/probe.ts'
 import type { Trial } from '../src/core/probe.ts'
+import { tempDir, writeWav } from './helpers.ts'
 
 // 데스크톱(외장 RX 9070 XT + 내장 Radeon)의 실제 whisper-cli 로그 형식
 const LOG = [
@@ -27,6 +30,44 @@ test('parseVulkanDevices는 장치 번호·이름·내장 여부를 읽는다', 
     { index: 1, name: 'AMD Radeon(TM) Graphics (AMD proprietary driver)', integrated: true }
   ])
   assert.deepEqual(parseVulkanDevices(['whisper_backend_init_gpu: no GPU found']), [])
+})
+
+test('macOS: 장치 목록 없이 Metal(0번)을 재 보고, 이름은 그 로그에서 읽는다', async (t) => {
+  assert.equal(parseMetalName(['ggml_metal_device_init: GPU name:   MTL0 (Apple M2)']), 'Apple M2')
+  assert.equal(parseMetalName(LOG), null)
+
+  const dir = await tempDir()
+  await writeWav(join(dir, 'in.wav'), 2)
+  process.env['FAKE_WHISPER_MODE'] = 'metal'
+  t.after(() => delete process.env['FAKE_WHISPER_MODE'])
+  const options = {
+    cli: [process.execPath, join(import.meta.dirname, 'fixtures', 'fake-whisper-cli.mjs')],
+    model: join(dir, 'model.bin'), modelName: 'm', vadModel: join(dir, 'vad.bin'), threads: 2, beamSize: 1, language: 'ko',
+    sample: join(dir, 'in.wav'), workDir: join(dir, 'probe')
+  }
+  const mac = await probeDevices({ ...options, platform: 'darwin' })
+  assert.deepEqual(mac.devices, [{ index: 0, name: 'Apple M2', integrated: true }])
+  assert.deepEqual(mac.trials.map((x) => [x.device, x.name, x.ok, x.processMs]), [[null, 'CPU', true, 9000], [0, 'Apple M2', true, 1000]])
+  assert.equal(mac.gpuDevice, 0)
+
+  // 같은 로그라도 Windows에서는 Vulkan 장치 목록이 없으니 CPU만 잰다
+  const win = await probeDevices({ ...options, platform: 'win32' })
+  assert.deepEqual(win.trials.map((x) => x.device), [null])
+  assert.equal(win.gpuDevice, null)
+
+  // GPU 쪽이 멈춰 버리면 기다리지 않고 CPU를 고른다
+  process.env['FAKE_WHISPER_MODE'] = 'metal-hang'
+  const hung = await probeDevices({ ...options, platform: 'darwin', gpuTrialLimitMs: 500 })
+  assert.equal(hung.gpuDevice, null)
+  assert.equal(hung.trials[1].ok, false)
+  assert.match(hung.trials[1].reason ?? '', /너무 오래 걸려/)
+})
+
+test('defaultThreads: 물리 코어 2개를 남기고, 성능·효율 코어가 나뉜 Mac은 성능 코어만 쓴다', () => {
+  const hw = { cpu: 'x', logicalCores: 16, ramGb: 16, gpus: [], powerPlugged: null }
+  assert.equal(defaultThreads({ ...hw, physicalCores: 8 }), 6)
+  assert.equal(defaultThreads({ ...hw, physicalCores: 2 }), 1)
+  assert.equal(defaultThreads({ ...hw, physicalCores: 8, performanceCores: 4 }), 4, 'M1: 성능 4 + 효율 4')
 })
 
 test('parseTimings는 로드·전체 시간을 읽는다', () => {

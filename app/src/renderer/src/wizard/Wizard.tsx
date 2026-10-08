@@ -8,8 +8,9 @@ import { ReadyStep } from './ReadyStep'
 import type { StepProps } from './shared'
 import { WelcomeStep } from './WelcomeStep'
 import styles from './Wizard.module.css'
+import { PC } from '../platform'
 
-const STEPS = ['안내', '이 PC 확인', '요약 서비스', '저장 폴더']
+const STEPS = ['안내', `이 ${PC} 확인`, '요약 서비스', '저장 폴더']
 
 type Props = {
   /** 지난번에 보던 단계 (settings.json). 0~3은 단계, 4는 준비 완료 */

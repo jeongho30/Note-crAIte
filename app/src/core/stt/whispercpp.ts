@@ -11,7 +11,8 @@ import { defaultArgs } from '../sttargs.ts'
 import type { Segment, SttEngine, TranscribeOptions } from './base.ts'
 
 const PROGRESS_RE = /progress\s*=\s*(\d+)%/
-const BACKEND_RE = /using (\S+) backend/
+// GPU 백엔드를 고르는 줄만 본다 (Vulkan0, macOS는 MTL0). macOS는 CPU로 돌 때도 "whisper_backend_init: using BLAS backend"가 나온다
+const BACKEND_RE = /whisper_backend_init_gpu: using (\S+) backend/
 const TAIL_LINES = 40
 
 type WhisperJson = { transcription?: { text?: string; offsets?: { from?: number; to?: number } }[] }

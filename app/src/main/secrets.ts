@@ -20,7 +20,7 @@ async function load(dataDir: string): Promise<Store> {
 }
 
 export async function saveKey(dataDir: string, id: ProviderId, apiKey: string): Promise<void> {
-  if (!safeStorage.isEncryptionAvailable()) throw new Error('이 PC에서는 키를 암호화해 저장할 수 없어요.')
+  if (!safeStorage.isEncryptionAvailable()) throw new Error(`이 ${process.platform === 'darwin' ? 'Mac' : 'PC'}에서는 키를 암호화해 저장할 수 없어요.`)
   const store = await load(dataDir)
   store[id] = safeStorage.encryptString(apiKey).toString('base64')
   await writeJsonAtomic(storePath(dataDir), store)

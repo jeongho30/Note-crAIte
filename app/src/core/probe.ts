@@ -10,12 +10,18 @@ import { backendUsed, WhisperCpp } from './stt/whispercpp.ts'
 import { wavDuration } from './wav.ts'
 
 const VK_DEVICE_RE = /ggml_vulkan: (\d+) = (.+?) \| uma: (\d)/
+// macOS(Metal): "ggml_metal_device_init: GPU name:   MTL0 (Apple M2)"
+const METAL_NAME_RE = /GPU name:\s+MTL\d+ \((.+)\)\s*$/
 const TIMING_RE = /whisper_print_timings:\s+(load|total) time =\s+([\d.]+) ms/
 
 // GPU 전사가 CPU 전사와 이만큼 다르면 깨진 것으로 본다. 정상이면 같은 모델이라 거의 같다.
 const MAX_CER_VS_CPU = 0.3
 // GPU가 이만큼 빠르지 않으면 CPU를 쓴다 (내장 GPU와 나눠 쓰는 메모리 등 이득이 불분명한 경우).
 const MIN_SPEEDUP = 1.2
+// GPU로 재는 데 이보다 오래 걸리면 그만두고 그 GPU는 쓰지 않는다: CPU로 잰 시간의 몇 배(그만큼 느리면 어차피 안 쓴다), 적어도 2분.
+// GPU 쪽이 멈춰 버리면 속도 재기가 끝나지 않아 앱이 작업을 시작하지 못한다. 처음 쓸 때 셰이더를 만드는 시간(Metal은 수십 초)은 들어가게 둔다
+const GPU_TRIAL_VS_CPU = 5
+const GPU_TRIAL_MIN_MS = 120_000
 
 export type GpuDevice = { index: number; name: string; integrated: boolean }
 
@@ -50,6 +56,15 @@ export function parseVulkanDevices(log: string[]): GpuDevice[] {
   return [...devices.values()]
 }
 
+/** Metal로 돌린 로그에서 그래픽 장치 이름(Apple Silicon은 칩 이름)을 읽는다. 없으면 null */
+export function parseMetalName(log: string[]): string | null {
+  for (const line of log) {
+    const m = METAL_NAME_RE.exec(line)
+    if (m) return m[1].trim()
+  }
+  return null
+}
+
 export function parseTimings(log: string[]): { loadMs: number | null; totalMs: number | null } {
   let loadMs: number | null = null
   let totalMs: number | null = null
@@ -80,6 +95,8 @@ export type ProbeOptions = {
   sample: string // 16kHz 모노 WAV
   workDir: string // 샘플을 복사해 돌릴 폴더 (whisper가 샘플 옆에 결과 JSON을 쓴다)
   onTrial?: (name: string) => void
+  platform?: string // 테스트용. 기본은 이 PC
+  gpuTrialLimitMs?: number // 테스트용. 기본은 CPU로 잰 시간에서 계산
 }
 
 export async function probeDevices(o: ProbeOptions): Promise<ProbeResult> {
@@ -87,24 +104,28 @@ export async function probeDevices(o: ProbeOptions): Promise<ProbeResult> {
   const wav = join(o.workDir, 'sample.wav')
   await copyFile(o.sample, wav)
   const sampleS = await wavDuration(wav)
+  // macOS의 whisper-cli는 Vulkan이 아니라 Metal로 그래픽 장치를 쓴다 (백엔드 이름 MTL0)
+  const metal = (o.platform ?? process.platform) === 'darwin'
 
-  async function trial(device: number | null, name: string, cpuText: string | null): Promise<[Trial, string, string[]]> {
+  async function trial(device: number | null, name: string, cpuText: string | null, limitMs?: number): Promise<[Trial, string, string[]]> {
     o.onTrial?.(name)
     const engine = new WhisperCpp({
       cli: o.cli, model: o.model, vadModel: o.vadModel, threads: o.threads, gpuDevice: device, beamSize: o.beamSize, quiet: false
     })
+    const signal = limitMs ? AbortSignal.timeout(limitMs) : undefined
     let text = ''
     try {
-      text = (await engine.transcribe(wav, { language: o.language })).map((s) => s.text).join(' ')
+      text = (await engine.transcribe(wav, { language: o.language, signal })).map((s) => s.text).join(' ')
     } catch (e) {
       if (device === null) throw e
-      return [{ device, name, processMs: 0, loadMs: 0, chars: 0, ok: false, reason: (e as Error).message.split('\n')[0] }, '', engine.lastLog]
+      const reason = signal?.aborted ? `너무 오래 걸려 그만뒀습니다 (${Math.round(limitMs! / 1000)}초)` : (e as Error).message.split('\n')[0]
+      return [{ device, name, processMs: 0, loadMs: 0, chars: 0, ok: false, reason }, '', engine.lastLog]
     }
     const { loadMs, totalMs } = parseTimings(engine.lastLog)
     const t: Trial = {
       device, name, processMs: (totalMs ?? 0) - (loadMs ?? 0), loadMs: loadMs ?? 0, chars: normalize(text).length, ok: true
     }
-    if (device !== null && backendUsed(engine.lastLog) !== `Vulkan${device}`) {
+    if (device !== null && backendUsed(engine.lastLog) !== `${metal ? 'MTL' : 'Vulkan'}${device}`) {
       Object.assign(t, { ok: false, reason: 'GPU를 쓰지 못하고 CPU로 돌았습니다' })
     } else if (cpuText !== null && cer(cpuText, text) > MAX_CER_VS_CPU) {
       Object.assign(t, { ok: false, reason: `전사가 CPU 결과와 크게 다릅니다 (CER ${cer(cpuText, text).toFixed(2)})` })
@@ -114,10 +135,17 @@ export async function probeDevices(o: ProbeOptions): Promise<ProbeResult> {
     return [t, text, engine.lastLog]
   }
 
+  const cpuStarted = Date.now()
   const [cpu, cpuText, cpuLog] = await trial(null, 'CPU', null)
-  const devices = parseVulkanDevices(cpuLog)
+  const gpuLimitMs = o.gpuTrialLimitMs ?? Math.max(GPU_TRIAL_MIN_MS, (Date.now() - cpuStarted) * GPU_TRIAL_VS_CPU)
+  // Vulkan은 CPU로 돌 때도 장치 목록을 찍는다. Metal은 목록이 없어 0번(Apple Silicon의 GPU는 하나)을 재 보고, 이름은 그 로그에서 읽는다
+  const devices: GpuDevice[] = metal ? [{ index: 0, name: 'Metal', integrated: true }] : parseVulkanDevices(cpuLog)
   const trials = [cpu]
-  for (const d of devices) trials.push((await trial(d.index, d.name, cpuText))[0])
+  for (const d of devices) {
+    const [t, , log] = await trial(d.index, d.name, cpuText, gpuLimitMs)
+    if (metal) d.name = t.name = parseMetalName(log) ?? d.name
+    trials.push(t)
+  }
   const chosen = choose(trials)
   return {
     checkedAt: new Date().toISOString(),

@@ -63,21 +63,26 @@ function inside([x, y, w, h, r], px, py) {
   return px >= x && px <= x + w && py >= y && py <= y + h && dx * dx + dy * dy <= r * r
 }
 
-/** size×size RGBA (곱하지 않은 알파) */
-function render(size) {
+/**
+ * size×size RGBA (곱하지 않은 알파).
+ * inset이 있으면 가장자리를 그 비율만큼 비우고 가운데에 그린다 (macOS 아이콘의 여백). 이때는 픽셀에 맞춘 작은 그림을 쓰지 않는다.
+ */
+function render(size, inset = 0) {
   const buf = Buffer.alloc(size * size * 4)
-  const shapes = SMALL[size] ?? SHAPES
-  const step = (SMALL[size] ? size : 120) / size / SS
+  const shapes = (!inset && SMALL[size]) || SHAPES
+  const ss = inset && size >= 256 ? 4 : SS // macOS용 큰 그림은 덜 나눠도 가장자리가 부드럽다 (1024px를 8로 나누면 오래 걸린다)
+  const margin = size * inset
+  const step = (shapes === SHAPES ? 120 : size) / (size - 2 * margin) / ss
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       let r = 0
       let g = 0
       let b = 0
       let a = 0
-      for (let sy = 0; sy < SS; sy++) {
-        for (let sx = 0; sx < SS; sx++) {
-          const px = (x * SS + sx + 0.5) * step
-          const py = (y * SS + sy + 0.5) * step
+      for (let sy = 0; sy < ss; sy++) {
+        for (let sx = 0; sx < ss; sx++) {
+          const px = (x * ss + sx + 0.5 - margin * ss) * step
+          const py = (y * ss + sy + 0.5 - margin * ss) * step
           const top = shapes.findLast((s) => inside(s, px, py))
           if (!top) continue
           r += top[5][0]
@@ -91,7 +96,7 @@ function render(size) {
       buf[i] = Math.round(r / a)
       buf[i + 1] = Math.round(g / a)
       buf[i + 2] = Math.round(b / a)
-      buf[i + 3] = Math.round((a / (SS * SS)) * 255)
+      buf[i + 3] = Math.round((a / (ss * ss)) * 255)
     }
   }
   return buf
@@ -168,3 +173,24 @@ console.log(`${OUT} (${SIZES.join(', ')}px)`)
 for (const [name, size] of [['tray.png', 16], ['tray@2x.png', 32]]) {
   writeFileSync(join(import.meta.dirname, '..', 'resources', name), png(size, render(size)))
 }
+
+// macOS 앱 아이콘(resources/icon.icns). macOS 아이콘은 1024 가운데 824만 채우고 둘레를 비운다 (다른 앱 아이콘과 크기가 맞게).
+// 형식: 'icns' + 전체 길이, 이어서 [종류 4글자 + 길이 + PNG]. 고해상도용(@2x)까지 넣는다
+const ICNS = [['ic11', 32], ['ic12', 64], ['ic07', 128], ['ic13', 256], ['ic08', 256], ['ic14', 512], ['ic09', 512], ['ic10', 1024]]
+const MAC_INSET = 100 / 1024
+const macPng = new Map()
+const entries = ICNS.map(([type, size]) => {
+  if (!macPng.has(size)) macPng.set(size, png(size, render(size, MAC_INSET)))
+  const head = Buffer.alloc(8)
+  head.write(type, 0, 'latin1')
+  head.writeUInt32BE(macPng.get(size).length + 8, 4)
+  return Buffer.concat([head, macPng.get(size)])
+})
+const icnsHead = Buffer.alloc(8)
+icnsHead.write('icns', 0, 'latin1')
+icnsHead.writeUInt32BE(8 + entries.reduce((n, e) => n + e.length, 0), 4)
+const ICNS_OUT = join(import.meta.dirname, '..', 'resources', 'icon.icns')
+writeFileSync(ICNS_OUT, Buffer.concat([icnsHead, ...entries]))
+console.log(`${ICNS_OUT} (${[...macPng.keys()].join(', ')}px)`)
+// 눈으로 확인할 때: ICON_PREVIEW=<폴더>를 주면 macOS 아이콘 256px를 PNG로도 남긴다
+if (process.env.ICON_PREVIEW) writeFileSync(join(process.env.ICON_PREVIEW, 'icon-mac-256.png'), macPng.get(256))

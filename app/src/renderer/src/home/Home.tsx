@@ -9,6 +9,7 @@ import { onRecordingFinished, useRecorder } from './recording'
 import { RecordDialog, RecordingCard } from './Recorder'
 import { aboutMinutes, isActive, lengthMinutes, STAGE_LABEL, waitingText, type JobView } from './shared'
 import styles from './Home.module.css'
+import { PC } from '../platform'
 
 type Props = {
   jobs: JobView[] | null
@@ -131,7 +132,7 @@ export function Home({ jobs, llm, onConnect, onShowJobs, onPreview, refresh }: P
           </div>
         </Banner>
       ) : model?.state === 'ready' && setup?.probe.state === 'running' ? (
-        <Banner tone="info" title="이 PC의 받아쓰기 속도를 재는 중">
+        <Banner tone="info" title={`이 ${PC}의 받아쓰기 속도를 재는 중`}>
           1~2분 걸려요. 녹음을 먼저 넣어도 돼요. 다 재면 시작해요.
         </Banner>
       ) : unprocessed.length > 0 ? (
@@ -149,7 +150,7 @@ export function Home({ jobs, llm, onConnect, onShowJobs, onPreview, refresh }: P
             </>
           }
         >
-          앱에서 한 녹음이 이 PC에 남아 있어요. 앱이 꺼져 끊긴 녹음도 끊기기 전까지 저장돼 있어요.
+          앱에서 한 녹음이 이 {PC}에 남아 있어요. 앱이 꺼져 끊긴 녹음도 끊기기 전까지 저장돼 있어요.
         </Banner>
       ) : stopped > 0 ? (
         <Banner

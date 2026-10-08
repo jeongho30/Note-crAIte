@@ -5,6 +5,7 @@ import type { LlmStatus, StepProps } from './shared'
 import { KeyGuideLink } from './KeyGuide'
 import { Step } from './Step'
 import styles from './Wizard.module.css'
+import { PC } from '../platform'
 
 type Provider = { id: string; name: string; available: boolean }
 type Connected = { keyHint: string; credits: number | null; summariesLeft: number | null }
@@ -73,7 +74,7 @@ export function ProviderStep({ next, back, headingRef }: StepProps): React.JSX.E
       title="요약에 쓸 서비스를 연결해 주세요"
       description={
         <>
-          키는 {name || '요약 서비스'}가 이 앱에 요약을 허락하는 암호예요. 이 PC에만 암호화해서 저장되고, 요약할 때만 {name || '요약 서비스'}로 보내요.
+          키는 {name || '요약 서비스'}가 이 앱에 요약을 허락하는 암호예요. 이 {PC}에만 암호화해서 저장되고, 요약할 때만 {name || '요약 서비스'}로 보내요.
           {!needsKey && (
             <>
               {' '}

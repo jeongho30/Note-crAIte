@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"test/**/*.test.ts\"",
     "cli": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/cli/cli.ts",
-    "dist:win": "electron-vite build && node scripts/notices.mjs && electron-builder --win"
+    "dist:win": "electron-vite build && node scripts/notices.mjs && electron-builder --win",
+    "dist:mac": "electron-vite build && node scripts/notices.mjs && electron-builder --mac"
   },
   "devDependencies": {
     "@types/markdown-it": "^14.2.0",
@@ -28,6 +29,7 @@
     "katex": "^0.16.47",
     "markdown-it": "^15.0.2",
     "markdown-it-cjk-friendly": "^3.0.0",
+    "playwright-core": "^1.63.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "typescript": "^7.0.2",

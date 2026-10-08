@@ -229,18 +229,26 @@ const watcher = createWatcher({
   }
 })
 
-// PC를 켜면 자동 실행: 이 인자로 켜지면 창 없이 트레이로만 시작한다
+// OS마다 다른 낱말 (화면 쪽은 renderer의 platform.ts)
+const MAC = process.platform === 'darwin'
+const PC_OBJ = MAC ? 'Mac을' : 'PC를'
+const TRAY_ICON = MAC ? '메뉴 막대의 아이콘' : '작업 표시줄 오른쪽 아이콘'
+
+// PC를 켜면 자동 실행: 이 인자로 켜지면 창 없이 트레이로만 시작한다.
+// macOS는 로그인 항목에 인자를 못 넣어서, 로그인하면서 켜진 것인지를 OS에 묻는다(wasOpenedAtLogin)
 const HIDDEN_ARG = '--hidden'
+const LOGIN_ITEM = MAC ? {} : { args: [HIDDEN_ARG] }
+const openedAtLogin = (): boolean => (MAC ? app.getLoginItemSettings().wasOpenedAtLogin : process.argv.includes(HIDDEN_ARG))
 
 /** 로그인할 때 자동 실행. 개발 실행(electron.exe)을 등록하면 앱이 아니라 빈 Electron이 켜지므로 설치본에서만 */
 function loginState(): { supported: boolean; openAtLogin: boolean } {
   if (!app.isPackaged) return { supported: false, openAtLogin: false }
-  return { supported: true, openAtLogin: app.getLoginItemSettings({ args: [HIDDEN_ARG] }).openAtLogin }
+  return { supported: true, openAtLogin: app.getLoginItemSettings(LOGIN_ITEM).openAtLogin }
 }
 
 function setOpenAtLogin(on: boolean): void {
-  if (!app.isPackaged) throw new EngineError('input', 'PC를 켜면 자동으로 실행하기는 설치한 앱에서만 쓸 수 있어요.')
-  app.setLoginItemSettings({ openAtLogin: on, args: [HIDDEN_ARG] })
+  if (!app.isPackaged) throw new EngineError('input', `${PC_OBJ} 켜면 자동으로 실행하기는 설치한 앱에서만 쓸 수 있어요.`)
+  app.setLoginItemSettings({ openAtLogin: on, ...LOGIN_ITEM })
   log.write(`PC를 켜면 자동 실행: ${on ? '켬' : '끔'}`)
 }
 
@@ -1276,8 +1284,8 @@ function createWindow(target: Size, show = true): void {
     minHeight: MIN_CONTENT.height + TITLE_BAR,
     useContentSize: true,
     titleBarStyle: 'hidden',
-    // macOS는 창 버튼(신호등)을 스스로 그린다
-    ...(process.platform === 'darwin' ? {} : { titleBarOverlay: titleBarOverlay() }),
+    // macOS는 창 버튼(신호등)을 왼쪽에 스스로 그린다. 띠(32px) 가운데에 오게 자리만 맞춘다 (버튼 높이 12px)
+    ...(MAC ? { trafficLightPosition: { x: 12, y: (TITLE_BAR - 12) / 2 } } : { titleBarOverlay: titleBarOverlay() }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
@@ -1302,11 +1310,11 @@ function createWindow(target: Size, show = true): void {
     if (!closeHintShown) {
       closeHintShown = true
       if (recorder.active()) {
-        tray.notify('창을 닫아도 녹음은 계속돼요', '끝내려면 작업 표시줄 오른쪽 아이콘으로 창을 다시 열어 주세요.')
+        tray.notify('창을 닫아도 녹음은 계속돼요', `끝내려면 ${TRAY_ICON}으로 창을 다시 열어 주세요.`)
       } else if (runner.activeCount() > 0) {
-        tray.notify('창을 닫아도 계속해요', '받아쓰기가 끝나면 알려 드려요. 작업 표시줄 오른쪽 아이콘으로 다시 열 수 있어요.')
+        tray.notify('창을 닫아도 계속해요', `받아쓰기가 끝나면 알려 드려요. ${TRAY_ICON}으로 다시 열 수 있어요.`)
       } else {
-        tray.notify('창을 닫아도 폴더를 계속 살펴요', '녹음이 들어오면 노트를 만들고 알려 드려요. 작업 표시줄 오른쪽 아이콘으로 다시 열 수 있어요.')
+        tray.notify('창을 닫아도 폴더를 계속 살펴요', `녹음이 들어오면 노트를 만들고 알려 드려요. ${TRAY_ICON}으로 다시 열 수 있어요.`)
       }
     }
   })
@@ -1394,7 +1402,7 @@ app.whenReady().then(async () => {
     Menu.setApplicationMenu(process.platform === 'darwin' ? Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]) : null)
   }
   // PC를 켜면서 자동 실행된 경우: 자동 처리가 켜져 있으면 창 없이 트레이로만 시작한다
-  const startHidden = process.argv.includes(HIDDEN_ARG) && settings.wizardDone && settings.watch.enabled
+  const startHidden = openedAtLogin() && settings.wizardDone && settings.watch.enabled
   createWindow(settings.wizardDone ? HOME_CONTENT : WIZARD_CONTENT, !startHidden)
   if (startHidden) updateTray()
 })

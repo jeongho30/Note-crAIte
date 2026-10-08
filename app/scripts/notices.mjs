@@ -1,4 +1,5 @@
-// 설치본에 넣는 오픈소스 고지(build/THIRD_PARTY_NOTICES.txt)를 만든다. dist:win이 electron-builder 앞에서 부른다.
+// 설치본에 넣는 오픈소스 고지(build/THIRD_PARTY_NOTICES.txt)를 만든다. dist:win·dist:mac이 electron-builder 앞에서 부른다.
+// 함께 넣는 실행 파일이 OS마다 달라(ffmpeg 빌드, Visual C++ 런타임) 빌드하는 OS에 맞춰 적는다.
 // 화면 번들에 들어가는 npm 패키지는 node_modules에서 라이선스 전문을 읽고, 함께 배포하는 실행 파일·글꼴·모델은 아래 목록으로 적는다.
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -6,6 +7,7 @@ import { dirname, join } from 'node:path'
 const APP = join(import.meta.dirname, '..')
 const REPO = join(APP, '..')
 const OUT = join(APP, 'build', 'THIRD_PARTY_NOTICES.txt')
+const WIN = process.platform === 'win32'
 
 // 화면 번들(out/renderer)에 들어가는 패키지. 메인·preload는 Node·Electron 기능만 쓴다.
 const ROOTS = ['react', 'react-dom', 'markdown-it', 'markdown-it-cjk-friendly', '@vscode/markdown-it-katex']
@@ -49,13 +51,24 @@ https://github.com/ggml-org/whisper.cpp
 
 ${read(join(REPO, '.cache', 'whisper', 'bin', 'LICENSE-whisper.cpp.txt'))}`)
 
-parts.push(`FFmpeg (resources/bin/ffmpeg.exe) — LGPL v2.1 이상
+parts.push(`FFmpeg (resources/bin/ffmpeg${WIN ? '.exe' : ''}) — LGPL v2.1 이상
 라이선스 전문: resources/bin/LICENSE-ffmpeg.txt
 
 ${read(join(REPO, '.cache', 'ffmpeg', 'bin', 'FFMPEG-SOURCE.txt'))}`)
 
-parts.push(`Microsoft Visual C++ 런타임 (resources/bin/whisper의 msvcp140*.dll, vcruntime140*.dll, vcomp140.dll, concrt140.dll, vccorlib140.dll)
+// macOS의 ffmpeg에는 libopus를 함께 넣는다 (build_ffmpeg.sh). Windows 빌드는 받은 것이라 따로 없다
+const opus = join(REPO, '.cache', 'ffmpeg', 'bin', 'LICENSE-opus.txt')
+if (existsSync(opus)) {
+  parts.push(`libopus (ffmpeg에 들어 있음) — BSD 3-Clause
+https://github.com/xiph/opus
+
+${read(opus)}`)
+}
+
+if (WIN) {
+  parts.push(`Microsoft Visual C++ 런타임 (resources/bin/whisper의 msvcp140*.dll, vcruntime140*.dll, vcomp140.dll, concrt140.dll, vccorlib140.dll)
 Visual Studio의 재배포 가능 파일(Redistributable)로, Microsoft 소프트웨어 사용 조건에 따라 함께 배포한다.`)
+}
 
 parts.push(`Pretendard (화면 글꼴) — SIL Open Font License 1.1
 https://github.com/orioncactus/pretendard

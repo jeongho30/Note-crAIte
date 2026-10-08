@@ -10,6 +10,7 @@
 
 [![check](https://github.com/jeongho30/Note-crAIte/actions/workflows/check.yml/badge.svg)](https://github.com/jeongho30/Note-crAIte/actions/workflows/check.yml)
 ![Windows](https://img.shields.io/badge/Windows-64비트-2f6368)
+![macOS](https://img.shields.io/badge/macOS-Apple_Silicon_베타-8a8478)
 [![MIT](https://img.shields.io/badge/license-MIT-2f6368)](LICENSE)
 
 [주요 기능](#주요-기능) · [화면](#화면) · [설치](#설치) · [크레딧과 속도](#크레딧과-속도) · [소스에서 실행](#소스에서-실행) · [소개 페이지](https://claude.ai/artifact/GRgkqguRfzixiHgLh1PZ7j)
@@ -32,7 +33,7 @@
 - **요약 서비스를 골라 연결**: ChatKHU, OpenAI, Claude, Gemini 중 하나를 API 키로 연결합니다. 키가 없으면 전사문만 담은 노트를 만듭니다.
 - **로컬 LLM**: 요약과 전사문 다듬기를 [Ollama](https://ollama.com)로 돌릴 수 있습니다. 이때는 강의 내용이 컴퓨터 밖으로 전혀 나가지 않습니다.
 - **필기 참고**: 녹음과 같은 이름의 필기(.md, .txt)를 함께 넣으면 잘못 받아쓴 용어를 고칠 때 참고합니다.
-- **앱에서 바로 녹음**: 마이크나 컴퓨터 소리(온라인 강의)를 녹음해 그대로 노트로 만듭니다.
+- **앱에서 바로 녹음**: 마이크나 컴퓨터 소리(온라인 강의, Windows만)를 녹음해 그대로 노트로 만듭니다.
 - **자동 처리**: 폴더를 정해 두면 새로 들어온 녹음을 알아서 노트로 만듭니다. 창을 닫아도 트레이에서 계속 돕니다.
 - **멈춘 곳부터 이어서**: 단계마다 결과를 남겨서, 실패하거나 앱이 꺼져도 끝난 단계는 다시 하지 않습니다.
 - **평범한 마크다운**: 노트는 `.md` 파일 하나라 옵시디언이나 다른 편집기에서 그대로 열립니다. 수식은 LaTeX로 적습니다.
@@ -73,7 +74,12 @@
 
 ## 설치
 
-Windows 64비트용입니다. 설치 파일은 이 저장소의 GitHub Actions([installer.yml](.github/workflows/installer.yml))가 소스에서 만듭니다. Release로 올리는 공개 배포는 준비 중이라, 지금은 [소스에서 실행](#소스에서-실행)할 수 있습니다.
+| OS | 상태 |
+|---|---|
+| Windows 64비트 | 지원 |
+| macOS 13 이상, Apple Silicon | 베타. GitHub의 macOS 러너에서 빌드하고 앱을 띄워 노트를 만드는 데까지 확인했고, 실제 Mac에서는 아직 써 보지 못했습니다. |
+
+설치 파일은 이 저장소의 GitHub Actions([installer.yml](.github/workflows/installer.yml))가 소스에서 만듭니다. Release로 올리는 공개 배포는 준비 중이라, 지금은 [소스에서 실행](#소스에서-실행)할 수 있습니다.
 
 처음 켜면 마법사가 받아쓰기 모델(875MB)을 받고, 요약 서비스의 API 키와 노트를 저장할 폴더를 묻습니다.
 
@@ -86,6 +92,18 @@ Windows 64비트용입니다. 설치 파일은 이 저장소의 GitHub Actions([
 2. 앱 이름이 Note-crAIte 설치 파일인지 확인하고 **실행**을 누릅니다.
 
 브라우저가 내려받을 때 "일반적으로 다운로드되지 않는 파일"이라고 막으면 **유지**를 고릅니다. 설치는 관리자 권한 없이 현재 사용자 계정에만 됩니다. 설치 파일은 이 저장소의 GitHub Actions가 만든 것만 받으세요.
+
+</details>
+
+<details>
+<summary><b>macOS: 처음 열 때 막힐 때</b></summary>
+
+DMG에 Apple 개발자 서명과 공증이 없습니다(임시 서명). 앱을 응용 프로그램 폴더로 옮긴 뒤 처음 열면 macOS가 막습니다.
+
+1. 한 번 열어 경고 창을 닫습니다.
+2. **시스템 설정 > 개인정보 보호 및 보안**의 아래쪽에서 Note-crAIte 옆 **그래도 열기**를 누릅니다.
+
+macOS에서는 컴퓨터 소리 녹음이 되지 않습니다. 마이크 녹음과 파일로 넣기는 같습니다.
 
 </details>
 
@@ -114,12 +132,25 @@ ChatKHU 학생 크레딧은 한 달 4,000입니다. 90분 강의 한 개 기준�
 
 ## 소스에서 실행
 
-Node 24 이상, PATH의 ffmpeg, whisper.cpp를 빌드할 도구(Visual Studio C++, CMake, Vulkan SDK)가 필요합니다. 빌드 스크립트가 고정한 커밋의 소스를 직접 받고, `-NoVulkan`을 붙이면 Vulkan 없이 빌드합니다.
+**Windows**: Node 24 이상, PATH의 ffmpeg, whisper.cpp를 빌드할 도구(Visual Studio C++, CMake, Vulkan SDK)가 필요합니다. 빌드 스크립트가 고정한 커밋의 소스를 직접 받고, `-NoVulkan`을 붙이면 Vulkan 없이 빌드합니다.
 
 ```bash
 git clone https://github.com/jeongho30/Note-crAIte
 cd Note-crAIte
 powershell -File scripts/build_whisper.ps1
+cd app
+npm ci
+npm run dev
+```
+
+**macOS**: Node 24 이상, Xcode 명령줄 도구, CMake, pkg-config가 필요합니다. whisper는 Metal로, ffmpeg는 앱이 쓰는 기능만 넣어 LGPL로 빌드합니다.
+
+```bash
+git clone https://github.com/jeongho30/Note-crAIte
+cd Note-crAIte
+bash scripts/build_whisper.sh
+bash scripts/build_ffmpeg.sh
+export PATH="$PWD/.cache/ffmpeg/bin:$PATH"
 cd app
 npm ci
 npm run dev
@@ -132,7 +163,8 @@ npm run dev
 | `npm test` | 테스트 |
 | `npm run typecheck` | 타입 검사 |
 | `npm run cli -- run <녹음> --out <저장 폴더> --subject <과목>` | 화면 없이 노트 만들기 |
-| `npm run dist:win` | 설치 파일 (먼저 `scripts/fetch_ffmpeg.ps1`) |
+| `npm run dist:win` | Windows 설치 파일 (먼저 `scripts/fetch_ffmpeg.ps1`) |
+| `npm run dist:mac` | macOS DMG (먼저 `scripts/build_whisper.sh`, `build_ffmpeg.sh`) |
 
 ## 구조
 
@@ -154,7 +186,7 @@ Electron과 TypeScript 하나로 만들었습니다. 무거운 계산은 함께 
 ## 개인정보
 
 - 녹음 파일은 컴퓨터 밖으로 나가지 않습니다. 요약할 때 전사문, 필기, 과목 이름만 연결한 요약 서비스로 보냅니다. (실험 기능인 ChatKHU 받아쓰기를 직접 켰을 때만 녹음을 올립니다.)
-- API 키는 Windows의 암호화 저장소로 암호화해 두고, 화면에는 끝 네 자리만 보여 줍니다.
+- API 키는 OS의 암호화 저장소로 암호화해 두고, 화면에는 끝 네 자리만 보여 줍니다.
 - 로그에는 작업 상태와 실패 이유만 남기고 키와 강의 내용은 적지 않습니다.
 - 이 저장소에는 강의 녹음·전사·노트가 없습니다. 테스트는 합성 데이터만 씁니다.
 
@@ -171,8 +203,8 @@ Electron과 TypeScript 하나로 만들었습니다. 무거운 계산은 함께 
 
 - OpenAI·Claude·Gemini 연결은 가짜 응답 테스트만 통과했고, 실제 키로는 불러 보지 못했습니다. 로컬 LLM(Ollama)은 실제 강의 길이의 요약을 아직 돌려 보지 못했습니다.
 - 요약 비교는 강의 4개, 정답 전사는 10분 구간 6개입니다. 요약 채점은 Claude가 했고 작성자가 일부만 검수했습니다.
-- 개발자가 아닌 사람이 설치부터 첫 노트까지 가는 테스트는 아직 하지 않았습니다. 설치 파일에 서명이 없어 Windows가 경고를 띄웁니다([넘어가는 법](#설치)).
-- Mac은 베타를 계획하고 있습니다.
+- 개발자가 아닌 사람이 설치부터 첫 노트까지 가는 테스트는 아직 하지 않았습니다. 설치 파일에 서명이 없어 OS가 경고를 띄웁니다([넘어가는 법](#설치)).
+- Mac은 실제 기기에서 확인하지 못했습니다. GitHub의 macOS 러너(가상 머신)에서 빌드·테스트하고 앱을 띄워 첫 실행 마법사부터 노트 미리보기까지 자동으로 눌러 본 것이 전부입니다. 가상 머신에서는 그래픽 가속(Metal)이 프로세서보다 느려서, 실제 Mac에서의 받아쓰기 속도는 모릅니다. 마이크 녹음, 로그인할 때 자동 실행, 알림도 실제 Mac에서 봐야 합니다.
 
 ## 라이선스
 

@@ -1,9 +1,17 @@
-# Windows 설치 파일: whisper.cpp 빌드(Vulkan) → ffmpeg(LGPL) 받기 → 테스트 → electron-builder.
-# 결과는 워크플로 실행의 아티팩트(Note-crAIte-windows)로 받는다. GitHub Release에 올리지는 않는다.
+# 설치 파일: whisper.cpp 빌드 → ffmpeg(LGPL) → 테스트 → electron-builder.
+#   Windows  whisper는 Vulkan, ffmpeg는 받는다. 결과는 아티팩트 Note-crAIte-windows (.exe)
+#   macOS    Apple Silicon만. whisper는 Metal, ffmpeg는 직접 빌드한다. 결과는 아티팩트 Note-crAIte-mac (.dmg)
+# GitHub Release에 올리지는 않는다.
 name: installer
 
 on:
   workflow_dispatch:
+    inputs:
+      os:
+        description: 만들 설치 파일
+        type: choice
+        options: [all, windows, macos]
+        default: all
   push:
     tags: ['v*']
 
@@ -12,6 +20,7 @@ permissions:
 
 jobs:
   windows:
+    if: github.event_name != 'workflow_dispatch' || inputs.os != 'macos'
     runs-on: windows-latest
     timeout-minutes: 60
     env:
@@ -73,5 +82,123 @@ jobs:
         with:
           name: Note-crAIte-windows
           path: dist/installer/*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  macos:
+    if: github.event_name != 'workflow_dispatch' || inputs.os != 'windows'
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      # 받아쓰기를 실제로 돌려 볼 때 쓰는 작은 모델 (앱 기본 모델은 874MB라 여기서는 받지 않는다)
+      SMOKE_MODEL: small-q5_1
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      # 빌드 스크립트(고정 커밋·옵션)가 같으면 전 결과를 쓴다
+      - name: whisper.cpp 캐시
+        id: whisper-cache
+        uses: actions/cache@v6
+        with:
+          path: .cache/whisper/bin
+          key: whisper-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build_whisper.sh') }}
+
+      - name: whisper.cpp 빌드
+        if: steps.whisper-cache.outputs.cache-hit != 'true'
+        run: bash scripts/build_whisper.sh
+
+      # check.yml과 같은 키라 그쪽에서 만든 것을 그대로 쓴다
+      - name: ffmpeg 캐시
+        id: ffmpeg-cache
+        uses: actions/cache@v6
+        with:
+          path: .cache/ffmpeg/bin
+          key: ffmpeg-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build_ffmpeg.sh') }}
+
+      - name: ffmpeg 빌드
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        run: |
+          command -v pkg-config >/dev/null || brew install pkgconf
+          bash scripts/build_ffmpeg.sh
+
+      - name: 의존성
+        working-directory: app
+        run: npm ci
+
+      - name: 타입 검사와 테스트
+        working-directory: app
+        run: |
+          export PATH="$GITHUB_WORKSPACE/.cache/ffmpeg/bin:$PATH"
+          npm run typecheck
+          npm test
+
+      - name: 받아쓰기 모델 캐시
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/ln-data/models
+          key: models-${{ env.SMOKE_MODEL }}-${{ hashFiles('app/src/core/models.ts') }}
+
+      # 테스트는 가짜 whisper-cli를 쓴다. 여기서는 방금 만든 whisper-cli와 ffmpeg로 녹음 하나를 실제로 노트로 만들어 본다
+      # (화면 없이, 프로세서로, 요약은 키가 없어 건너뜀). 속도 재기와 Metal은 아래의 앱 시험에서 돈다.
+      # 코어가 3개인 러너에서는 몇 분 걸린다: whisper의 VAD가 스레드 4개로 돌아 코어보다 많으면 아주 느려진다.
+      - name: 실제로 받아써 보기
+        timeout-minutes: 30
+        working-directory: app
+        run: |
+          export PATH="$GITHUB_WORKSPACE/.cache/ffmpeg/bin:$PATH"
+          DATA="$RUNNER_TEMP/ln-data"
+          sysctl -n machdep.cpu.brand_string hw.physicalcpu
+          npm run --silent cli -- --data-dir "$DATA" models download "$SMOKE_MODEL" silero-v6.2.0 > /dev/null
+          npm run --silent cli -- --data-dir "$DATA" run resources/probe-ko.wav --out "$RUNNER_TEMP/notes" --model "$SMOKE_MODEL" --device cpu
+          find "$RUNNER_TEMP/notes" -name '*.md' -print -exec head -c 600 {} \;
+
+      - name: 설치 파일 만들기
+        working-directory: app
+        run: npm run dist:mac -- --publish never
+
+      # 서명(임시 서명), 최소 macOS 버전, 함께 넣은 실행 파일이 앱 안에서 도는지 본다
+      - name: 만든 앱 확인
+        run: |
+          APP="dist/installer/mac-arm64/Note-crAIte.app"
+          ls -la dist/installer
+          codesign -dv --verbose=2 "$APP" 2>&1 | head -20
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          /usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' -c 'Print :CFBundleIdentifier' -c 'Print :NSMicrophoneUsageDescription' "$APP/Contents/Info.plist"
+          ls -la "$APP/Contents/Resources" "$APP/Contents/Resources/bin" "$APP/Contents/Resources/bin/whisper"
+          "$APP/Contents/Resources/bin/whisper/whisper-cli" --help >/dev/null 2>&1 && echo "whisper-cli 실행됨"
+          "$APP/Contents/Resources/bin/ffmpeg" -hide_banner -version | head -1
+          du -sh "$APP" dist/installer/*.dmg
+          spctl -a -vv "$APP" 2>&1 || true
+
+      # 만든 앱을 새 데이터 폴더로 띄워 첫 실행 마법사부터 노트 미리보기까지 눌러 본다 (app/e2e/first-run.mjs).
+      # 화면 흐름이 macOS에서 실제로 도는지 보는 단계다. 단계마다 찍은 화면은 아티팩트 mac-screenshots에 남는다
+      - name: 앱에서 끝까지 해 보기
+        timeout-minutes: 40
+        working-directory: app
+        env:
+          E2E_APP: ${{ github.workspace }}/dist/installer/mac-arm64/Note-crAIte.app/Contents/MacOS/Note-crAIte
+          E2E_MODELS: ${{ runner.temp }}/ln-data/models
+          E2E_OUT: ${{ runner.temp }}/shots
+        run: node e2e/first-run.mjs
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: mac-screenshots
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: Note-crAIte-mac
+          path: dist/installer/*.dmg
           if-no-files-found: error
           retention-days: 30

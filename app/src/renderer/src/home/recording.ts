@@ -2,6 +2,7 @@
 // 화면을 옮겨도(홈이 사라져도) 녹음이 이어지도록 React 밖의 한 곳에 상태를 둔다.
 import { useSyncExternalStore } from 'react'
 import { ApiError, call } from '../api'
+import { MIC_SETTINGS_HELP } from '../platform'
 
 export type RecordSource = 'mic' | 'system'
 
@@ -46,7 +47,7 @@ export function useRecorder(): RecorderState {
   )
 }
 
-/** 녹음을 시작하지 못한 이유 (화면에 그대로 보인다). mic: 마이크 권한 문제면 Windows 설정을 여는 버튼을 붙인다 */
+/** 녹음을 시작하지 못한 이유 (화면에 그대로 보인다). mic: 마이크 권한 문제면 OS의 마이크 설정을 여는 버튼을 붙인다 */
 export class RecordError extends Error {
   readonly micSettings: boolean
 
@@ -91,7 +92,7 @@ async function openStream(source: RecordSource, deviceId: string | null): Promis
     if (e instanceof RecordError) throw e
     const name = e instanceof DOMException ? e.name : ''
     if (source === 'mic' && name === 'NotAllowedError')
-      throw new RecordError('마이크를 쓸 수 없어요. Windows 설정 > 개인 정보 > 마이크에서 "데스크톱 앱이 마이크에 액세스하도록 허용"을 켜 주세요.', true)
+      throw new RecordError(`마이크를 쓸 수 없어요. ${MIC_SETTINGS_HELP}`, true)
     if (source === 'mic' && (name === 'NotFoundError' || name === 'OverconstrainedError')) throw new RecordError('마이크를 찾지 못했어요. 연결을 확인해 주세요.')
     if (source === 'mic' && name === 'NotReadableError') throw new RecordError('마이크를 열지 못했어요. 다른 프로그램이 쓰고 있을 수 있어요.')
     throw new RecordError(source === 'mic' ? '마이크를 열지 못했어요.' : '컴퓨터 소리를 가져오지 못했어요.')

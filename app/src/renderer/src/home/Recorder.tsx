@@ -7,6 +7,7 @@ import {
   type RecordSource
 } from './recording'
 import styles from './Recorder.module.css'
+import { OS, PC } from '../platform'
 
 const SOURCE_KEY = 'record.source'
 const MIC_KEY = 'record.mic'
@@ -85,17 +86,15 @@ export function RecordDialog({ open, onClose, transcribing }: DialogProps): Reac
         onChange={setSource}
         options={[
           { value: 'mic', title: '마이크', description: '강의실에서 교수님 목소리를 녹음해요.' },
-          {
-            value: 'system',
-            title: '컴퓨터 소리',
-            description: systemAudioSupported ? '온라인 강의처럼 이 PC에서 나오는 소리를 녹음해요. 알림음도 함께 들어가요.' : 'Windows에서만 쓸 수 있어요.',
-            disabled: !systemAudioSupported
-          }
+          // 컴퓨터 소리 녹음은 Windows에서만 된다. macOS에서는 선택지를 보이지 않는다
+          ...(systemAudioSupported
+            ? [{ value: 'system' as const, title: '컴퓨터 소리', description: `온라인 강의처럼 이 ${PC}에서 나오는 소리를 녹음해요. 알림음도 함께 들어가요.` }]
+            : [])
         ]}
       />
       {source === 'mic' && mics.length > 1 && (
         <Select label="마이크" value={mics.some((m) => m.id === mic) ? mic : ''} onChange={(e) => setMic(e.target.value)}>
-          <option value="">Windows 기본 마이크</option>
+          <option value="">{OS} 기본 마이크</option>
           {mics.map((m) => (
             <option key={m.id} value={m.id}>
               {m.label}
@@ -122,7 +121,7 @@ export function RecordDialog({ open, onClose, transcribing }: DialogProps): Reac
           {error.message}
         </Banner>
       )}
-      <p className={styles.hint}>녹음은 이 PC에만 저장돼요. 창을 닫아도 녹음은 계속되지만, 노트북 덮개를 닫으면 멈춰요.</p>
+      <p className={styles.hint}>녹음은 이 {PC}에만 저장돼요. 창을 닫아도 녹음은 계속되지만, 노트북 덮개를 닫으면 멈춰요.</p>
     </Dialog>
   )
 }
