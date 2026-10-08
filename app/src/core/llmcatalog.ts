@@ -28,14 +28,14 @@ export function parseModelList(data: unknown): ModelItem[] {
  * - prices: 모델별 단가 (크레딧 / 1K 토큰). 목록에 있어도 여기 없으면 예상 크레딧을 모른다.
  *   https://docs.mindlogic.ai/docs/khu/baze/product/model-credits (2026-09-16 기준. gpt-6.1-sol만 2026-09-30 기준 문서에서 더함)
  * - ranked: 요약 모델 추천 순서 (9/29 2차 비교와 10/2 다시 비교, docs/decisions.md). 앞의 recommendedCount개가 설정의 "추천 모델 목록",
- *   전체가 [전체 모델 보기].
+ *   전체가 [더 많은 모델 보기].
  *   10/2: gpt-6-sol 자리에 gpt-6.1-sol(잰 것 중 요약이 가장 빠짐없고 교정을 하나도 망가뜨리지 않음). deepseek-v4-flash(틀린 서술이 가장 많고
  *   출력이 길어 상한에 걸림)와 gemma(수식이 깨지고 교정을 자주 망가뜨림)는 맨 뒤로 내렸다. grok-4-1-fast는 요약이 가장 짧고 담는 내용이
  *   가장 적어 추천에서 뺐다(추천은 4개). 10/2에 다시 잰 것은 luna·flash·sol·grok·deepseek·gemma뿐이다.
  * - polishRecommended: 전사문 다듬기 추천 모델. 90분 약 20크레딧 안팎인 모델. 10/2 작성자 결정으로 grok-4-1-fast와 deepseek-v4-flash를 뺐다
- *   ([전체 모델 보기]에서는 고를 수 있다). 다듬기 품질을 재 본 것은 gpt-6-luna와 로컬 gemma 12B뿐이다(docs/decisions.md).
+ *   ([더 많은 모델 보기]에서는 고를 수 있다). 다듬기 품질을 재 본 것은 gpt-6-luna와 로컬 gemma 12B뿐이다(docs/decisions.md).
  * - hidden: 알지만 목록에 보이지 않는 모델(시간 초과가 잦은 모델 등). [직접 모델 입력]으로만 고른다.
- *   ranked에도 hidden에도 없는 모델이 서비스 목록에 있으면 새로 나온 모델로 보고 [전체 모델 보기] 끝에 보인다(newModels).
+ *   ranked에도 hidden에도 없는 모델이 서비스 목록에 있으면 새로 나온 모델로 보고 [더 많은 모델 보기] 끝에 보인다(newModels).
  * - summaryCredits90: 써 보기 전에도 알고 있는 모델별 90분 요약 크레딧: 강의 2~4개의 토큰 × 단가를 90분으로 환산한 평균.
  *   luna·flash·sol·grok·deepseek·gemma는 주제별 틀로 바꾼 뒤(10/2), 나머지는 그 전(9/29 2차 비교)에 잰 값이라 조금 낮게 본다.
  * - updated: 고친 날짜(YYYY-MM-DD). 받아 온 것이 앱에 든 것보다 오래됐으면 쓰지 않는다.
@@ -104,7 +104,7 @@ export function setCatalog(c: Catalog): void {
 
 /**
  * 서비스의 글 모델 중 카탈로그가 모르는 것(추천 순서에도 숨김 목록에도 없음): 카탈로그를 고친 뒤에 나온 모델이다.
- * 비교해 보지 않았어도 바로 고를 수 있게 [전체 모델 보기] 끝에 보인다. 단가를 모르면 예상 크레딧은 비고, 써 보면 기록으로 채워진다.
+ * 비교해 보지 않았어도 바로 고를 수 있게 [더 많은 모델 보기] 끝에 보인다. 단가를 모르면 예상 크레딧은 비고, 써 보면 기록으로 채워진다.
  */
 export function newModels(available: string[]): string[] {
   const known = new Set([...current.ranked.map((r) => r.id), ...current.hidden])
