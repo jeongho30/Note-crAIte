@@ -79,7 +79,7 @@
 | Windows 64비트 | 지원 |
 | macOS 13 이상, Apple Silicon | 베타. 실제 Mac에서 설치, 처음 열기, 받아쓰기까지 확인했습니다. |
 
-설치 파일은 [Releases](https://github.com/jeongho30/Note-crAIte/releases)에서 받습니다(지금은 사전 출시 0.1.0). 이 저장소의 GitHub Actions([installer.yml](.github/workflows/installer.yml))가 소스에서 만든 것입니다. 직접 빌드하려면 [소스에서 실행](#소스에서-실행)을 봅니다.
+설치 파일은 [Releases](https://github.com/jeongho30/Note-crAIte/releases)에서 받습니다(지금은 사전 출시 0.1.1). 이 저장소의 GitHub Actions([installer.yml](.github/workflows/installer.yml))가 소스에서 만든 것입니다. 직접 빌드하려면 [소스에서 실행](#소스에서-실행)을 봅니다.
 
 처음 켜면 마법사가 받아쓰기 모델(875MB)을 받고, 요약 서비스의 API 키와 노트를 저장할 폴더를 묻습니다.
 
