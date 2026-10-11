@@ -43,6 +43,10 @@ export type Settings = {
   chatkhuStt: boolean
   /** 로컬 LLM(Ollama). 설정 > 고급 */
   ollama: OllamaSettings
+  /** 처음 [녹음하기]를 누를 때 보이는 녹음 안내를 넘겼다 (home/Recorder.tsx) */
+  recordIntroSeen: boolean
+  /** 녹음을 처음 넣을 때 시작 전 확인 창에 보이는 안내를 넘겼다 (home/ConfirmDialog.tsx) */
+  confirmIntroSeen: boolean
 }
 
 export type OllamaSettings = {
@@ -64,7 +68,8 @@ export const DEFAULT_SETTINGS: Settings = {
   wizardStep: 0, wizardDone: false, outDir: null, provider: null, lastSubject: null, subjectLanguage: {},
   summaryModel: null, polishModel: null, summaryExtra: null, summaryPrompt: null, sttModel: DEFAULT_MODEL, sttAuto: true, sttLightNotice: false, sttArgs: null, theme: 'system',
   watch: { enabled: false, folder: null, paused: false }, sttWhileRecording: false, chatkhuStt: false,
-  ollama: { summary: false, polish: false, summaryModel: null, polishModel: null, summaryRequest: null, polishRequest: null }
+  ollama: { summary: false, polish: false, summaryModel: null, polishModel: null, summaryRequest: null, polishRequest: null },
+  recordIntroSeen: false, confirmIntroSeen: false
 }
 
 function settingsPath(dataDir: string): string {

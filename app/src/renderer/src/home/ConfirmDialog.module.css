@@ -180,6 +180,7 @@
 
 .notesOn,
 .notesOn:hover:not(:disabled) {
+  background: var(--color-primary-soft);
   color: var(--color-primary);
 }
 
@@ -361,4 +362,78 @@
 .plus::after {
   width: 2px;
   height: 12px;
+}
+
+/* 시작 전 확인 안내: 녹음을 처음 넣을 때만 과목 칸 대신 먼저 보인다. 왼쪽 예시는 위의 칸·녹음 줄 모양을 그대로 쓴다 */
+.intro {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  align-items: start;
+  gap: var(--space-5);
+}
+
+.example {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+/* 예시와 설명을 잇는 번호 */
+.num {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legend li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.legend .num {
+  margin-top: 2px;
+}
+
+.legend strong {
+  display: block;
+  font-weight: var(--font-weight-semibold);
+}
+
+.legendText {
+  display: block;
+  color: var(--color-text-2);
+  font-size: var(--font-size-sm);
+}
+
+/* 설명 제목 옆에 놓는 필기 아이콘 */
+.legendIcon {
+  margin: 0 0 0 var(--space-1);
+  vertical-align: middle;
+  cursor: default;
+}
+
+/* [안내 다시 보기]: 버튼 줄의 왼쪽 끝 */
+.help {
+  margin-right: auto;
+  align-self: center;
 }

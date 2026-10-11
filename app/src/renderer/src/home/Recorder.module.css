@@ -56,3 +56,48 @@
   color: var(--color-text-3);
   font-size: var(--font-size-xs);
 }
+
+/* 녹음 안내: 처음 [녹음하기]를 누를 때만 녹음 시작 창의 본문 자리에 보인다 */
+.intro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--color-text);
+}
+
+.intro li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.intro strong {
+  display: block;
+  font-weight: var(--font-weight-semibold);
+}
+
+.introText {
+  display: block;
+  color: var(--color-text-2);
+  font-size: var(--font-size-sm);
+}
+
+.introIcon,
+.introIconWarn {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--space-8);
+  height: var(--space-8);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.introIconWarn {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}

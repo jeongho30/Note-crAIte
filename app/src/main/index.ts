@@ -1192,6 +1192,10 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     runner.refresh()
     return sttWhileRecording
   },
+  // 처음 한 번만 보이는 안내(녹음 안내, 시작 전 확인 안내)를 [계속하기]로 넘겼다
+  'settings.introSeen': async (p) => {
+    await updateSettings(dataDir, p === 'record' ? { recordIntroSeen: true } : { confirmIntroSeen: true })
+  },
 
   'app.openData': () => openFolder(dataDir),
   'app.openLogs': () => openFolder(log.dir),
