@@ -9,20 +9,16 @@ import { SummaryPrompt } from './SummaryPrompt'
 import type { SetupState } from '../../../main/setup'
 import { Block, Section, sizeLabel } from './parts'
 import styles from './Settings.module.css'
-import { GPU, GPU_PC_ADVICE, PC, PC_SUBJ } from '../platform'
+import { PC, PC_SUBJ } from '../platform'
 
 type Choice = { id: string; size: number; downloaded: boolean; deletable: boolean; locked: string }
 // defaultArgs는 속도를 재기 전이면 null(쓸 장치를 아직 모름), args는 고쳐 저장한 옵션이 없으면 null
 type Options = { model: string; choices: Choice[]; defaultArgs: string | null; args: string | null }
 type SampleTest = { sampleS: number; processS: number; chars: number; ok: boolean; reason?: string }
 
-const MODEL_TEXT: Record<string, { title: string; description: (gpu: boolean) => string }> = {
-  'large-v3-turbo-q8_0': { title: '기본 · large-v3-turbo-q8_0', description: () => `대부분의 ${PC}에 맞아요. 속도와 정확도의 균형.` },
-  'large-v3-q5_0': {
-    title: '더 정확하게 · large-v3',
-    description: (gpu) => (gpu ? `${GPU_PC_ADVICE} 기본보다 약 2배 느려요.`.trim() : `${GPU}가 없는 이 ${PC}에서는 아주 느려요.`)
-  },
-  'small-q5_1': { title: '가볍게 · small', description: () => `느린 ${PC}용. 정확도가 낮아요.` }
+const MODEL_TEXT: Record<string, { title: string; description: string }> = {
+  'large-v3-turbo-q8_0': { title: '기본 · large-v3-turbo-q8_0', description: `대부분의 ${PC}에 맞아요. 속도와 정확도의 균형.` },
+  'small-q5_1': { title: '가볍게 · small', description: `느린 ${PC}용. 요약은 괜찮지만 원문 전사는 부정확해요.` }
 }
 
 type Props = {
@@ -125,8 +121,6 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
   }, [open, probeKey])
 
   const choice = opts?.choices.find((c) => c.id === model)
-  // 그래픽카드 없이 받아쓰는 PC에서는 large-v3를 고를 수 없다 (아주 느림)
-  const gpu = setup?.probe.state !== 'done' || !!setup.probe.gpuName
   // 입력칸에 보이는 옵션: 손대지 않았으면 기본 옵션 (속도를 재기 전이면 아직 없음)
   const shown = args ?? opts?.defaultArgs ?? ''
   // 저장할 고친 옵션: 손대지 않았거나 기본 옵션과 같으면 없음
@@ -198,7 +192,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                     options={opts.choices.map((c) => ({
                       value: c.id,
                       title: MODEL_TEXT[c.id]?.title ?? c.id,
-                      description: MODEL_TEXT[c.id]?.description(gpu),
+                      description: MODEL_TEXT[c.id]?.description,
                       meta: (
                         <>
                           {sizeLabel(c.size)} · {c.downloaded ? '받음' : '받아야 해요'}
@@ -211,8 +205,7 @@ export const AdvancedSection = forwardRef<HTMLElement, Props>(function AdvancedS
                             </>
                           )}
                         </>
-                      ),
-                      disabled: c.id === 'large-v3-q5_0' && !gpu && opts.model !== c.id
+                      )
                     }))}
                   />
                   <p className={styles.hint}>모델을 바꾸면 받은 뒤 이 {PC}의 속도를 다시 재고, 예상 시간도 바뀌어요.</p>

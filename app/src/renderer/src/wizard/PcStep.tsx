@@ -4,15 +4,14 @@ import { Banner, Button, Card, ProgressBar, RadioCardGroup } from '../components
 import { gb, gpuLabel, mb, percent, useSetup, type StepProps } from './shared'
 import { Step } from './Step'
 import styles from './Wizard.module.css'
-import { GPU, GPU_PC_ADVICE, PC, PC_OBJ } from '../platform'
+import { GPU, PC, PC_OBJ } from '../platform'
 
 type SystemInfo = { cpu: string; cores: number; gpus: string[]; ramGb: number; freeBytes: number }
 type Choice = { id: string; size: number; downloaded: boolean }
 
 const MODEL_TEXT: Record<string, { title: string; description: string }> = {
   'large-v3-turbo-q8_0': { title: '기본', description: `turbo. 대부분의 ${PC}에 맞아요.` },
-  'large-v3-q5_0': { title: '정확하게', description: `large-v3. ${GPU_PC_ADVICE}`.trim() },
-  'small-q5_1': { title: '가볍게', description: `small. 느린 ${PC}용, 정확도가 낮아요.` }
+  'small-q5_1': { title: '가볍게', description: `small. 느린 ${PC}용. 요약은 괜찮지만 원문 전사는 부정확해요.` }
 }
 
 // 모델은 [받기 시작]을 눌러야 받는다(데이터 요금제에서 모르고 받지 않게). 건너뛰면 녹음을 넣을 때 받는다.
@@ -82,10 +81,18 @@ export function PcStep({ next, back, headingRef }: StepProps): React.JSX.Element
               </Button>
             </p>
           )}
-          {choices.length > 0 && (picking || setup.name !== choices[0].id) && (
+          {choices.length > 0 && !picking && setup.auto && setup.name !== choices[0].id && (
+            <p className={styles.small}>
+              먼저 가벼운 모델로 이 {PC}의 속도를 재요. 충분히 빠르면 기본 모델({mb(choices[0].size)})을 이어서 받아요.{' '}
+              <Button variant="link" onClick={() => setPicking(true)}>
+                다른 모델 고르기
+              </Button>
+            </p>
+          )}
+          {choices.length > 0 && (picking || (!setup.auto && setup.name !== choices[0].id)) && (
             <RadioCardGroup
               label="받아쓰기 모델"
-              columns={3}
+              columns={2}
               value={setup.name}
               disabled={model.state === 'downloading'}
               onChange={(v) => void call('setup.pickModel', v)}
@@ -127,6 +134,11 @@ export function PcStep({ next, back, headingRef }: StepProps): React.JSX.Element
             이 {PC}의 프로세서로 받아쓰기해요 · 90분 강의 약 {probe.minutesFor90}분. 처리는 뒤에서 진행돼요. {PC_OBJ} 계속 쓰셔도 돼요.
           </Banner>
         ))}
+      {probe?.state === 'done' && setup?.name === 'small-q5_1' && (
+        <Banner tone="warning" title="가벼운 모델을 써요">
+          요약은 괜찮지만 원문 전사는 부정확해요.
+        </Banner>
+      )}
       {probe?.state === 'error' && (
         <Banner tone="warning" title="주의">
           받아쓰기 속도를 재지 못했어요. 받아쓰기는 프로세서로 해요.

@@ -10,8 +10,6 @@ export const PC_SUBJ = isMac ? 'Mac이' : 'PC가'
 export const OS = isMac ? 'macOS' : 'Windows'
 /** 받아쓰기에 쓰는 그래픽 장치. Apple Silicon은 카드가 아니라 칩 안에 있다 */
 export const GPU = isMac ? 'GPU' : '그래픽카드'
-/** 느린 모델의 안내에 붙는 권장 문구. Apple Silicon Mac은 모두 GPU가 있어 붙이지 않는다 */
-export const GPU_PC_ADVICE = isMac ? '' : '그래픽카드 PC 권장.'
 /** 창을 닫아도 앱 아이콘이 남는 곳 */
 export const TRAY = isMac ? '메뉴 막대' : '트레이'
 export const TRAY_WHERE = isMac ? '메뉴 막대(화면 오른쪽 위 아이콘)' : '트레이(작업 표시줄 오른쪽 아이콘)'
