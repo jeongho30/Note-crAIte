@@ -1,7 +1,13 @@
+/* 읽는 중, 안내, 과목 칸이 같은 높이로 열리게 한다(녹음 하나와 모델 받기 안내가 있을 때의 과목 칸 높이). 녹음이 많으면 더 커진다 */
 .body {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  min-height: 330px;
+}
+
+.loading {
+  margin: auto;
 }
 
 .muted {
@@ -180,6 +186,7 @@
 
 .notesOn,
 .notesOn:hover:not(:disabled) {
+  background: var(--color-primary-soft);
   color: var(--color-primary);
 }
 
@@ -291,7 +298,8 @@
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
   gap: var(--space-1) var(--space-4);
-  margin: 0;
+  /* 내용이 창의 최소 높이보다 짧으면 남는 자리는 과목 칸과 이 칸 사이에 둔다 */
+  margin: auto 0 0;
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md);
   background: var(--color-surface-2);
@@ -361,4 +369,78 @@
 .plus::after {
   width: 2px;
   height: 12px;
+}
+
+/* 시작 전 확인 안내: 녹음을 처음 넣을 때만 과목 칸 대신 먼저 보인다. 왼쪽 예시는 위의 칸·녹음 줄 모양을 그대로 쓴다 */
+.intro {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  align-items: start;
+  gap: var(--space-5);
+}
+
+.example {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+/* 예시와 설명을 잇는 번호 */
+.num {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legend li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.legend .num {
+  margin-top: 2px;
+}
+
+.legend strong {
+  display: block;
+  font-weight: var(--font-weight-semibold);
+}
+
+.legendText {
+  display: block;
+  color: var(--color-text-2);
+  font-size: var(--font-size-sm);
+}
+
+/* 설명 제목 옆에 놓는 필기 아이콘 */
+.legendIcon {
+  margin: 0 0 0 var(--space-1);
+  vertical-align: middle;
+  cursor: default;
+}
+
+/* [안내 다시 보기]: 버튼 줄의 왼쪽 끝 */
+.help {
+  margin-right: auto;
+  align-self: center;
 }

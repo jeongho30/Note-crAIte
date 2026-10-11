@@ -118,6 +118,10 @@ try {
     await shot('home')
     await answerDialog([audio])
     await button('파일 고르기').click()
+    // 녹음을 처음 넣을 때만 안내가 먼저 보인다
+    await page.getByText('이 창에서 과목과 필기를 정해요').waitFor()
+    await shot('confirm-intro')
+    await button('계속하기').click()
     await page.getByText('시작하기 전에 확인해 주세요').waitFor()
     await page.getByText('9.21 컴파일러 강의').first().waitFor()
     await shot('confirm')
