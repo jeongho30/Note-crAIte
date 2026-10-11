@@ -63,10 +63,13 @@ test('macOS: 장치 목록 없이 Metal(0번)을 재 보고, 이름은 그 로�
   assert.match(hung.trials[1].reason ?? '', /너무 오래 걸려/)
 })
 
-test('defaultThreads: 물리 코어 2개를 남기고, 성능·효율 코어가 나뉜 Mac은 성능 코어만 쓴다', () => {
+test('defaultThreads: 물리 코어 2개를 남기고(4코어 이하는 하나), 성능·효율 코어가 나뉜 Mac은 성능 코어만 쓴다', () => {
   const hw = { cpu: 'x', logicalCores: 16, ramGb: 16, gpus: [], powerPlugged: null }
   assert.equal(defaultThreads({ ...hw, physicalCores: 8 }), 6)
+  assert.equal(defaultThreads({ ...hw, physicalCores: 6 }), 4)
+  assert.equal(defaultThreads({ ...hw, physicalCores: 4 }), 3)
   assert.equal(defaultThreads({ ...hw, physicalCores: 2 }), 1)
+  assert.equal(defaultThreads({ ...hw, physicalCores: 1 }), 1)
   assert.equal(defaultThreads({ ...hw, physicalCores: 8, performanceCores: 4 }), 4, 'M1: 성능 4 + 효율 4')
 })
 

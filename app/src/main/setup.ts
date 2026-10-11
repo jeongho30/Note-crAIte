@@ -169,7 +169,8 @@ export function createSetup({ dataDir, model, whisperCli, sample, busy, emit, lo
   async function savedProbe(): Promise<SetupState['probe'] | null> {
     try {
       const p = await readJson<ProbeResult>(probePath)
-      return p.model === name ? summarize(p) : null
+      // 기본 스레드 수가 바뀐 판으로 올라왔으면(10/11: 4코어 이하는 하나만 남김) 옛 스레드로 잰 값은 버리고 다시 잰다
+      return p.model === name && p.threads === defaultThreads(await detect()) ? summarize(p) : null
     } catch {
       return null // 아직 잰 적 없음
     }

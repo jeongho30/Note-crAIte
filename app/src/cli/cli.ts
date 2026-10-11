@@ -68,7 +68,7 @@ async function main(argv: string[]): Promise<void> {
       start: { type: 'string', default: '0' },
       duration: { type: 'string' },
       config: { type: 'string', multiple: true },
-      threads: { type: 'string', description: '기본: 물리 코어 - 2' },
+      threads: { type: 'string', description: '기본: 물리 코어 - 2 (4코어 이하는 - 1)' },
       lang: { type: 'string', default: 'ko' },
       'chunk-s': { type: 'string', default: '600', description: 'whisper.cpp 조각 길이 (초). 0이면 나누지 않음' },
       python: { type: 'string', default: join(REPO, 'dev', '.venv', 'Scripts', 'python.exe') },
