@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-lecture-notes(앱 이름 **Note-crAIte**, 읽는 법 "노트크리에이트", 부제 "강의 녹음을 노트로". 화면에 보이는 이름은 `src/core/brand.ts`와 `electron-builder.yml`의 `productName`, 데이터 폴더·npm 이름은 lecture-notes 그대로, GitHub 저장소는 10/2부터 `jeongho30/Note-crAIte`): 강의 녹음(+선택적 필기 .md/.txt)을 요약·주요 키워드·전사문이 담긴 마크다운 노트로 만드는 PC 설치형 앱 (ChatKHU 공모전, 마감 2026-10-24). Electron + TypeScript 하나로 만든다(`app/`). 무거운 일은 외부 실행 파일(whisper-cli, ffmpeg)이 하고, 메인 프로세스의 `src/core/`가 그것들을 부르고 HTTP·텍스트 처리를 한다. 결정과 실험 결과는 `docs/decisions.md`에 적는다.
+lecture-notes(앱 이름 **Note-crAIte**, 읽는 법 "노트크리에이트", 부제 "강의 녹음을 노트로". 화면에 보이는 이름은 `src/core/brand.ts`와 `electron-builder.yml`의 `productName`, 데이터 폴더·npm 이름은 lecture-notes 그대로, GitHub 저장소는 10/2부터 `jeongho30/Note-crAIte`): 강의 녹음(+선택적 필기 .md/.txt/.hwpx/.docx/.pptx)을 요약·주요 키워드·전사문이 담긴 마크다운 노트로 만드는 PC 설치형 앱 (ChatKHU 공모전, 마감 2026-10-24). Electron + TypeScript 하나로 만든다(`app/`). 무거운 일은 외부 실행 파일(whisper-cli, ffmpeg)이 하고, 메인 프로세스의 `src/core/`가 그것들을 부르고 HTTP·텍스트 처리를 한다. 결정과 실험 결과는 `docs/decisions.md`에 적는다.
 
 처리 코드의 상당 부분은 작성자의 개인용 Python 파이프라인 `C:\ljh\Coding\STT_AutoLectureNote\pipeline\`에서 옮겨 왔다. 그 폴더는 따로 계속 쓰이므로 여기서 수정하지 않는다.
 
@@ -106,7 +106,7 @@ npm 11은 의존 패키지의 설치 스크립트를 막아 `npm ci`만으로는
 - `job.ts`: 작업 하나를 `audio→stt→clean→polish→summarize→note→save` 단계로(polish는 전사문 다듬기를 켠 작업만, 9/30 전 작업에는 없음) 돌리고 `<데이터 폴더>/jobs/<id>/job.json`에 단계 상태를 남긴다. 끝난 단계(`done`/`skipped`)는 건너뛰므로 실패·취소 뒤 `runJob`을 다시 부르면 이어서 한다. 필기는 작업 폴더에 복사해 두고, API 키는 `job.json`에 넣지 않고 실행할 때 `JobContext`로 받는다. 요약 설정(`settings.llm`)이 없으면 요약 단계는 `skipped`이고 전사만 담은 노트가 된다.
 - `probe.ts`: 샘플을 CPU와 Vulkan 장치마다 돌려(로그의 장치 목록·`uma`·처리 시간) 쓸 장치와 RTF를 정한다. GPU 전사가 CPU 전사와 CER 0.3 넘게 다르면 깨진 것으로 보고, 1.2배 이상 빠를 때만 GPU를 고른다. 결과는 `<데이터 폴더>/probe.json`, `run --device auto`(기본)가 장치·예상 시간에 쓴다. `compare.ts`: CER(벤치와 공용).
 - `sttargs.ts`: 설정 > 고급에서 고칠 수 있는 whisper-cli 옵션(기본값, 잠긴 옵션 거절, 명령 미리보기). 옵션이 있으면 `WhisperCpp`는 threads·beamSize·장치 대신 그것을 쓰고, 저장 전에 `checkArgs`로 whisper-cli에 한 번 읽혀 본다(없는 입력 파일로 실행하면 옵션을 읽은 뒤 바로 끝남). `probe.ts`의 `testSample`은 [샘플로 시험하기]. `providers.ts`의 `creditsPer90ByModel`은 작업 기록으로 모델별 90분 요약 크레딧을 잰다.
-- `note.ts`: 노트 마크다운(frontmatter 값은 JSON 문자열, 접는 부분은 `> [!quote]-` callout)과 저장(`<저장 폴더>/<과목|미분류>/<날짜> <제목>.md`, 겹치면 ` (2)`). `inputs.ts`: 녹음 옆 같은 이름 필기 찾기(`pairInputs`), 이미 목록에 있는 녹음에 나중에 넣은 필기 붙이기(`attachNotes`: 같은 폴더·이름 우선, 없으면 이름만 같은 녹음이 하나일 때), UTF-8이 아니면 CP949로 읽기.
+- `note.ts`: 노트 마크다운(frontmatter 값은 JSON 문자열, 접는 부분은 `> [!quote]-` callout)과 저장(`<저장 폴더>/<과목|미분류>/<날짜> <제목>.md`, 겹치면 ` (2)`). `inputs.ts`: 녹음 옆 같은 이름 필기 찾기(`pairInputs`), 이미 목록에 있는 녹음에 나중에 넣은 필기 붙이기(`attachNotes`: 같은 폴더·이름 우선, 없으면 이름만 같은 녹음이 하나일 때), UTF-8이 아니면 CP949로 읽기. 문서 필기(.hwpx·.docx·.pptx)는 `doctext.ts`가 ZIP(fflate)을 풀어 XML에서 글자만 뽑는다(수식·그림은 버림, 읽을 수 없으면 `input` 오류).
 - 화면(`src/renderer/src/`):
   - 색·크기는 `styles/tokens.css`의 CSS 변수만 쓴다(라이트 B2, 다크 D4, OS 설정을 따름). 화면은 `components/`(CSS Modules)의 부품을 조합하고 색·치수를 직접 쓰지 않는다. 본문 글꼴은 내장한 Pretendard 가변 글꼴(`assets/fonts/`, 서브셋 아님).
   - 창 맨 위 띠(10/3): Windows 기본 제목 줄을 숨기고(`titleBarStyle: 'hidden'` + `titleBarOverlay`, 창 버튼은 Windows가 겹쳐 그림) `components/TitleBar`(아이콘 + 이름, 끌어서 창 이동)를 `main.tsx`에서 모든 화면 위에 둔다. 높이는 `tokens.css`의 `--titlebar-h`와 `main/index.ts`의 `TITLE_BAR`(32)가 같아야 하고, 화면을 꽉 채울 때는 `100vh` 대신 `--app-h`를 쓴다. 아래의 4:3·최소 크기는 띠를 뺀 영역 기준이다.

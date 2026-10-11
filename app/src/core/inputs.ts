@@ -1,11 +1,13 @@
-// 입력 파일: 녹음 옆의 같은 이름 필기(.md/.txt)를 찾고, 인코딩을 가려 읽는다.
+// 입력 파일: 녹음 옆의 같은 이름 필기(.md/.txt, 문서 .hwpx/.docx/.pptx)를 찾고, 글자로 읽는다.
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { basename, extname, resolve } from 'node:path'
+import { DOC_EXTS, documentText } from './doctext.ts'
+import { EngineError } from './errors.ts'
 
 /** 받는 녹음 확장자. 영상 컨테이너(mp4·webm·3gp)는 소리만 쓴다. 실제로 소리가 있는지는 ffmpeg로 다시 본다. */
 export const AUDIO_EXTS = ['m4a', 'mp3', 'wav', 'ogg', 'flac', 'aac', 'mp4', '3gp', 'amr', 'webm', 'opus', 'wma']
-export const NOTE_EXTS = ['md', 'txt']
+export const NOTE_EXTS = ['md', 'txt', ...DOC_EXTS]
 
 const extOf = (path: string): string => extname(path).slice(1).toLowerCase()
 const baseOf = (path: string): string => path.slice(0, path.length - extname(path).length)
@@ -66,9 +68,16 @@ export function findNotes(audio: string): string | null {
   return null
 }
 
-/** UTF-8로 읽히지 않으면 CP949(EUC-KR)로 다시 읽는다 (오래된 메모장 파일). */
+/** 문서(.hwpx·.docx·.pptx)는 글자만 뽑는다. 글 파일은 UTF-8로 읽히지 않으면 CP949(EUC-KR)로 다시 읽는다 (오래된 메모장 파일). */
 export async function readNotes(path: string): Promise<string> {
   const buf = await readFile(path)
+  if (DOC_EXTS.includes(extOf(path))) {
+    try {
+      return documentText(buf, extOf(path))
+    } catch {
+      throw new EngineError('input', `필기 파일을 읽을 수 없어요: ${basename(path)}`)
+    }
+  }
   try {
     return new TextDecoder('utf-8', { fatal: true }).decode(buf)
   } catch {
