@@ -76,7 +76,7 @@
 
 설정의 요약 모델 목록을 추리고 예상 크레딧을 보이려고 쟀다. ChatKHU `/models/`는 90개를 주는데 `type`이 `llm`인 것은 42개(나머지는 이미지·영상·음성)다. 단가표: https://docs.mindlogic.ai/docs/khu/baze/product/model-credits (2026-09-16 기준, 크레딧/1K 토큰, 앱에는 `app/src/core/llmcatalog.ts`의 `PRICES`).
 
-입력: 82분 강의(게임프로그래밍입문, 게임 물리용 수치적분) 전사. small-q5_1로 받아쓴 뒤 작성자 요청으로 Claude가 용어 오류를 고친 22,800자, 필기 없음. `npm run cli -- llm bench --text … --minutes 82`. 전사·모델별 요약·`results.json`은 강의 내용이라 노트북의 `%LOCALAPPDATA%\lecture-notes\bench\summary-2026-09-29T12-02-00\`와 `C:\ljh\2026-2\s3-data\`에만 있다(저장소에 없음).
+입력: 82분 강의(게임프로그래밍입문, 게임 물리용 수치적분) 전사. small-q5_1로 받아쓴 뒤 작성자 요청으로 Claude가 용어 오류를 고친 22,800자, 필기 없음. `npm run cli -- llm bench --text … --minutes 82`. 전사·모델별 요약·`results.json`은 강의 내용이라 노트북의 `%LOCALAPPDATA%\lecture-notes\bench\summary-2026-09-29T12-02-00\`와 `C:\ljh\10_School\2026-2\s3-data\`에만 있다(저장소에 없음).
 
 | 모델 | 입력 토큰 | 출력 토큰 | 크레딧 | 90분 환산 | 시간 | JSON | 교정 | 요약 |
 |---|---|---|---|---|---|---|---|---|
@@ -945,11 +945,11 @@ S3는 9/28에 정했다: 로컬 STT는 whisper.cpp, CPU 기본 `large-v3-turbo-q
 2. **S1 새 Windows 계정 설치와 SmartScreen 문구**(내려받은 설치 파일이어야 뜸. CI 설치 파일이 생겨 이제 할 수 있다).
 3. **옵시디언에서 굵게.** `**파싱(Parsing)**을`처럼 닫는 `**` 앞이 문장부호이고 뒤에 조사가 붙으면 표준 규칙상 굵게가 안 된다. 앱 미리보기는 cjk-friendly로 고쳤고, 노트 파일(옵시디언)은 그대로다. 옵시디언에서 안 보이는 것을 확인하면 노트를 쓸 때 그 부분만 `<strong>`으로 바꾸는 안이 있다(프롬프트는 고치지 않기로 함).
 
-PC별 메모: 노트북(Ryzen 7 5700U)에는 모델과 `tools/.venv`가 있고 설치본을 이 계정에 깔아 두었다. 모델은 9/29에 Claude 가상화 폴더에서 실제 `%LOCALAPPDATA%\lecture-notes\models`로 옮겼다(Gotchas의 MSIX 참고). 벤치용 녹음·기준 전사는 저장소 밖 `C:\ljh\2026-2\s3-data\`에 있다. faster-whisper 벤치가 필요하면 `tools/.venv`를 새로 만든다. 오픈소스 고지에 수식 플러그인(katex)이 들어간 것은 9/30 데스크톱에서 `notices.mjs`로 확인했다. `.cache/ffmpeg`는 PC마다 `fetch_ffmpeg.ps1`로 받아야 하니(저장소에 없음) 노트북에서 `dist:win`이나 `notices.mjs`를 돌릴 때는 먼저 받는다.
+PC별 메모: 노트북(Ryzen 7 5700U)에는 모델과 `tools/.venv`가 있고 설치본을 이 계정에 깔아 두었다. 모델은 9/29에 Claude 가상화 폴더에서 실제 `%LOCALAPPDATA%\lecture-notes\models`로 옮겼다(Gotchas의 MSIX 참고). 벤치용 녹음·기준 전사는 저장소 밖 `C:\ljh\10_School\2026-2\s3-data\`에 있다. faster-whisper 벤치가 필요하면 `tools/.venv`를 새로 만든다. 오픈소스 고지에 수식 플러그인(katex)이 들어간 것은 9/30 데스크톱에서 `notices.mjs`로 확인했다. `.cache/ffmpeg`는 PC마다 `fetch_ffmpeg.ps1`로 받아야 하니(저장소에 없음) 노트북에서 `dist:win`이나 `notices.mjs`를 돌릴 때는 먼저 받는다.
 
 - Claude 데스크톱 앱(MSIX)에서 실행한 명령·앱이 `%LOCALAPPDATA%`에 새로 쓴 파일은 `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Local\lecture-notes\`로 가상화된다. Claude 안의 프로세스는 두 곳을 합쳐 보지만, 사용자가 자기 터미널에서 띄운 앱은 실제 폴더만 본다(9/29 노트북: Claude 세션에서 받은 모델을 사용자 `npm run dev`가 못 찾음). 사용자 앱이 쓸 모델·데이터는 사용자 터미널에서 받거나 옮기게 하고, Claude 쪽에서는 실제 폴더에 쓸 수 없다. 앱이 켜질 때 로그에 모델 폴더와 파일 크기를 남긴다(`받아쓰기 모델: ...`).
 - 데스크톱의 `py -3.13`은 Microsoft Store판이라 `%LOCALAPPDATA%` 쓰기가 `...\Packages\PythonSoftwareFoundation...\LocalCache\`로 가상화된다. 벤치용 venv를 그 Python으로 만들지 않는다.
 
 ChatKHU 크레딧: 9/30 실험으로 월 할당(4000)을 다 썼다(4001.83 사용). 10/1에 갱신된다. 다듬기처럼 조각을 동시에 보내는 호출은 잔액이 떨어져도 진행 중인 호출이 끝까지 과금되어 할당을 조금 넘을 수 있다.
 
-9/30 전사 품질 실험의 스크립트(조건별 받아쓰기·채점·가린 요약 채점)와 전사·요약은 강의 내용이라 저장소 밖 데스크톱의 `C:\ljh\2026-2\s3-data\9.30 전사 품질 실험\`에 있다(설명은 그 폴더의 `README.md`, 숫자는 `docs/decisions.md`).
+9/30 전사 품질 실험의 스크립트(조건별 받아쓰기·채점·가린 요약 채점)와 전사·요약은 강의 내용이라 저장소 밖 데스크톱의 `C:\ljh\10_School\2026-2\s3-data\9.30 전사 품질 실험\`에 있다(설명은 그 폴더의 `README.md`, 숫자는 `docs/decisions.md`).
