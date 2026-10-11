@@ -70,9 +70,10 @@ test('gpuOrder: 외장 GPU를 먼저 잰다 (Intel + NVIDIA 노트북은 내장�
   assert.deepEqual(gpuOrder([igpu]), [igpu])
 })
 
-test('gpuTrialLimit: Windows는 CPU로 잰 시간(적어도 1분), macOS는 그 5배(적어도 2분)까지 기다린다', () => {
-  assert.equal(gpuTrialLimit(10_000, false), 60_000)
-  assert.equal(gpuTrialLimit(90_000, false), 90_000)
+test('gpuTrialLimit: Windows는 CPU로 잰 시간(20초~60초), macOS는 그 5배(적어도 2분)까지 기다린다', () => {
+  assert.equal(gpuTrialLimit(7_000, false), 20_000)
+  assert.equal(gpuTrialLimit(23_000, false), 23_000)
+  assert.equal(gpuTrialLimit(90_000, false), 60_000)
   assert.equal(gpuTrialLimit(10_000, true), 120_000)
   assert.equal(gpuTrialLimit(40_000, true), 200_000)
 })

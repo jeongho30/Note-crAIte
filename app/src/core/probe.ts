@@ -21,15 +21,17 @@ const MIN_SPEEDUP = 1.2
 // GPU로 재는 데 이보다 오래 걸리면 그만두고 그 GPU는 쓰지 않는다.
 // GPU 쪽이 멈춰 버리면 속도 재기가 끝나지 않아 앱이 작업을 시작하지 못한다.
 // macOS: CPU로 잰 시간의 5배, 적어도 2분 (처음 쓸 때 Metal 셰이더를 만드는 데 수십 초가 든다).
-// Windows: CPU로 잰 시간, 적어도 1분. CPU보다 느린 GPU는 어차피 안 쓰고, 깨지는 내장 GPU를 끝까지 기다리지 않는다
-// (10/11: 노트북 내장 GPU는 small에 약 57초를 돌고 버려졌고, 데스크톱 외장 GPU는 다시 켠 직후에도 1.3초 안에 끝났다).
+// Windows: CPU로 잰 시간까지, 단 20초보다 짧지 않고 60초보다 길지 않게. CPU보다 느린 GPU는 어차피 안 쓰니 그 뒤로는 기다리지 않는다.
+// 바닥 20초는 CPU가 빠른 PC에서 모델 로드·셰이더 만드는 시간 때문에 멀쩡한 외장 GPU가 잘리지 않게 둔 여유다
+// (10/11: 노트북 내장 GPU는 CPU 7초인 small에 약 57초를 돌고 버려졌고, 데스크톱 외장 GPU는 다시 켠 직후에도 1.3초 안에 끝났다).
 const GPU_TRIAL_VS_CPU_MAC = 5
 const GPU_TRIAL_MIN_MS_MAC = 120_000
-const GPU_TRIAL_MIN_MS = 60_000
+const GPU_TRIAL_MIN_MS = 20_000
+const GPU_TRIAL_MAX_MS = 60_000
 
 /** GPU 하나를 재는 데 기다릴 시간(ms). cpuMs는 CPU로 재는 데 걸린 시간 */
 export function gpuTrialLimit(cpuMs: number, metal: boolean): number {
-  return metal ? Math.max(GPU_TRIAL_MIN_MS_MAC, cpuMs * GPU_TRIAL_VS_CPU_MAC) : Math.max(GPU_TRIAL_MIN_MS, cpuMs)
+  return metal ? Math.max(GPU_TRIAL_MIN_MS_MAC, cpuMs * GPU_TRIAL_VS_CPU_MAC) : Math.min(GPU_TRIAL_MAX_MS, Math.max(GPU_TRIAL_MIN_MS, cpuMs))
 }
 
 export type GpuDevice = { index: number; name: string; integrated: boolean }
