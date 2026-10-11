@@ -17,6 +17,8 @@ export type SetupState = {
   name: string
   /** 앱이 이 PC의 속도에 맞춰 모델을 고르는 중 (가벼운 모델로 먼저 재고, 빠르면 기본 모델을 이어서 받는다) */
   auto: boolean
+  /** 앱이 가벼운 모델로 정했고 홈의 안내를 아직 닫지 않음 (마법사를 먼저 넘긴 사람은 그 화면의 경고를 못 본다) */
+  lightNotice: boolean
   model: { state: 'missing' | 'downloading' | 'ready' | 'error'; done: number; total: number; error?: string }
   probe: {
     state: 'idle' | 'running' | 'done' | 'error'
@@ -69,7 +71,7 @@ export function createSetup({ dataDir, model, whisperCli, sample, busy, emit, lo
     return { state: done === total() ? 'ready' : 'missing', done, total: total() }
   }
 
-  const state: SetupState = { name, auto: false, model: modelState(), probe: { state: 'idle' } }
+  const state: SetupState = { name, auto: false, lightNotice: false, model: modelState(), probe: { state: 'idle' } }
 
   // whenReady()를 기다리는 작업들
   const waiters: { resolve: () => void; reject: (e: Error) => void }[] = []
@@ -174,8 +176,9 @@ export function createSetup({ dataDir, model, whisperCli, sample, busy, emit, lo
   }
 
   // 설정의 받아쓰기 모델로 시작한다. 모델은 있는데 이 모델로 잰 속도가 없으면(측정 중에 앱을 껐던 경우) 다시 잰다.
-  async function init(model: string, auto = false): Promise<void> {
+  async function init(model: string, auto = false, lightNotice = false): Promise<void> {
     state.auto = auto
+    state.lightNotice = lightNotice
     if (MODELS.whisper[model] && model !== name) {
       name = model
       state.name = name
@@ -208,6 +211,11 @@ export function createSetup({ dataDir, model, whisperCli, sample, busy, emit, lo
     if (state.auto !== auto) update({ auto })
   }
 
+  /** 홈의 "가벼운 모델을 써요" 안내를 보일지 */
+  function setLightNotice(on: boolean): void {
+    if (state.lightNotice !== on) update({ lightNotice: on })
+  }
+
   /** [속도 다시 재기] */
   function reprobe(): void {
     if (state.model.state !== 'ready') throw new EngineError('input', '받아쓰기 모델을 받은 뒤 잴 수 있어요.')
@@ -235,5 +243,5 @@ export function createSetup({ dataDir, model, whisperCli, sample, busy, emit, lo
     return p
   }
 
-  return { get: () => structuredClone(state), download, init, whenReady, setModel, setAuto, reprobe, resume, model: () => name }
+  return { get: () => structuredClone(state), download, init, whenReady, setModel, setAuto, setLightNotice, reprobe, resume, model: () => name }
 }
