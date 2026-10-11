@@ -18,10 +18,21 @@ const TIMING_RE = /whisper_print_timings:\s+(load|total) time =\s+([\d.]+) ms/
 const MAX_CER_VS_CPU = 0.3
 // GPU가 이만큼 빠르지 않으면 CPU를 쓴다 (내장 GPU와 나눠 쓰는 메모리 등 이득이 불분명한 경우).
 const MIN_SPEEDUP = 1.2
-// GPU로 재는 데 이보다 오래 걸리면 그만두고 그 GPU는 쓰지 않는다: CPU로 잰 시간의 몇 배(그만큼 느리면 어차피 안 쓴다), 적어도 2분.
-// GPU 쪽이 멈춰 버리면 속도 재기가 끝나지 않아 앱이 작업을 시작하지 못한다. 처음 쓸 때 셰이더를 만드는 시간(Metal은 수십 초)은 들어가게 둔다
-const GPU_TRIAL_VS_CPU = 5
-const GPU_TRIAL_MIN_MS = 120_000
+// GPU로 재는 데 이보다 오래 걸리면 그만두고 그 GPU는 쓰지 않는다.
+// GPU 쪽이 멈춰 버리면 속도 재기가 끝나지 않아 앱이 작업을 시작하지 못한다.
+// macOS: CPU로 잰 시간의 5배, 적어도 2분 (처음 쓸 때 Metal 셰이더를 만드는 데 수십 초가 든다).
+// Windows: CPU로 잰 시간까지, 단 20초보다 짧지 않고 60초보다 길지 않게. CPU보다 느린 GPU는 어차피 안 쓰니 그 뒤로는 기다리지 않는다.
+// 바닥 20초는 CPU가 빠른 PC에서 모델 로드·셰이더 만드는 시간 때문에 멀쩡한 외장 GPU가 잘리지 않게 둔 여유다
+// (10/11: 노트북 내장 GPU는 CPU 7초인 small에 약 57초를 돌고 버려졌고, 데스크톱 외장 GPU는 다시 켠 직후에도 1.3초 안에 끝났다).
+const GPU_TRIAL_VS_CPU_MAC = 5
+const GPU_TRIAL_MIN_MS_MAC = 120_000
+const GPU_TRIAL_MIN_MS = 20_000
+const GPU_TRIAL_MAX_MS = 60_000
+
+/** GPU 하나를 재는 데 기다릴 시간(ms). cpuMs는 CPU로 재는 데 걸린 시간 */
+export function gpuTrialLimit(cpuMs: number, metal: boolean): number {
+  return metal ? Math.max(GPU_TRIAL_MIN_MS_MAC, cpuMs * GPU_TRIAL_VS_CPU_MAC) : Math.min(GPU_TRIAL_MAX_MS, Math.max(GPU_TRIAL_MIN_MS, cpuMs))
+}
 
 export type GpuDevice = { index: number; name: string; integrated: boolean }
 
@@ -74,6 +85,11 @@ export function parseTimings(log: string[]): { loadMs: number | null; totalMs: n
     else if (m?.[1] === 'total') totalMs = Number(m[2])
   }
   return { loadMs, totalMs }
+}
+
+/** 재는 순서: 외장 GPU 먼저, 그다음 내장 GPU (같은 종류끼리는 번호 순서) */
+export function gpuOrder(devices: GpuDevice[]): GpuDevice[] {
+  return [...devices.filter((d) => !d.integrated), ...devices.filter((d) => d.integrated)]
 }
 
 /** 정상인 GPU 중 가장 빠른 것을, CPU보다 MIN_SPEEDUP배 이상 빠를 때만 고른다. */
@@ -137,14 +153,17 @@ export async function probeDevices(o: ProbeOptions): Promise<ProbeResult> {
 
   const cpuStarted = Date.now()
   const [cpu, cpuText, cpuLog] = await trial(null, 'CPU', null)
-  const gpuLimitMs = o.gpuTrialLimitMs ?? Math.max(GPU_TRIAL_MIN_MS, (Date.now() - cpuStarted) * GPU_TRIAL_VS_CPU)
+  const gpuLimitMs = o.gpuTrialLimitMs ?? gpuTrialLimit(Date.now() - cpuStarted, metal)
   // Vulkan은 CPU로 돌 때도 장치 목록을 찍는다. Metal은 목록이 없어 0번(Apple Silicon의 GPU는 하나)을 재 보고, 이름은 그 로그에서 읽는다
   const devices: GpuDevice[] = metal ? [{ index: 0, name: 'Metal', integrated: true }] : parseVulkanDevices(cpuLog)
   const trials = [cpu]
-  for (const d of devices) {
+  // 외장 GPU부터 잰다. 외장 GPU가 정상이고 CPU보다 충분히 빠르면 나머지(내장 GPU)는 재지 않는다
+  // (10/11 데스크톱: 외장 1초 뒤에 내장 GPU를 30초 더 재고 있었다)
+  for (const d of gpuOrder(devices)) {
     const [t, , log] = await trial(d.index, d.name, cpuText, gpuLimitMs)
     if (metal) d.name = t.name = parseMetalName(log) ?? d.name
     trials.push(t)
+    if (!d.integrated && t.ok && t.processMs * MIN_SPEEDUP <= cpu.processMs) break
   }
   const chosen = choose(trials)
   return {

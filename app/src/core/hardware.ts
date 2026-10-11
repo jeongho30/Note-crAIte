@@ -58,9 +58,10 @@ export async function detect(): Promise<Hardware> {
 }
 
 /**
- * PC 사용을 덜 방해하도록 물리 코어 2개는 남긴다.
+ * PC 사용을 덜 방해하도록 물리 코어 2개는 남긴다. 4코어 이하는 하나만 남긴다: 2개를 남기면 절반밖에 못 써 너무 느리다
+ * (10/11 노트북에서 스레드만 줄여 잰 값: 스레드 2 → 3이면 27~28% 짧아짐).
  * 성능·효율 코어가 나뉜 Mac은 성능 코어만 쓴다: 효율 코어가 남아 있어 덜 방해하고, 느린 코어가 섞이면 whisper가 오히려 느려진다.
  */
 export function defaultThreads(hw: Hardware): number {
-  return hw.performanceCores ?? Math.max(1, hw.physicalCores - 2)
+  return hw.performanceCores ?? Math.max(1, hw.physicalCores - (hw.physicalCores <= 4 ? 1 : 2))
 }

@@ -9,7 +9,8 @@ import { dirSize, readJson } from '../core/files.ts'
 import { defaultThreads, detect } from '../core/hardware.ts'
 import { editNote, parseNoteProps } from '../core/noteedit.ts'
 import { attachNotes, AUDIO_EXTS, NOTE_EXTS, pairInputs } from '../core/inputs.ts'
-import { DEFAULT_BEAM_SIZE, DEFAULT_MODEL, jobsDir, listJobs, STT_MODEL_CHOICES, VAD_MODEL } from '../core/job.ts'
+import { DEFAULT_BEAM_SIZE, DEFAULT_MODEL, LIGHT_MODEL, jobsDir, listJobs, STT_MODEL_CHOICES, VAD_MODEL } from '../core/job.ts'
+import { afterProbe, firstModel } from '../core/recommend.ts'
 import type { LlmSettings } from '../core/job.ts'
 import { MODELS } from '../core/models.ts'
 import { defaultDataDir, findFfmpeg, findWhisperCli } from '../core/paths.ts'
@@ -101,6 +102,19 @@ const setup = createSetup({
   sample: probeSample,
   busy: () => runner.transcribing() || holdStt(),
   log: log.write,
+  // 앱이 모델을 고르는 중이면 잰 속도로 모델을 정한다 (기본 모델이 90분 강의에 30분을 넘으면 가벼운 모델)
+  afterProbe: async (model, probe) => {
+    if (!(await loadSettings(dataDir)).sttAuto) return null
+    const pick = afterProbe(model, probe.minutesFor90, probe.gpu)
+    // 가벼운 모델로 정했으면 홈에서 한 번 알린다 (마법사를 먼저 넘기면 그 화면의 경고를 못 본다)
+    const light = pick.settled && pick.model === LIGHT_MODEL
+    await updateSettings(dataDir, { sttModel: pick.model, sttAuto: !pick.settled, ...(light ? { sttLightNotice: true } : {}) })
+    setup.setAuto(!pick.settled)
+    if (light) setup.setLightNotice(true)
+    if (pick.model === model) return null
+    log.write(`받아쓰기 모델을 이 PC에 맞춰 바꿈: ${model} → ${pick.model} (${model}로 90분 약 ${probe.minutesFor90}분${probe.gpu ? ', 그래픽카드' : ''})`)
+    return pick.model
+  },
   emit: (s) => {
     emit('setup', s)
     // 모델을 다 받고 속도 재기도 끝나면 기다리던 작업을 돌린다
@@ -628,6 +642,20 @@ async function unusedModels(): Promise<{ id: string; bytes: number }[]> {
   return found
 }
 
+/**
+ * 앱을 켤 때 쓸 받아쓰기 모델. 고를 수 없게 된 모델(large-v3)은 기본으로 돌리고,
+ * 아직 아무 모델도 받지 않았으면 이 PC의 그래픽카드를 보고 처음 받을 모델을 정한다 (core/recommend.ts).
+ */
+async function startModel(settings: Settings): Promise<string> {
+  let model = (STT_MODEL_CHOICES as readonly string[]).includes(settings.sttModel) ? settings.sttModel : DEFAULT_MODEL
+  if (settings.sttAuto) {
+    const have = await Promise.all(STT_MODEL_CHOICES.map(haveModel))
+    if (!have.some(Boolean)) model = firstModel(await detect(), process.platform)
+  }
+  if (model !== settings.sttModel) await updateSettings(dataDir, { sttModel: model })
+  return model
+}
+
 /** 설정 > 고급 > 받아쓰기 세부설정에 보여 줄 것 */
 async function sttOptions() {
   const settings = await loadSettings(dataDir)
@@ -750,8 +778,16 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     const model = String(p)
     if (!(STT_MODEL_CHOICES as readonly string[]).includes(model)) throw new EngineError('input', '고를 수 없는 모델이에요.')
     await setup.setModel(model, false)
-    await updateSettings(dataDir, { sttModel: model })
+    await updateSettings(dataDir, { sttModel: model, sttAuto: false, sttLightNotice: false })
+    setup.setAuto(false)
+    setup.setLightNotice(false)
     log.write(`받아쓰기 모델 고름: ${model}`)
+    return setup.get()
+  },
+  // 홈의 "가벼운 모델을 써요" 안내를 닫는다 (다시 보이지 않는다)
+  'setup.dismissLightNotice': async () => {
+    await updateSettings(dataDir, { sttLightNotice: false })
+    setup.setLightNotice(false)
     return setup.get()
   },
   'desktopShortcut.supported': () => app.isPackaged && process.platform === 'win32',
@@ -1071,7 +1107,13 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     const text = args?.join(' ') ?? null
     const { defaultArgs: defaults } = await sttOptions()
     const custom = text === defaults ? null : text
-    await updateSettings(dataDir, { sttModel: model, sttArgs: custom })
+    // 모델을 직접 바꾸면 앱이 다시 고르지 않는다
+    const picked = model !== setup.model()
+    await updateSettings(dataDir, { sttModel: model, sttArgs: custom, ...(picked ? { sttAuto: false, sttLightNotice: false } : {}) })
+    if (picked) {
+      setup.setAuto(false)
+      setup.setLightNotice(false)
+    }
     await setup.setModel(model)
     log.write(`받아쓰기 설정: ${model} · ${custom ?? '기본 옵션'}`)
     return sttOptions()
@@ -1413,7 +1455,7 @@ app.whenReady().then(async () => {
       () => callback({})
     )
   })
-  await setup.init(settings.sttModel)
+  await setup.init(await startModel(settings), settings.sttAuto, settings.sttLightNotice)
   runner.kick() // 앱이 꺼져 멈췄던 작업을 이어서 한다
   await watcher.init()
   // 설치본에는 기본 메뉴 줄(File·Edit·View…)을 두지 않는다. 개발 실행에서는 새로 고침·개발자 도구 단축키 때문에 남긴다.

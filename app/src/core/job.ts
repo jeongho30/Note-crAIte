@@ -31,8 +31,9 @@ import { verifyCorrections } from './verify.ts'
 export const DEFAULT_MODEL = 'large-v3-turbo-q8_0'
 export const DEFAULT_BEAM_SIZE = 1
 export const VAD_MODEL = 'silero-v6.2.0'
-/** 설정 > 고급에서 고를 수 있는 받아쓰기 모델: 기본, 더 정확하게(large-v3), 가볍게(small) */
-export const STT_MODEL_CHOICES = [DEFAULT_MODEL, 'large-v3-q5_0', 'small-q5_1'] as const
+export const LIGHT_MODEL = 'small-q5_1'
+/** 고를 수 있는 받아쓰기 모델: 기본, 가볍게(small). large-v3는 기본과 차이가 작아 10/11에 뺐다 */
+export const STT_MODEL_CHOICES = [DEFAULT_MODEL, LIGHT_MODEL] as const
 
 export const STAGES = ['audio', 'stt', 'clean', 'polish', 'summarize', 'note', 'save'] as const
 export type StageName = (typeof STAGES)[number]

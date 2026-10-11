@@ -16,6 +16,8 @@ type Props = {
   llm: LlmStatus | null
   onConnect: () => void
   onShowJobs: () => void
+  /** "가벼운 모델을 써요" 안내의 [설정 보기] */
+  onSettings: () => void
   /** 최근 노트를 누르면 앱 안에서 미리보기 */
   onPreview: (path: string) => void
   /** 바뀌면 최근 노트를 다시 읽는다 (노트 정보를 수정한 뒤) */
@@ -25,7 +27,7 @@ type Props = {
 // 녹음 파형 모양 (끌어 놓기 칸 장식)
 const WAVE = [10, 18, 26, 14, 22, 8, 16]
 
-export function Home({ jobs, llm, onConnect, onShowJobs, onPreview, refresh }: Props): React.JSX.Element {
+export function Home({ jobs, llm, onConnect, onShowJobs, onSettings, onPreview, refresh }: Props): React.JSX.Element {
   const setup = useSetup()
   const toast = useToast()
   const [over, setOver] = useState(false)
@@ -111,7 +113,7 @@ export function Home({ jobs, llm, onConnect, onShowJobs, onPreview, refresh }: P
     >
       <RecordingCard />
 
-      {/* 상황 배너: 한 번에 하나. 모델 → 속도 재기 → 처리하지 않은 녹음 → 멈춘 작업 → 요약 서비스 순 */}
+      {/* 상황 배너: 한 번에 하나. 모델 → 속도 재기 → 가벼운 모델 안내 → 처리하지 않은 녹음 → 멈춘 작업 → 요약 서비스 순 */}
       {model && (model.state === 'missing' || model.state === 'error') ? (
         <Banner
           tone="warning"
@@ -134,6 +136,23 @@ export function Home({ jobs, llm, onConnect, onShowJobs, onPreview, refresh }: P
       ) : model?.state === 'ready' && setup?.probe.state === 'running' ? (
         <Banner tone="info" title={`이 ${PC}의 받아쓰기 속도를 재는 중`}>
           1~2분 걸려요. 녹음을 먼저 넣어도 돼요. 다 재면 시작해요.
+        </Banner>
+      ) : setup?.lightNotice && setup.name === 'small-q5_1' && model?.state === 'ready' && setup.probe.state === 'done' ? (
+        <Banner
+          tone="warning"
+          title="가벼운 모델을 써요"
+          action={
+            <>
+              <Button size="sm" variant="ghost" onClick={() => void call('setup.dismissLightNotice')}>
+                닫기
+              </Button>
+              <Button size="sm" onClick={onSettings}>
+                설정 보기
+              </Button>
+            </>
+          }
+        >
+          이 {PC}에서는 기본 모델이 느려서 가벼운 모델로 정했어요. 요약은 괜찮지만 원문 전사는 부정확해요. 설정 &gt; 고급에서 바꿀 수 있어요.
         </Banner>
       ) : unprocessed.length > 0 ? (
         <Banner

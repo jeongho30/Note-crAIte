@@ -27,6 +27,10 @@ export type Settings = {
   summaryPrompt: string | null
   /** 받아쓰기 모델 (설정 > 고급 > 받아쓰기 세부설정) */
   sttModel: string
+  /** 받아쓰기 모델을 앱이 이 PC의 속도에 맞춰 고르는 중 (core/recommend.ts). 다 정했거나 사용자가 직접 고르면 false */
+  sttAuto: boolean
+  /** 앱이 가벼운 모델로 정했다는 홈의 안내를 아직 닫지 않음. 안내를 닫거나 사용자가 모델을 직접 고르면 false */
+  sttLightNotice: boolean
   /** 고친 whisper-cli 옵션. null이면 앱 기본(이 PC에서 잰 장치·스레드) */
   sttArgs: string | null
   /** 화면 색. system이면 Windows 설정을 따른다 */
@@ -58,7 +62,7 @@ export type Language = 'ko' | 'en'
 
 export const DEFAULT_SETTINGS: Settings = {
   wizardStep: 0, wizardDone: false, outDir: null, provider: null, lastSubject: null, subjectLanguage: {},
-  summaryModel: null, polishModel: null, summaryExtra: null, summaryPrompt: null, sttModel: DEFAULT_MODEL, sttArgs: null, theme: 'system',
+  summaryModel: null, polishModel: null, summaryExtra: null, summaryPrompt: null, sttModel: DEFAULT_MODEL, sttAuto: true, sttLightNotice: false, sttArgs: null, theme: 'system',
   watch: { enabled: false, folder: null, paused: false }, sttWhileRecording: false, chatkhuStt: false,
   ollama: { summary: false, polish: false, summaryModel: null, polishModel: null, summaryRequest: null, polishRequest: null }
 }

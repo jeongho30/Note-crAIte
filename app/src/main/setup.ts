@@ -15,6 +15,10 @@ import type { ProbeResult } from '../core/probe.ts'
 export type SetupState = {
   /** 쓰는 받아쓰기 모델 이름 */
   name: string
+  /** 앱이 이 PC의 속도에 맞춰 모델을 고르는 중 (가벼운 모델로 먼저 재고, 빠르면 기본 모델을 이어서 받는다) */
+  auto: boolean
+  /** 앱이 가벼운 모델로 정했고 홈의 안내를 아직 닫지 않음 (마법사를 먼저 넘긴 사람은 그 화면의 경고를 못 본다) */
+  lightNotice: boolean
   model: { state: 'missing' | 'downloading' | 'ready' | 'error'; done: number; total: number; error?: string }
   probe: {
     state: 'idle' | 'running' | 'done' | 'error'
@@ -37,13 +41,15 @@ type Deps = {
   busy: () => boolean
   emit: (state: SetupState) => void
   log: (message: string) => void
+  /** 속도를 잰 뒤 다른 모델로 바꿔야 하면 그 이름 (core/recommend.ts). 그대로면 null */
+  afterProbe?: (model: string, probe: { minutesFor90: number; gpu: boolean }) => Promise<string | null>
 }
 
 function sizeOf(path: string): number {
   return existsSync(path) ? statSync(path).size : 0
 }
 
-export function createSetup({ dataDir, model, whisperCli, sample, busy, emit, log }: Deps) {
+export function createSetup({ dataDir, model, whisperCli, sample, busy, emit, log, afterProbe }: Deps) {
   const modelsDir = join(dataDir, 'models')
   const probePath = join(dataDir, 'probe.json')
   let name = model
@@ -65,7 +71,7 @@ export function createSetup({ dataDir, model, whisperCli, sample, busy, emit, lo
     return { state: done === total() ? 'ready' : 'missing', done, total: total() }
   }
 
-  const state: SetupState = { name, model: modelState(), probe: { state: 'idle' } }
+  const state: SetupState = { name, auto: false, lightNotice: false, model: modelState(), probe: { state: 'idle' } }
 
   // whenReady()를 기다리는 작업들
   const waiters: { resolve: () => void; reject: (e: Error) => void }[] = []
@@ -84,7 +90,7 @@ export function createSetup({ dataDir, model, whisperCli, sample, busy, emit, lo
     settle()
   }
 
-  function summarize(p: ProbeResult): SetupState['probe'] {
+  function summarize(p: ProbeResult): SetupState['probe'] & { minutesFor90: number } {
     const gpuName = p.gpuDevice === null ? null : (p.devices.find((d) => d.index === p.gpuDevice)?.name ?? `GPU ${p.gpuDevice}`)
     return { state: 'done', gpuName, minutesFor90: Math.ceil(estimateSttSeconds(5400, sttSpeed(p, [], null)) / 60), threads: p.threads, gpuDevice: p.gpuDevice }
   }
@@ -116,6 +122,13 @@ export function createSetup({ dataDir, model, whisperCli, sample, busy, emit, lo
       await writeJsonAtomic(probePath, result)
       const s = summarize(result)
       log(`속도 재기: ${probing} · ${s.gpuName ?? 'CPU'} · RTF ${result.rtf.toFixed(3)} · 90분 약 ${s.minutesFor90}분`)
+      // 이 PC에 다른 모델이 맞으면 속도 재기를 끝난 것으로 알리지 않고 바로 그 모델로 넘어간다 (기다리던 작업이 바꾸기 전 모델로 시작하지 않게)
+      const next = await afterProbe?.(probing, { minutesFor90: s.minutesFor90, gpu: result.gpuDevice !== null })
+      if (next && next !== name) {
+        state.probe = { state: 'idle' }
+        await setModel(next)
+        return
+      }
       update({ probe: s })
     } catch (e) {
       if (probing !== name) return
@@ -156,14 +169,17 @@ export function createSetup({ dataDir, model, whisperCli, sample, busy, emit, lo
   async function savedProbe(): Promise<SetupState['probe'] | null> {
     try {
       const p = await readJson<ProbeResult>(probePath)
-      return p.model === name ? summarize(p) : null
+      // 기본 스레드 수가 바뀐 판으로 올라왔으면(10/11: 4코어 이하는 하나만 남김) 옛 스레드로 잰 값은 버리고 다시 잰다
+      return p.model === name && p.threads === defaultThreads(await detect()) ? summarize(p) : null
     } catch {
       return null // 아직 잰 적 없음
     }
   }
 
   // 설정의 받아쓰기 모델로 시작한다. 모델은 있는데 이 모델로 잰 속도가 없으면(측정 중에 앱을 껐던 경우) 다시 잰다.
-  async function init(model: string): Promise<void> {
+  async function init(model: string, auto = false, lightNotice = false): Promise<void> {
+    state.auto = auto
+    state.lightNotice = lightNotice
     if (MODELS.whisper[model] && model !== name) {
       name = model
       state.name = name
@@ -189,6 +205,16 @@ export function createSetup({ dataDir, model, whisperCli, sample, busy, emit, lo
     if (state.model.state === 'missing') {
       if (start) void download()
     } else if (state.probe.state === 'idle') void runProbe()
+  }
+
+  /** 앱이 모델을 고르는 중인지 (다 정했거나 사용자가 직접 고르면 false) */
+  function setAuto(auto: boolean): void {
+    if (state.auto !== auto) update({ auto })
+  }
+
+  /** 홈의 "가벼운 모델을 써요" 안내를 보일지 */
+  function setLightNotice(on: boolean): void {
+    if (state.lightNotice !== on) update({ lightNotice: on })
   }
 
   /** [속도 다시 재기] */
@@ -218,5 +244,5 @@ export function createSetup({ dataDir, model, whisperCli, sample, busy, emit, lo
     return p
   }
 
-  return { get: () => structuredClone(state), download, init, whenReady, setModel, reprobe, resume, model: () => name }
+  return { get: () => structuredClone(state), download, init, whenReady, setModel, setAuto, setLightNotice, reprobe, resume, model: () => name }
 }

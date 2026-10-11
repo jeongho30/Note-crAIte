@@ -4,7 +4,7 @@ import { EngineError } from '../src/core/errors.ts'
 import { defaultThreads } from '../src/core/hardware.ts'
 import type { Job } from '../src/core/job.ts'
 import { join } from 'node:path'
-import { choose, estimateJobSeconds, estimateSttSeconds, parseMetalName, parseTimings, parseVulkanDevices, polishRate, probeDevices, sttSpeed, summarySeconds } from '../src/core/probe.ts'
+import { choose, estimateJobSeconds, gpuOrder, gpuTrialLimit, estimateSttSeconds, parseMetalName, parseTimings, parseVulkanDevices, polishRate, probeDevices, sttSpeed, summarySeconds } from '../src/core/probe.ts'
 import type { ProbeResult } from '../src/core/probe.ts'
 import type { Trial } from '../src/core/probe.ts'
 import { tempDir, writeWav } from './helpers.ts'
@@ -63,10 +63,28 @@ test('macOS: 장치 목록 없이 Metal(0번)을 재 보고, 이름은 그 로�
   assert.match(hung.trials[1].reason ?? '', /너무 오래 걸려/)
 })
 
-test('defaultThreads: 물리 코어 2개를 남기고, 성능·효율 코어가 나뉜 Mac은 성능 코어만 쓴다', () => {
+test('gpuOrder: 외장 GPU를 먼저 잰다 (Intel + NVIDIA 노트북은 내장이 0번이다)', () => {
+  const igpu = { index: 0, name: 'Intel(R) UHD Graphics', integrated: true }
+  const dgpu = { index: 1, name: 'NVIDIA GeForce RTX 3070 Laptop GPU', integrated: false }
+  assert.deepEqual(gpuOrder([igpu, dgpu]), [dgpu, igpu])
+  assert.deepEqual(gpuOrder([igpu]), [igpu])
+})
+
+test('gpuTrialLimit: Windows는 CPU로 잰 시간(20초~60초), macOS는 그 5배(적어도 2분)까지 기다린다', () => {
+  assert.equal(gpuTrialLimit(7_000, false), 20_000)
+  assert.equal(gpuTrialLimit(23_000, false), 23_000)
+  assert.equal(gpuTrialLimit(90_000, false), 60_000)
+  assert.equal(gpuTrialLimit(10_000, true), 120_000)
+  assert.equal(gpuTrialLimit(40_000, true), 200_000)
+})
+
+test('defaultThreads: 물리 코어 2개를 남기고(4코어 이하는 하나), 성능·효율 코어가 나뉜 Mac은 성능 코어만 쓴다', () => {
   const hw = { cpu: 'x', logicalCores: 16, ramGb: 16, gpus: [], powerPlugged: null }
   assert.equal(defaultThreads({ ...hw, physicalCores: 8 }), 6)
+  assert.equal(defaultThreads({ ...hw, physicalCores: 6 }), 4)
+  assert.equal(defaultThreads({ ...hw, physicalCores: 4 }), 3)
   assert.equal(defaultThreads({ ...hw, physicalCores: 2 }), 1)
+  assert.equal(defaultThreads({ ...hw, physicalCores: 1 }), 1)
   assert.equal(defaultThreads({ ...hw, physicalCores: 8, performanceCores: 4 }), 4, 'M1: 성능 4 + 효율 4')
 })
 
