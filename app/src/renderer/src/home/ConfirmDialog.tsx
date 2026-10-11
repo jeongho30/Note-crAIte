@@ -567,7 +567,9 @@ export function ConfirmDialog({ paths, llm, onClose }: Props): React.JSX.Element
           </>
         }
       >
-        <Intro />
+        <div className={styles.body}>
+          <Intro />
+        </div>
       </Dialog>
     )
   }
@@ -597,7 +599,7 @@ export function ConfirmDialog({ paths, llm, onClose }: Props): React.JSX.Element
       }
     >
       <div className={styles.body}>
-        {loading && <p className={styles.muted}>길이와 녹음 시각을 읽는 중이에요…</p>}
+        {loading && <p className={cx(styles.muted, styles.loading)}>길이와 녹음 시각을 읽는 중이에요…</p>}
         {error && <Banner tone="danger">{error}</Banner>}
 
         {prepared && prepared.rejected.length > 0 && (
