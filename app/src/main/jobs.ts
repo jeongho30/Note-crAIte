@@ -1,6 +1,6 @@
 // 작업 실행기: 시작 전 확인에서 넣은 녹음을 작업으로 만들고, 한 번에 하나씩 돌린다.
 // 진행 상황은 바뀔 때마다 화면에 'jobs' 이벤트로 보낸다. 앱을 껐다 켜면 끝나지 않은 작업을 이어서 한다.
-import { powerSaveBlocker } from 'electron'
+import { powerMonitor, powerSaveBlocker } from 'electron'
 import { readdirSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
@@ -9,7 +9,8 @@ import { writeJsonAtomic } from '../core/files.ts'
 import { createJob, DEFAULT_BEAM_SIZE, jobsDir, listJobs, loadJob, polishTarget, runJob, STAGES } from '../core/job.ts'
 import type { Job, JobContext, LlmSettings, StageName, StageState } from '../core/job.ts'
 import { MODELS } from '../core/models.ts'
-import { estimateSttSeconds, polishRate, sttSpeed, summarySeconds } from '../core/probe.ts'
+import { jobSummary } from '../core/joblog.ts'
+import { estimateJobSeconds, estimateSttSeconds, polishRate, sttSpeed, summarySeconds } from '../core/probe.ts'
 import type { SttSpeed } from '../core/probe.ts'
 import type { ProbeResult } from '../core/probe.ts'
 import type { Language } from '../core/settings.ts'
@@ -81,6 +82,7 @@ type Deps = {
   sttService: () => Promise<'whisper' | 'chatkhu'>
   /** ChatKHU 게이트웨이 주소 */
   chatkhuBase: string
+  log?: (message: string) => void
 }
 
 const cloudStt = (job: Job): boolean => job.settings.sttService === 'chatkhu'
@@ -240,6 +242,8 @@ export function createJobRunner(d: Deps) {
         speed = probeCache ? sttSpeed(probeCache, history, job.settings.args ?? null) : null
         later = { polish: polishRate(history, polishTarget(job.settings)), summaryS: summarySeconds(history, job.settings.llm ?? null) }
         if (stopping) break
+        const continued = STAGES.some((s) => job.stages[s]?.status === 'done')
+        const batteryAtStart = powerMonitor.isOnBatteryPower() // 노트북은 배터리로 돌면 받아쓰기가 느려진다
         current = { id: job.id, stage: 'audio', frac: 0, stageStartedAt: Date.now(), cloud: cloudStt(job) }
         controller = new AbortController()
         const ctx: JobContext = {
@@ -260,12 +264,16 @@ export function createJobRunner(d: Deps) {
         }
         try {
           const finished = await runJob(jobDir, ctx)
+          report(finished, continued, batteryAtStart)
           await d.onDone?.(finished).catch(() => {}) // 옮기기 실패는 작업 실패가 아니다
         } catch {
           // 실패 이유는 job.json에 남는다 (화면이 error로 보여 준다)
           // 앱을 끄느라, 녹음을 시작해서 멈춘 것은 실패가 아니다: 다음에 켜거나 녹음이 끝나면 이어서 한다
           if (stopping || yielding) await requeue(jobDir)
-          else await scheduleAutoRetry(job.id)
+          else {
+            report(await loadJob(jobDir), continued, batteryAtStart)
+            await scheduleAutoRetry(job.id)
+          }
         }
         yielding = false
         controller = null
@@ -277,6 +285,17 @@ export function createJobRunner(d: Deps) {
       running = false
       await emitNow()
     }
+  }
+
+  /** 끝났거나 멈춘 작업의 요약을 기록에 남긴다 (설정·단계별 시간·시작할 때의 예상 시간) */
+  function report(job: Job, continued: boolean, batteryAtStart: boolean): void {
+    const durationS = job.audio?.durationS
+    const expected = speed && durationS && !cloudStt(job)
+      ? { sttS: Math.round(estimateSttSeconds(durationS, speed)), totalS: Math.round(estimateJobSeconds(durationS, speed, later.summaryS, later.polish)), from: speed.from }
+      : null
+    const gpuName = probeCache?.devices.find((g) => g.index === job.settings.gpuDevice)?.name ?? null
+    const onBattery = { start: batteryAtStart, end: powerMonitor.isOnBatteryPower() }
+    d.log?.(`작업 요약: ${JSON.stringify(jobSummary(job, { gpuName, expected, continued, onBattery }))}`)
   }
 
   async function scheduleAutoRetry(id: string): Promise<void> {

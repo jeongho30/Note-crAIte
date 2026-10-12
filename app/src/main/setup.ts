@@ -8,6 +8,7 @@ import { EngineError } from '../core/errors.ts'
 import { readJson, writeJsonAtomic } from '../core/files.ts'
 import { defaultThreads, detect } from '../core/hardware.ts'
 import { DEFAULT_BEAM_SIZE, VAD_MODEL } from '../core/job.ts'
+import { probeSummary } from '../core/joblog.ts'
 import { MODELS } from '../core/models.ts'
 import { estimateSttSeconds, probeDevices, sttSpeed } from '../core/probe.ts'
 import type { ProbeResult } from '../core/probe.ts'
@@ -122,6 +123,7 @@ export function createSetup({ dataDir, model, whisperCli, sample, busy, emit, lo
       await writeJsonAtomic(probePath, result)
       const s = summarize(result)
       log(`속도 재기: ${probing} · ${s.gpuName ?? 'CPU'} · RTF ${result.rtf.toFixed(3)} · 90분 약 ${s.minutesFor90}분`)
+      log(`속도 재기 상세: ${JSON.stringify(probeSummary(result))}`)
       // 이 PC에 다른 모델이 맞으면 속도 재기를 끝난 것으로 알리지 않고 바로 그 모델로 넘어간다 (기다리던 작업이 바꾸기 전 모델로 시작하지 않게)
       const next = await afterProbe?.(probing, { minutesFor90: s.minutesFor90, gpu: result.gpuDevice !== null })
       if (next && next !== name) {
@@ -133,7 +135,7 @@ export function createSetup({ dataDir, model, whisperCli, sample, busy, emit, lo
     } catch (e) {
       if (probing !== name) return
       const error = (e as Error).message.split('\n')[0]
-      log(`속도 재기 실패: ${probing} · ${error}`)
+      log(`속도 재기 실패: ${probing} · ${(e as Error).message}`) // whisper-cli가 남긴 마지막 줄들까지
       update({ probe: { state: 'error', error } })
     }
   }
@@ -142,7 +144,9 @@ export function createSetup({ dataDir, model, whisperCli, sample, busy, emit, lo
     if (state.model.state === 'downloading' || state.model.state === 'ready') return
     const downloading = name
     let before = 0
-    update({ model: { state: 'downloading', done: received(), total: total() } })
+    const started = Date.now()
+    const had = received()
+    update({ model: { state: 'downloading', done: had, total: total() } })
     try {
       for (const [kind, entry] of [['whisper', downloading], ['vad', VAD_MODEL]] as const) {
         const size = MODELS[kind][entry].size
@@ -156,7 +160,7 @@ export function createSetup({ dataDir, model, whisperCli, sample, busy, emit, lo
         before += size
       }
       if (downloading !== name) return
-      log(`모델 받음: ${downloading}`)
+      log(`모델 받음: ${downloading} · ${Math.round((total() - had) / 1e6)}MB · ${Math.round((Date.now() - started) / 1000)}초`)
       update({ model: { state: 'ready', done: total(), total: total() } })
       void runProbe()
     } catch (e) {

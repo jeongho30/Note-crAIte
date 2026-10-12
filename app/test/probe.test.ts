@@ -152,10 +152,10 @@ test('sttSpeed는 같은 설정으로 끝낸 작업의 실제 속도를 쓰고, 
     }) as unknown as Job
 
   // 기록이 없으면 잰 값 × 0.65, 모델 로드는 그대로
-  assert.deepEqual(sttSpeed(probe, [], null), { rtf: 0.6 * 0.65, loadS: 2 })
+  assert.deepEqual(sttSpeed(probe, [], null), { rtf: 0.6 * 0.65, loadS: 2, from: 'probe' })
 
   // 기록이 있으면 중앙값, 모델 로드는 기록에 들어 있어 0
-  assert.deepEqual(sttSpeed(probe, [job(1000, 5000), job(2000, 5000), job(1500, 5000)], null), { rtf: 0.3, loadS: 0 })
+  assert.deepEqual(sttSpeed(probe, [job(1000, 5000), job(2000, 5000), job(1500, 5000)], null), { rtf: 0.3, loadS: 0, from: 'history' })
   assert.equal(sttSpeed(probe, [job(1000, 4000), job(3000, 4000)], null).rtf, 0.5)
 
   // 최근 5개만
@@ -173,6 +173,6 @@ test('sttSpeed는 같은 설정으로 끝낸 작업의 실제 속도를 쓰고, 
     job(100, 5000, { sttService: 'chatkhu' }),
     job(100, 5000, {}, { status: 'failed' })
   ]
-  assert.deepEqual(sttSpeed(probe, skipped, null), { rtf: 0.6 * 0.65, loadS: 2 })
+  assert.deepEqual(sttSpeed(probe, skipped, null), { rtf: 0.6 * 0.65, loadS: 2, from: 'probe' })
   assert.equal(sttSpeed(probe, skipped, ['-bs', '5']).rtf, 0.02)
 })

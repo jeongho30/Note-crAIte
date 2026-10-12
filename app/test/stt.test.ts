@@ -8,7 +8,7 @@ import { EngineError } from '../src/core/errors.ts'
 import { writeJsonAtomic } from '../src/core/files.ts'
 import { transcribeChunks } from '../src/core/stt/base.ts'
 import type { Segment, SttEngine, TranscribeOptions } from '../src/core/stt/base.ts'
-import { WhisperCpp } from '../src/core/stt/whispercpp.ts'
+import { exitWord, WhisperCpp } from '../src/core/stt/whispercpp.ts'
 import { tempDir } from './helpers.ts'
 
 const FAKE = join(import.meta.dirname, 'fixtures', 'fake-whisper-cli.mjs')
@@ -114,8 +114,12 @@ test('WhisperCpp 실패는 stderr 끝부분과 함께 stt_failed', async (t) => 
   await assert.rejects((await makeEngine(dir)).transcribe(await makeWav(dir), { language: 'ko' }), (e: EngineError) => {
     assert.equal(e.code, 'stt_failed')
     assert.match(e.message, /failed to load model/)
+    assert.match(e.message, /종료 코드 \d+/)
     return true
   })
+  // Windows의 비정상 종료 코드는 16진수로도 적는다
+  assert.equal(exitWord(3221225477, null), '종료 코드 3221225477 = 0xC0000005')
+  assert.equal(exitWord(null, 'SIGKILL'), '신호 SIGKILL')
 })
 
 test('WhisperCpp 취소는 프로세스를 끝낸다', { timeout: 30_000 }, async (t) => {

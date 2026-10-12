@@ -85,6 +85,24 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      # 만든 앱(설치 전의 win-unpacked)을 새 데이터 폴더로 띄워 첫 실행 마법사부터 노트 미리보기까지 눌러 본다 (app/e2e/first-run.mjs).
+      # 끝에 앱 기록(logs)을 출력한다. 받아쓰기 모델(작은 것)은 앱이 직접 받는다
+      - name: 앱에서 끝까지 해 보기
+        timeout-minutes: 30
+        working-directory: app
+        env:
+          E2E_APP: ${{ github.workspace }}/dist/installer/win-unpacked/Note-crAIte.exe
+          E2E_OUT: ${{ runner.temp }}/shots
+        run: node e2e/first-run.mjs
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-screenshots
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: ignore
+          retention-days: 7
+
   macos:
     if: github.event_name != 'workflow_dispatch' || inputs.os != 'windows'
     runs-on: macos-latest

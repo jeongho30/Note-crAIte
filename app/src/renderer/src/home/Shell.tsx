@@ -105,7 +105,7 @@ export default function Shell({ onRestartWizard }: Props): React.JSX.Element {
         toast(`노트가 만들어졌어요 · ${j.subject ?? '미분류'}`, 'success', note ? { label: '보기', onClick: () => setPreview(note) } : undefined)
       }
       // 요청 몰림으로 1분 뒤 저절로 다시 시도하는 것은 알리지 않는다 (그래도 안 되면 그때 알린다)
-      if (j.status === 'failed' && !j.autoRetryAt) toast(`${j.name} · ${j.error?.message ?? '노트를 만들지 못했어요.'}`, 'danger')
+      if (j.status === 'failed' && !j.autoRetryAt) toast(`${j.name} · ${j.error?.message.split('\n')[0] ?? '노트를 만들지 못했어요.'}`, 'danger')
     }
   }, [jobs, toast])
 
