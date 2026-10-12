@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'rea
 import { ApiError, call } from '../api'
 import { Banner, Button, Dialog, SegmentedControl } from '../components'
 import { cx } from '../components/cx'
-import type { Language } from '../../../core/settings'
+import type { Language, Settings } from '../../../core/settings'
 import { mb, useSetup, type LlmStatus } from '../wizard/shared'
 import { aboutMinutes, lengthMinutes } from './shared'
 import styles from './ConfirmDialog.module.css'
@@ -157,6 +157,98 @@ function SubjectMenu(props: {
   )
 }
 
+const Num = ({ n }: { n: number }): React.JSX.Element => (
+  <span className={styles.num} aria-hidden="true">
+    {n}
+  </span>
+)
+
+// 시작 전 확인 안내: 녹음을 처음 넣을 때만 과목 칸 대신 먼저 보인다. 왼쪽은 실제 칸과 같은 모양의 예시(누를 수 없음), 오른쪽은 번호별 설명.
+function Intro(): React.JSX.Element {
+  return (
+    <div className={styles.intro}>
+      <div className={styles.example} inert>
+        <section className={styles.zone}>
+          <div className={styles.zoneHead}>
+            <span className={cx(styles.zoneName, styles.zonePick)}>
+              <span className={styles.zoneTitle}>컴파일러</span>
+              <ChevronIcon />
+              <span className={styles.muted}>2</span>
+              <Num n={1} />
+            </span>
+            <SegmentedControl label="강의 언어" value="ko" options={LANGS.map((l) => ({ value: l, label: LANG_LABEL[l] }))} onChange={() => {}} />
+            <Num n={2} />
+          </div>
+          <ul className={styles.files}>
+            <li className={styles.file}>
+              <span className={styles.grip} />
+              <span className={styles.fileName}>9.28 강의.m4a</span>
+              <span className={cx(styles.notes, styles.notesOn)}>
+                <NotesIcon />
+              </span>
+              <Num n={3} />
+              <span className={styles.muted}>63분</span>
+            </li>
+            <li className={styles.file}>
+              <span className={styles.grip} />
+              <span className={styles.fileName}>10.5 강의.m4a</span>
+              <span className={styles.notes}>
+                <NotesAddIcon />
+              </span>
+              <Num n={4} />
+              <span className={styles.muted}>75분</span>
+            </li>
+          </ul>
+        </section>
+        <div className={styles.add}>
+          <span className={styles.plus} />
+          과목 추가
+        </div>
+      </div>
+      <ul className={styles.legend}>
+        <li>
+          <Num n={1} />
+          <span>
+            <strong>과목 칸</strong>
+            <span className={styles.legendText}>녹음을 끌어 다른 칸으로 옮기면 그 과목 폴더에 저장돼요. 이름을 누르면 과목을 바꾸고, [과목 추가]로 칸을 더 만들어요.</span>
+          </span>
+        </li>
+        <li>
+          <Num n={2} />
+          <span>
+            <strong>강의 언어</strong>
+            <span className={styles.legendText}>과목마다 한국어와 영어 중에 골라요.</span>
+          </span>
+        </li>
+        <li>
+          <Num n={3} />
+          <span>
+            <strong>
+              색이 있는 문서 아이콘
+              <span className={cx(styles.notes, styles.notesOn, styles.legendIcon)}>
+                <NotesIcon />
+              </span>
+            </strong>
+            <span className={styles.legendText}>해당 녹음의 필기노트가 인식된 상태예요. 누르면 필기를 빼요.</span>
+          </span>
+        </li>
+        <li>
+          <Num n={4} />
+          <span>
+            <strong>
+              더하기가 있는 문서 아이콘
+              <span className={cx(styles.notes, styles.legendIcon)}>
+                <NotesAddIcon />
+              </span>
+            </strong>
+            <span className={styles.legendText}>필기가 없는 녹음이에요. 누르면 필기 파일을 추가할 수 있어요.</span>
+          </span>
+        </li>
+      </ul>
+    </div>
+  )
+}
+
 type Props = {
   paths: string[]
   llm: LlmStatus | null
@@ -179,7 +271,12 @@ export function ConfirmDialog({ paths, llm, onClose }: Props): React.JSX.Element
   const [removed, setRemoved] = useState<{ rec: Recording; zone: number } | null>(null) // 마지막에 뺀 녹음 (되돌리기)
   const [starting, setStarting] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [intro, setIntro] = useState<boolean | null>(null) // 안내를 보이는가. null은 설정을 읽는 중
   const nextId = useRef(1)
+
+  useEffect(() => {
+    call<Settings>('settings.get').then((s) => setIntro(!s.confirmIntroSeen), () => setIntro(false))
+  }, [])
 
   useEffect(() => {
     Promise.all([call<Prepared>('inputs.prepare', paths), call<Subjects>('subjects.get')]).then(
@@ -351,7 +448,7 @@ export function ConfirmDialog({ paths, llm, onClose }: Props): React.JSX.Element
     }
   }
 
-  const loading = !prepared && !error
+  const loading = !error && (!prepared || intro === null)
   const nothing = prepared && recs.length === 0 && !removed
 
   function fileRow(r: Recording): React.JSX.Element {
@@ -446,6 +543,37 @@ export function ConfirmDialog({ paths, llm, onClose }: Props): React.JSX.Element
     )
   }
 
+  if (intro) {
+    return (
+      <Dialog
+        open
+        size="xl"
+        onClose={onClose}
+        title="이 창에서 과목과 필기를 정해요"
+        actions={
+          <>
+            <Button variant="ghost" onClick={onClose}>
+              취소
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                setIntro(false)
+                void call('settings.introSeen', 'confirm').catch(() => {})
+              }}
+            >
+              계속하기
+            </Button>
+          </>
+        }
+      >
+        <div className={styles.body}>
+          <Intro />
+        </div>
+      </Dialog>
+    )
+  }
+
   return (
     <Dialog
       open
@@ -457,6 +585,9 @@ export function ConfirmDialog({ paths, llm, onClose }: Props): React.JSX.Element
           <Button onClick={onClose}>닫기</Button>
         ) : (
           <>
+            <Button variant="link" className={styles.help} onClick={() => setIntro(true)}>
+              안내 다시 보기
+            </Button>
             <Button variant="ghost" onClick={onClose}>
               취소
             </Button>
@@ -468,7 +599,7 @@ export function ConfirmDialog({ paths, llm, onClose }: Props): React.JSX.Element
       }
     >
       <div className={styles.body}>
-        {loading && <p className={styles.muted}>길이와 녹음 시각을 읽는 중이에요…</p>}
+        {loading && <p className={cx(styles.muted, styles.loading)}>길이와 녹음 시각을 읽는 중이에요…</p>}
         {error && <Banner tone="danger">{error}</Banner>}
 
         {prepared && prepared.rejected.length > 0 && (

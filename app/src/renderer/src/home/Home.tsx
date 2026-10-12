@@ -218,7 +218,7 @@ export function Home({ jobs, llm, onConnect, onShowJobs, onSettings, onPreview, 
                 녹음하기
               </Button>
             </div>
-            <p className={styles.hint}>같은 이름의 필기(.md·.txt)를 함께 넣으면 용어를 더 정확히 고쳐요</p>
+            <p className={styles.hint}>같은 이름의 필기(.txt·.md·.hwpx·.docx·.pptx)를 함께 넣으면 용어를 더 정확히 고쳐요</p>
           </>
         )}
       </section>
