@@ -24,6 +24,7 @@ const MIN_SPEEDUP = 1.2
 // Windows: CPU로 잰 시간까지, 단 20초보다 짧지 않고 60초보다 길지 않게. CPU보다 느린 GPU는 어차피 안 쓰니 그 뒤로는 기다리지 않는다.
 // 바닥 20초는 CPU가 빠른 PC에서 모델 로드·셰이더 만드는 시간 때문에 멀쩡한 외장 GPU가 잘리지 않게 둔 여유다
 // (10/11: 노트북 내장 GPU는 CPU 7초인 small에 약 57초를 돌고 버려졌고, 데스크톱 외장 GPU는 다시 켠 직후에도 1.3초 안에 끝났다).
+const FAILED_TAIL_LINES = 8
 const GPU_TRIAL_VS_CPU_MAC = 5
 const GPU_TRIAL_MIN_MS_MAC = 120_000
 const GPU_TRIAL_MIN_MS = 20_000
@@ -44,6 +45,10 @@ export type Trial = {
   chars: number
   ok: boolean
   reason?: string
+  /** CPU 전사와의 CER (GPU로 끝까지 받아쓴 것만) */
+  cer?: number
+  /** 받아쓰지 못한 GPU: whisper-cli가 마지막에 남긴 줄 (왜 실패했는지·어디서 멈췄는지) */
+  tail?: string[]
 }
 
 export type ProbeResult = {
@@ -135,12 +140,13 @@ export async function probeDevices(o: ProbeOptions): Promise<ProbeResult> {
     } catch (e) {
       if (device === null) throw e
       const reason = signal?.aborted ? `너무 오래 걸려 그만뒀습니다 (${Math.round(limitMs! / 1000)}초)` : (e as Error).message.split('\n')[0]
-      return [{ device, name, processMs: 0, loadMs: 0, chars: 0, ok: false, reason }, '', engine.lastLog]
+      return [{ device, name, processMs: 0, loadMs: 0, chars: 0, ok: false, reason, tail: engine.lastLog.filter((l) => !l.includes('vad_segment_info')).slice(-FAILED_TAIL_LINES) }, '', engine.lastLog]
     }
     const { loadMs, totalMs } = parseTimings(engine.lastLog)
     const t: Trial = {
       device, name, processMs: (totalMs ?? 0) - (loadMs ?? 0), loadMs: loadMs ?? 0, chars: normalize(text).length, ok: true
     }
+    if (cpuText !== null) t.cer = cer(cpuText, text)
     if (device !== null && backendUsed(engine.lastLog) !== `${metal ? 'MTL' : 'Vulkan'}${device}`) {
       Object.assign(t, { ok: false, reason: 'GPU를 쓰지 못하고 CPU로 돌았습니다' })
     } else if (cpuText !== null && cer(cpuText, text) > MAX_CER_VS_CPU) {
@@ -221,7 +227,8 @@ const SAMPLE_TO_LECTURE = 0.65
 const HISTORY_MIN_S = 300 // 이보다 짧은 녹음은 모델 로드 비중이 커서 뺀다
 const HISTORY_JOBS = 5
 
-export type SttSpeed = Pick<ProbeResult, 'rtf' | 'loadS'>
+/** from: 속도의 근거. probe는 잰 속도 × 보정, history는 끝낸 작업들의 실제 속도 */
+export type SttSpeed = Pick<ProbeResult, 'rtf' | 'loadS'> & { from: 'probe' | 'history' }
 
 /**
  * 예상 시간에 쓸 받아쓰기 속도. 같은 모델·장치·스레드·옵션으로 이 PC에서 끝낸 최근 작업들의 실제 속도(중앙값)를 쓰고,
@@ -241,15 +248,15 @@ export function sttSpeed(probe: ProbeResult, jobs: Job[], args: string[] | null)
     const tookS = (Date.parse(stt.endedAt) - Date.parse(stt.startedAt)) / 1000
     if (tookS > 0) rates.push(tookS / durationS)
   }
-  if (!rates.length) return { rtf: probe.rtf * SAMPLE_TO_LECTURE, loadS: probe.loadS }
+  if (!rates.length) return { rtf: probe.rtf * SAMPLE_TO_LECTURE, loadS: probe.loadS, from: 'probe' }
   const recent = rates.slice(-HISTORY_JOBS).sort((a, b) => a - b)
   const mid = recent.length >> 1
   const median = recent.length % 2 ? recent[mid] : (recent[mid - 1] + recent[mid]) / 2
-  return { rtf: median, loadS: 0 } // 실제 기록에는 모델 로드가 들어 있다
+  return { rtf: median, loadS: 0, from: 'history' } // 실제 기록에는 모델 로드가 들어 있다
 }
 
 /** 로컬 STT 예상 시간(초): 처리 속도 × 길이 + 약 10분 조각마다 모델 로드. p는 sttSpeed()로 얻는다. */
-export function estimateSttSeconds(durationS: number, p: SttSpeed): number {
+export function estimateSttSeconds(durationS: number, p: Pick<SttSpeed, 'rtf' | 'loadS'>): number {
   return durationS * p.rtf + Math.ceil(durationS / 600) * p.loadS
 }
 
@@ -312,6 +319,6 @@ export function polishRate(jobs: Job[], target: LlmTarget | null): number {
  * 작업 하나의 예상 총 소요 시간(초): 오디오 준비 + 받아쓰기 + 다듬기 + 요약.
  * summaryS는 summarySeconds(), polish는 polishRate()로 얻는다 (그 단계를 안 하면 0).
  */
-export function estimateJobSeconds(durationS: number, p: SttSpeed, summaryS: number, polish = 0): number {
+export function estimateJobSeconds(durationS: number, p: Pick<SttSpeed, 'rtf' | 'loadS'>, summaryS: number, polish = 0): number {
   return durationS * PREP_S_PER_AUDIO_S + estimateSttSeconds(durationS, p) + durationS * polish + summaryS
 }

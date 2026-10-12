@@ -99,7 +99,8 @@ export function createWatcher({ dataDir, start, log, emit }: Deps) {
           known.add(baselineKey(x.file))
         })
         await saveWatchState(dataDir, state)
-        for (const x of inputs) log(`자동 처리: ${relative(folder, x.file.path)} (${x.file.subject ?? '미분류'})`)
+        // 녹음 파일 이름과 과목은 적지 않는다 (작업 ID로 "작업 요약" 줄과 잇는다)
+        log(`자동 처리: 녹음 ${inputs.length}개 · 작업 ${ids.join(', ')}`)
       }
       update({
         error: null,
@@ -185,7 +186,8 @@ export function createWatcher({ dataDir, start, log, emit }: Deps) {
         await writeJsonAtomic(join(jobsDir(dataDir), job.id, 'job.json'), job)
       } catch (e) {
         // 잠겨 있거나 동기화 중이면 그대로 둔다. 처리 기록(fingerprint)이 있어 다시 넘기지 않는다
-        log(`처리됨으로 옮기지 못함: ${job.input.audio} · ${(e as Error).message}`)
+        // 오류 메시지에는 녹음 경로가 들어 있어 코드만 적는다
+        log(`처리됨으로 옮기지 못함: 작업 ${job.id} · ${(e as NodeJS.ErrnoException).code ?? '알 수 없는 오류'}`)
       }
     }
   }

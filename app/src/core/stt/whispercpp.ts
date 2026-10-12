@@ -36,7 +36,13 @@ export function backendUsed(log: string[]): string {
   return 'CPU'
 }
 
-const VAD_VALUE_OPTS = new Set(['-vm', '--vad-model', '-vt', '--vad-threshold', '-vspd', '--vad-min-speech-duration-ms', '-vsd', '--vad-min-silence-duration-ms',
+/** 종료 코드를 읽기 좋게. Windows의 비정상 종료 코드(NTSTATUS)는 16진수로 찾아보므로 함께 적는다 */
+export function exitWord(code: number | null, signal: string | null): string {
+  if (code === null) return `신호 ${signal ?? '알 수 없음'}`
+  return code > 255 ? `종료 코드 ${code} = 0x${code.toString(16).toUpperCase()}` : `종료 코드 ${code}`
+}
+
+const VAD_VALUE_OPTS =new Set(['-vm', '--vad-model', '-vt', '--vad-threshold', '-vspd', '--vad-min-speech-duration-ms', '-vsd', '--vad-min-silence-duration-ms',
   '-vmsd', '--vad-max-speech-duration-s', '-vp', '--vad-speech-pad-ms', '-vo', '--vad-samples-overlap'])
 
 /** whisper-cli 옵션에서 VAD 관련 옵션(--vad와 값을 받는 VAD 옵션)을 뺀다 */
@@ -134,14 +140,15 @@ export class WhisperCpp implements SttEngine {
         log?.push(line)
       }
     })
-    const code = await new Promise<number | null>((resolve, reject) => {
+    const [code, killedBy] = await new Promise<[number | null, string | null]>((resolve, reject) => {
       proc.on('error', (e) => reject(new EngineError('stt_failed', `whisper-cli 실행 실패: ${e.message}`)))
-      proc.on('close', resolve)
+      proc.on('close', (c, s) => resolve([c, s]))
     }).finally(() => signal?.removeEventListener('abort', kill))
 
     this.lastLog = log ?? tail
     if (signal?.aborted) throw new EngineError('cancelled', '전사를 취소했습니다.')
-    if (code !== 0) throw new EngineError('stt_failed', 'whisper-cli 실행 실패:\n' + tail.join('\n'))
+    // 종료 코드를 함께 남긴다: 죽거나(0xC0000005) DLL이 없으면(0xC0000135) stderr에는 아무것도 없다
+    if (code !== 0) throw new EngineError('stt_failed', `whisper-cli 실행 실패 (${exitWord(code, killedBy)}):\n` + tail.join('\n'))
     if (!existsSync(outJson)) throw new EngineError('stt_failed', `whisper JSON 출력을 찾을 수 없습니다: ${outJson}`)
     return parseWhisperJson(outJson)
   }

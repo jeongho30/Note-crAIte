@@ -1,6 +1,7 @@
-import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, nativeTheme, screen, session, shell } from 'electron'
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, nativeTheme, powerMonitor, screen, session, shell } from 'electron'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, rm, stat, statfs } from 'node:fs/promises'
+import { version as osVersion } from 'os'
 import { basename, isAbsolute, join, relative } from 'path'
 import { probe as probeAudio } from '../core/audio.ts'
 import { PRODUCT_NAME } from '../core/brand.ts'
@@ -171,7 +172,8 @@ const runner = createJobRunner({
   onDone: (job) => watcher.onDone(job),
   holdStt: () => holdStt(),
   sttService: () => sttService(),
-  chatkhuBase: CHATKHU_BASE
+  chatkhuBase: CHATKHU_BASE,
+  log: log.write
 })
 
 /** 지금 설정에서 요약과 전사문 다듬기가 부를 서비스·모델 (요약 서비스 또는 로컬 LLM, 안 하면 null) */
@@ -309,6 +311,12 @@ function updateTray(): void {
   })
 }
 
+// 기록에 남길 OS 이름과 버전. macOS는 Node의 os.version()이 커널 이름(Darwin Kernel Version …)이라 Electron이 주는 버전을 쓴다
+const osName = (): string => (process.platform === 'darwin' ? `macOS ${process.getSystemVersion()}` : `${osVersion()} ${process.getSystemVersion()}`)
+
+// 첫 실행 마법사의 단계 이름 (기록용. 화면의 wizard/Wizard.tsx와 같은 순서)
+const WIZARD_STEPS = ['안내', 'PC 확인', '요약 서비스', '저장 폴더', '준비 완료']
+
 // 작업 상태가 바뀔 때마다 기록에 남긴다 (앱을 켠 뒤 처음 받은 목록은 남기지 않음)
 let loggedStatus: Map<string, JobView['status']> | null = null
 const STATUS_WORD: Record<JobView['status'], string> = { queued: '대기', running: '시작', done: '완료', failed: '실패', cancelled: '취소' }
@@ -322,7 +330,8 @@ function logJobs(jobs: JobView[]): void {
     const why = j.status === 'failed' && j.error ? ` · ${j.error.stage} · [${j.error.code}] ${j.error.message}` : ''
     // 다듬기가 오류 없이 원문으로 돌아간 조각이 있으면 남긴다 (모델이 문단 수나 길이를 못 맞춘 것)
     const polish = j.status === 'done' && j.polish?.fallbackChunks ? ` · 다듬기 ${j.polish.chunks}조각 중 ${j.polish.fallbackChunks}조각은 원문 그대로${j.polish.reasons ? ` (${j.polish.reasons.join(", ")})` : ""}` : ''
-    log.write(`작업 ${STATUS_WORD[j.status]}: ${j.name}${why}${polish}`)
+    // 녹음 파일 이름(강의 이름)은 적지 않고 작업 ID로 남긴다. 기록을 받아 볼 때는 ID로 "작업 요약" 줄과 잇는다
+    log.write(`작업 ${STATUS_WORD[j.status]}: ${j.id}${why}${polish}`)
   }
 }
 
@@ -732,6 +741,9 @@ const handlers: Record<string, (params: unknown) => unknown> = {
       ...(Number.isInteger(step) ? { wizardStep: step } : {}),
       ...(typeof done === 'boolean' ? { wizardDone: done } : {})
     })
+    // 어느 단계까지 갔고 단계마다 얼마나 머물렀는지는 이 줄들의 시각으로 본다
+    if (Number.isInteger(step)) log.write(`마법사: ${step}단계 (${WIZARD_STEPS[step as number] ?? '?'})`)
+    if (typeof done === 'boolean') log.write(done ? '마법사 끝냄' : '마법사 다시 시작')
     // 마법사를 끝내면 창을 홈 크기로 키운다
     if (done && mainWindow) resizeContent(mainWindow, HOME_CONTENT)
     return settings
@@ -1440,6 +1452,13 @@ app.whenReady().then(async () => {
   })
   log.prune()
   log.write(`앱 시작 ${app.getVersion()} · ${process.platform} ${process.arch}${app.isPackaged ? '' : ' · 개발 실행'}`)
+  // PC 사양: 기록만 받아도 어떤 PC에서 잰 속도인지 알 수 있게 (OS 명령으로 읽어 1초쯤 걸리니 기다리지 않는다)
+  void detect().then((hw) => log.write(`PC: ${JSON.stringify({ ...hw, defaultThreads: defaultThreads(hw), os: osName() })}`))
+  // 전원이 바뀌거나 PC가 잠들었다 깨면 남긴다 (작업이 갑자기 느려지거나 오래 걸린 까닭을 기록에서 찾게)
+  powerMonitor.on('on-battery', () => log.write('전원: 배터리'))
+  powerMonitor.on('on-ac', () => log.write('전원: 어댑터'))
+  powerMonitor.on('suspend', () => log.write('전원: 잠자기'))
+  powerMonitor.on('resume', () => log.write('전원: 깨어남'))
   const settings = await loadSettings(dataDir)
   nativeTheme.themeSource = settings.theme
   if (await loadCachedCatalog(dataDir)) log.write(`모델 카탈로그: 받아 둔 것 (${catalog().updated})`)
