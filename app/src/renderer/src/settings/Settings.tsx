@@ -10,7 +10,7 @@ import { AutoSection } from './AutoSection'
 import { Row, Section, SettingsCard, sizeLabel } from './parts'
 import { ProviderSection } from './ProviderSection'
 import styles from './Settings.module.css'
-import { GPU, OS, PC } from '../platform'
+import { DATA_DIR, GPU, OS, PC } from '../platform'
 
 type Storage = { modelsBytes: number; models: string[]; unused: { id: string; bytes: number }[]; jobsBytes: number; done: number; stopped: number; recordings: number; recordingsBytes: number }
 // 과목 없이 저장한 노트가 가는 폴더 이름 (core/note.ts의 saveNote). 과목 목록에는 폴더로 나온다
@@ -376,7 +376,7 @@ export function Settings({ llm, doneCount, openKey, onLlmChange, onRestartWizard
           />
           <Row
             title="데이터 폴더"
-            sub="%LOCALAPPDATA%\lecture-notes · 모델, 작업 기록, 로그"
+            sub={`${DATA_DIR} · 모델, 작업 기록, 로그`}
             ctrl={
               <>
                 <Button size="sm" variant="ghost" onClick={() => void call('app.openData').catch(fail)}>

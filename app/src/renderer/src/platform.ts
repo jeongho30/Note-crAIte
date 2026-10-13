@@ -14,6 +14,8 @@ export const GPU = isMac ? 'GPU' : '그래픽카드'
 export const TRAY = isMac ? '메뉴 막대' : '트레이'
 export const TRAY_WHERE = isMac ? '메뉴 막대(화면 오른쪽 위 아이콘)' : '트레이(작업 표시줄 오른쪽 아이콘)'
 export const TRAY_MENU = isMac ? '메뉴 막대 아이콘의 메뉴' : '트레이 메뉴'
+/** 데이터 폴더가 있는 곳. core/paths.ts의 defaultDataDir과 같아야 한다 */
+export const DATA_DIR = isMac ? '~/Library/Application Support/lecture-notes' : '%LOCALAPPDATA%\\lecture-notes'
 /** 마이크 권한이 꺼져 있을 때 켜는 곳 */
 export const MIC_SETTINGS_HELP = isMac
   ? '시스템 설정 > 개인정보 보호 및 보안 > 마이크에서 이 앱을 켜 주세요.'
