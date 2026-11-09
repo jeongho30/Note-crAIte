@@ -94,7 +94,8 @@ export const PRESETS: Record<string, Preset> = {
     models: `${CHATKHU_BASE}/models/`,
     model: 'gpt-6-luna'
   },
-  // 아래 셋의 기본 모델은 서비스마다 빠르고 싼 등급이다. 연결할 때 목록에 없으면 목록의 첫 모델을 쓴다(main의 llm.connect)
+  // 아래 셋의 기본 모델은 서비스마다 가장 작은 등급이다 (실제 키로 시험하지 못했고 비용이 사용자 몫. AGENTS.md 우선순위 2의 예외,
+  // decisions.md 구현 결정 표 11/10). 연결할 때 목록에 없으면 목록의 첫 모델을 쓴다(main의 llm.connect)
   openai: { endpoint: 'https://api.openai.com/v1/chat/completions', models: 'https://api.openai.com/v1/models', model: 'gpt-6-luna' },
   claude: { endpoint: 'https://api.anthropic.com/v1/messages', models: 'https://api.anthropic.com/v1/models?limit=1000', model: 'claude-haiku-4-5' },
   gemini: {
