@@ -13,7 +13,7 @@
 ![macOS](https://img.shields.io/badge/macOS-Apple_Silicon_베타-8a8478)
 [![MIT](https://img.shields.io/badge/license-MIT-2f6368)](LICENSE)
 
-[주요 기능](#주요-기능) · [화면](#화면) · [설치](#설치) · [사양](#사양) · [크레딧과 속도](#크레딧과-속도) · [소스에서 실행](#소스에서-실행) · [소개 페이지](https://claude.ai/artifact/GRgkqguRfzixiHgLh1PZ7j)
+[주요 기능](#주요-기능) · [화면](#화면) · [설치](#설치) · [사양](#사양) · [크레딧과 속도](#크레딧과-속도) · [소개 페이지](https://claude.ai/artifact/GRgkqguRfzixiHgLh1PZ7j)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/home-dark.png">
@@ -79,7 +79,7 @@
 | Windows 64비트 | 지원 |
 | macOS 13 이상, Apple Silicon | 베타. 실제 Mac에서 설치, 처음 열기, 받아쓰기까지 확인했습니다. |
 
-설치 파일은 [Releases](https://github.com/jeongho30/Note-crAIte/releases)에서 받습니다(지금은 사전 출시 0.1.4). 이 저장소의 GitHub Actions([installer.yml](.github/workflows/installer.yml))가 소스에서 만든 것입니다. 직접 빌드하려면 [소스에서 실행](#소스에서-실행)을 봅니다.
+설치 파일은 [Releases](https://github.com/jeongho30/Note-crAIte/releases)에서 받습니다(지금은 사전 출시 0.1.4). 이 저장소의 GitHub Actions([installer.yml](.github/workflows/installer.yml))가 소스에서 만든 것입니다. 직접 빌드하거나 코드를 고치려면 [AGENTS.md](AGENTS.md)를 봅니다.
 
 처음 켜면 마법사가 이 컴퓨터에 맞는 받아쓰기 모델을 받고(기본 875MB, 느린 PC는 190MB), 요약 서비스의 API 키와 노트를 저장할 폴더를 묻습니다.
 
@@ -168,42 +168,6 @@ ChatKHU 학생 크레딧은 한 달 4,000입니다. 90분 강의 한 개 기준�
 
 노트북 값은 CI가 만든 설치 파일로 강의 하나를 끝까지 처리한 결과이고, 요약까지 합친 전체 시간은 31분 58초였습니다. Mac 값도 설치 파일로 강의 하나를 끝까지 처리한 결과이고 전체 시간은 약 3분 30초였습니다. 각각 한 대, 강의 하나로 잰 값입니다.
 
-## 소스에서 실행
-
-**Windows**: Node 24 이상, PATH의 ffmpeg, whisper.cpp를 빌드할 도구(Visual Studio C++, CMake, Vulkan SDK)가 필요합니다. 빌드 스크립트가 고정한 커밋의 소스를 직접 받고, `-NoVulkan`을 붙이면 Vulkan 없이 빌드합니다.
-
-```bash
-git clone https://github.com/jeongho30/Note-crAIte
-cd Note-crAIte
-powershell -File scripts/build_whisper.ps1
-cd app
-npm ci
-npm run dev
-```
-
-**macOS**: Node 24 이상, Xcode 명령줄 도구, CMake, pkg-config가 필요합니다. whisper는 Metal로, ffmpeg는 앱이 쓰는 기능만 넣어 LGPL로 빌드합니다.
-
-```bash
-git clone https://github.com/jeongho30/Note-crAIte
-cd Note-crAIte
-bash scripts/build_whisper.sh
-bash scripts/build_ffmpeg.sh
-export PATH="$PWD/.cache/ffmpeg/bin:$PATH"
-cd app
-npm ci
-npm run dev
-```
-
-그 밖의 명령(모두 `app/`에서):
-
-| 명령 | 하는 일 |
-|---|---|
-| `npm test` | 테스트 |
-| `npm run typecheck` | 타입 검사 |
-| `npm run cli -- run <녹음> --out <저장 폴더> --subject <과목>` | 화면 없이 노트 만들기 |
-| `npm run dist:win` | Windows 설치 파일 (먼저 `scripts/fetch_ffmpeg.ps1`) |
-| `npm run dist:mac` | macOS DMG (먼저 `scripts/build_whisper.sh`, `build_ffmpeg.sh`) |
-
 ## 구조
 
 Electron과 TypeScript 하나로 만들었습니다. 무거운 계산은 함께 설치되는 whisper-cli와 ffmpeg가 하고, 앱은 그것들을 부르고 결과를 이어 붙입니다.
@@ -213,13 +177,7 @@ Electron과 TypeScript 하나로 만들었습니다. 무거운 계산은 함께 
    내 PC        내 PC     내 PC   └ 요약 서비스 또는 로컬 LLM ┘   내 PC       내 PC
 ```
 
-| 폴더 | 내용 |
-|---|---|
-| `app/src/core/` | 처리 코드. Electron에 기대지 않아 앱, 명령줄 도구(`app/src/cli/`), 테스트(`app/test/`)가 같은 코드를 씁니다. |
-| `app/src/main/` | 메인 프로세스. 화면이 부를 수 있는 처리를 허용 목록으로 열고, 작업을 한 번에 하나씩 돌립니다. |
-| `app/src/renderer/` | 화면(React). 샌드박스 안에서 돕니다. |
-| `scripts/` | whisper.cpp와 ffmpeg를 빌드하거나 받는 스크립트 |
-| `docs/` | 결정과 실험 기록([decisions.md](docs/decisions.md)) |
+소스에서 빌드하는 법, 폴더 구조, 코드를 고칠 때의 규칙은 [AGENTS.md](AGENTS.md)에, 모듈별 동작과 빌드·CI의 배경은 [docs/internals/](docs/internals/)에 있습니다.
 
 ## 개인정보
 
