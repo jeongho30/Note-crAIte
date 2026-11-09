@@ -17,8 +17,8 @@
 
 ## 처리 파이프라인(작업)
 
-- `core/job.ts`: 작업 하나를 `audio→stt→clean→polish→summarize→note→save` 단계로 돌리고 `<데이터 폴더>/jobs/<id>/job.json`에 단계 상태를 남긴다. API 키는 `job.json`에 넣지 않고 `JobContext`로 받는다. 단계별 담당은 `core/audio.ts`+`core/wav.ts`(16kHz WAV, 10분 조각), `stt/`, `core/clean.ts`·`core/corrections.ts`, `core/polish.ts`, `core/summarize.ts`, `core/note.ts`.
-- 다시 시작할 때 건너뛸 조각은 각 모듈이 작업 폴더에 남긴다: 받아쓰기 `part_NNN.json`과 ChatKHU의 `stt/<조각>.op.json`, 다듬기 `polish/part_NNN.json`. 단계 상태는 `job.json`. 끝난 조각·단계를 다시 하지 않는 것은 AGENTS.md 우선순위 3.
+- `core/job.ts`: 작업 하나를 `audio→stt→clean→polish→summarize→note→save` 단계로 돌리고 `<데이터 폴더>/jobs/<id>/job.json`에 단계 상태를 남긴다. API 키는 `job.json`에 넣지 않고 `JobContext`로 받는다. 단계별 담당은 `core/audio.ts`+`core/wav.ts`(16kHz WAV, 10분 조각), `core/stt/`, `core/clean.ts`·`core/corrections.ts`, `core/polish.ts`, `core/summarize.ts`, `core/note.ts`.
+- 다시 시작할 때 건너뛸 조각은 각 모듈이 작업 폴더에 남긴다: 받아쓰기 `<작업 폴더>/stt/part_NNN.json`과 ChatKHU의 `<작업 폴더>/stt/<조각>.op.json`, 다듬기 `<작업 폴더>/polish/part_NNN.json`. 단계 상태는 같은 폴더의 `job.json`. 끝난 조각·단계를 다시 하지 않는 것은 AGENTS.md 우선순위 3.
 
 ## 받아쓰기
 
@@ -78,4 +78,4 @@ Apple Silicon만(10/8). 목표는 Windows 앱과 같게 도는 것이다. OS 분
 ## 빌드·CLI
 
 - 모두 `app/`에서 `npm run cli -- <명령>`으로 돌린다. `cli/cli.ts`: 화면 없는 실행. `run <녹음> --out <저장 폴더> [--subject 과목] [--device gpu0]`, `resume <작업 ID>`, `probe [--sample <16kHz 모노 WAV>]`, `models download <이름...>`. `cli/bench.ts`: S3 벤치 `bench --audio <녹음> --ref <기준 JSON> --config wcpp:small-q5_1:cpu`(RTF와 기준 전사 대비 CER). `cli/llmbench.ts`: 요약 모델 비교 `llm models`, `llm bench --text <전사.txt> --models <모델,...>`(키는 환경변수 `LN_API_KEY`). 벤치 결과는 강의 내용이라 데이터 폴더의 `bench/`에만 쓴다.
-- `app/scripts/icon.mjs`(`resources/icon.ico`·`icon.icns`, 10/3. 설치 파일·창·트레이가 같은 파일을 씀), `app/scripts/notices.mjs`(오픈소스 고지. `.cache/`의 라이선스 파일에서 자동으로 만들므로 손으로 고치지 않는다. 빌드하는 OS에 맞춤), `app/electron-builder.yml`, `app/e2e/first-run.mjs`(Playwright 첫 실행 시험, CI의 macOS 작업). 빌드 흐름은 build-and-ci.md.
+- `app/scripts/icon.mjs`(`app/resources/icon.ico`·`icon.icns`, 10/3. 설치 파일·창·트레이가 같은 파일을 씀), `app/scripts/notices.mjs`(오픈소스 고지. 저장소 루트 `.cache/`의 라이선스 파일에서 자동으로 만들므로 손으로 고치지 않는다. 빌드하는 OS에 맞춤), `app/electron-builder.yml`, `app/e2e/first-run.mjs`(Playwright 첫 실행 시험, CI의 macOS 작업). 빌드 흐름은 build-and-ci.md.
