@@ -5,10 +5,10 @@
 우선순위(둘이 부딪히면 위가 이긴다):
 
 1. 기본값에서 녹음은 PC 밖으로 나가지 않는다. 밖으로 보내는 것은 사용자가 직접 켠 실험 기능 ChatKHU 받아쓰기(Soniox)뿐이고, 요약 단계도 전사문·필기·과목 이름만 보낸다.
-2. 전사·요약의 정확성 > 크레딧 > 속도. 기본 모델(turbo)과 기본 요약 모델(luna)은 이 순서로 고른 것이다. 예외는 하나, 기본 모델로 90분 강의가 30분을 넘는 PC는 속도를 위해 정확성을 양보해 small을 쓴다.
+2. 전사·요약의 정확성 > 크레딧 > 속도. 기본 모델(turbo)과 기본 요약 모델(luna)은 이 순서로 고른 것이다. 예외는 둘. 기본 모델로 90분 강의가 30분을 넘는 PC는 속도를 위해 정확성을 양보해 small을 쓴다. 크레딧을 몇 배 들여 조금 나아지는 것은 기본으로 켜지 않는다(전사문 다듬기: 오류율 15.5 → 14.2%에 90분 크레딧 3.9 → 34, 말하지 않은 내용을 넣거나 빼기도 함. 그래서 선택 기능).
 3. 끝난 단계는 다시 하지 않는다. 실패·취소·재시작 뒤에도 끝난 조각과 단계는 건너뛰고 이어서 한다.
 
-처리 코드의 일부는 작성자의 개인용 Python 파이프라인 `C:\ljh\Coding\STT_AutoLectureNote\pipeline\`에서 옮겨 왔다. 그 폴더는 따로 쓰이므로 여기서 수정하지 않는다.
+처리 코드의 일부는 작성자의 개인용 Python 파이프라인(저장소 밖)에서 옮겨 왔다. 그래서 `clean.ts`·`corrections.ts`·`polish.ts`의 주석이 "예전 파이프라인"을 말한다.
 
 ## 명령어
 
@@ -16,7 +16,7 @@
 
 - 설치: `npm ci` (`npm run dev`가 `Error: Electron uninstall`로 멈추면 `node node_modules/electron/install.js`. 테스트가 `ERR_MODULE_NOT_FOUND`로 깨지면 의존성이 바뀐 것이니 `npm ci`부터)
 - 개발 서버: `npm run dev` (whisper-cli는 `.cache/whisper/bin`, ffmpeg는 PATH에서 찾는다)
-- 테스트 전체(조용히): `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test --test-reporter=dot "test/**/*.test.ts"`. `npm test`는 같은 것을 기본 리포터로 돌려 출력이 20KB쯤 된다
+- 테스트 전체: `npm run test:quiet` (점 리포터. 통과하면 수백 바이트, 실패한 것만 자세히). `npm test`는 같은 것을 기본 리포터로 돌려 출력이 20KB쯤 되므로 쓰지 않는다
 - 테스트 파일 하나: `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test test/stt.test.ts`. 이름으로 고르려면 `--test-name-pattern "<이름>" "test/**/*.test.ts"`
 - 타입 검사: `npm run typecheck`
 - 화면 없이 노트 만들기: `npm run cli -- run <녹음> --out <저장 폴더> [--subject 과목] [--device gpu0]`. 그 밖에 `resume <작업 ID>`, `probe [--sample <16kHz 모노 WAV>]`, `models download <이름...>`, `bench --audio <녹음> --ref <기준 JSON> --config wcpp:small-q5_1:cpu`, `llm bench --text <전사.txt> --models <모델,...>`(키는 환경변수 `LN_API_KEY`)
@@ -35,7 +35,7 @@
 
 ## 완료 기준
 
-- 끝내기 전 `app/`에서 `npm run typecheck`와 `npm test`를 통과시킨다. 작업 중에는 바꾼 모듈의 테스트만 돌리고 전체는 끝낼 때 한 번.
+- 끝내기 전 `app/`에서 `npm run typecheck`와 `npm run test:quiet`를 통과시킨다. 작업 중에는 바꾼 모듈의 테스트만 돌리고 전체는 끝낼 때 한 번.
 - 버그 수정은 수정 없이 실패하는 테스트를 먼저 추가한다(합성 데이터만).
 - 실제로 돌린 것만 보고한다. 설치본·실제 Mac·실제 API 키로 못 본 것은 못 봤다고 PR 본문에 적는다. 지금까지 못 본 것의 목록은 [docs/plans/2026-10-12-status.md](docs/plans/2026-10-12-status.md).
 - 실험을 했거나 기본값·방식을 정한 것이 있으면 `docs/decisions.md`에 `### 제목 (M/D, 기기)` 절로 남긴다. 기능을 더하거나 고치기만 했으면 적지 않는다.
@@ -66,7 +66,7 @@
 - 모델 추천·단가·숨김 변경 → 코드가 아니라 `src/core/modelcatalog.json`의 값과 `updated`. `main`에 올라가면 설치본이 받는다.
 - whisper-cli 옵션 → `core/sttargs.ts`(기본값, 잠긴 옵션) → `core/stt/whispercpp.ts`. 새 STT 엔진은 `core/stt/base.ts`의 `SttEngine`만 따르면 된다.
 - 작업 단계 추가 → `core/job.ts`의 단계 목록. 끝난 단계 건너뛰기와 옛 `job.json` 호환을 깨지 않는다.
-- 화면 색·치수 → `styles/tokens.css`의 변수만. 부품 안에서 색·치수를 직접 쓰지 않는다. OS별 문구 → `renderer/src/platform.ts`, 메인 쪽은 `main/index.ts`의 `MAC`·`PC_OBJ`.
+- 화면(색, 띠, 크기, OS별 문구) → 규칙은 [app/src/renderer/AGENTS.md](app/src/renderer/AGENTS.md). 메인 쪽 OS별 낱말은 `main/index.ts`의 `MAC`·`PC_OBJ`.
 - 데이터 폴더 이름 → `core/paths.ts`의 `APP_NAME`과 `app/installer.nsh`를 함께 바꾼다.
 - 경계: `core/`는 electron을 모른다. 강의에서 나온 파일은 데이터 폴더에만 쓴다. API 키는 `job.json`에 넣지 않고 실행할 때 `JobContext`로 받는다.
 
@@ -93,7 +93,7 @@
 - 실험 결과와 결정: `docs/decisions.md`에 `### 제목 (M/D, 기기)` 절로 추가한다. 읽을 때는 절 제목을 검색해 해당 절만 읽는다(900줄이 넘는다. 통째로 올리지 않는다).
 - 모듈별 동작과 화면 설계 원본(claude.ai artifact 링크): `docs/internals/architecture.md`. 고치려는 모듈 항목만 읽는다.
 - 빌드·외부 실행 파일·CI: `docs/internals/build-and-ci.md`. 그것들을 바꾸기 전에만.
-- 남은 할 일과 아직 못 본 것: `docs/plans/2026-10-12-status.md`. 새 계획은 `docs/plans/YYYY-MM-DD-<이름>.md`로 두고, 끝나도 지우지 않는다.
+- 남은 할 일과 아직 못 본 것: `docs/plans/2026-10-12-status.md`. 새 계획은 `docs/plans/YYYY-MM-DD-<이름>.md`로 두고 첫 줄에 상태를 적는다(진행 중, 또는 "끝남(날짜). 결과: <위치>"). 끝나도 지우지 않는다.
 - 사용자용 설명(설치, 사양, 크레딧): `README.md`. 사용자에게 보이는 동작이 바뀌면 같은 PR에서 고친다.
 - 구조·경계·명령어가 바뀌면 같은 PR에서 이 파일과 해당 `internals` 문서를 고친다.
 
