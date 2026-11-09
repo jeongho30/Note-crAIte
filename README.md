@@ -79,7 +79,7 @@
 | Windows 64비트 | 지원 |
 | macOS 13 이상, Apple Silicon | 베타. 실제 Mac에서 설치, 처음 열기, 받아쓰기까지 확인했습니다. |
 
-설치 파일은 [Releases](https://github.com/jeongho30/Note-crAIte/releases)에서 받습니다(지금은 사전 출시 0.1.4). 이 저장소의 GitHub Actions([installer.yml](.github/workflows/installer.yml))가 소스에서 만든 것입니다. 직접 빌드하거나 코드를 고치려면 [AGENTS.md](AGENTS.md)를 봅니다.
+설치 파일은 [Releases](https://github.com/jeongho30/Note-crAIte/releases)에서 받습니다(지금은 사전 출시 0.1.4). 이 저장소의 GitHub Actions([installer.yml](.github/workflows/installer.yml))가 소스에서 만든 것입니다. 직접 빌드하려면 [docs/internals/build-and-ci.md](docs/internals/build-and-ci.md)의 "처음 빌드"를, 코드를 고치려면 [AGENTS.md](AGENTS.md)를 봅니다.
 
 처음 켜면 마법사가 이 컴퓨터에 맞는 받아쓰기 모델을 받고(기본 875MB, 느린 PC는 190MB), 요약 서비스의 API 키와 노트를 저장할 폴더를 묻습니다.
 
@@ -177,7 +177,7 @@ Electron과 TypeScript 하나로 만들었습니다. 무거운 계산은 함께 
    내 PC        내 PC     내 PC   └ 요약 서비스 또는 로컬 LLM ┘   내 PC       내 PC
 ```
 
-소스에서 빌드하는 법, 폴더 구조, 코드를 고칠 때의 규칙은 [AGENTS.md](AGENTS.md)에, 모듈별 동작과 빌드·CI의 배경은 [docs/internals/](docs/internals/)에 있습니다.
+소스에서 빌드하는 법은 [docs/internals/build-and-ci.md](docs/internals/build-and-ci.md)에, 폴더 구조와 코드를 고칠 때의 규칙은 [AGENTS.md](AGENTS.md)에, 모듈별 동작은 [docs/internals/architecture.md](docs/internals/architecture.md)에 있습니다.
 
 ## 개인정보
 

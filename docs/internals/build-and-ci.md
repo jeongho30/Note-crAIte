@@ -1,8 +1,34 @@
 # 빌드, 외부 실행 파일, CI
 
-언제 읽나: whisper-cli·ffmpeg 빌드 스크립트(`scripts/`), `app/electron-builder.yml`, `.github/workflows/`를 바꾸기 전에. 설치 파일을 만들거나 CI 실패를 볼 때. 일상적인 코드 수정에는 필요 없다(명령어는 [AGENTS.md](../../AGENTS.md)).
+언제 읽나: 이 PC에서 처음 빌드할 때. whisper-cli·ffmpeg 빌드 스크립트(`scripts/`), `app/electron-builder.yml`, `.github/workflows/`를 바꾸기 전에. 설치 파일을 만들거나 CI 실패를 볼 때. 일상적인 코드 수정에는 필요 없다(명령어는 [AGENTS.md](../../AGENTS.md)).
 
-2026-10-12 기준 CLAUDE.md에서 옮겼다.
+## 처음 빌드
+
+PC마다 한 번. 빌드 결과물은 `.cache/`에 모이고 저장소에는 없다.
+
+**Windows**: Node 24 이상, PATH의 ffmpeg, whisper.cpp를 빌드할 도구(Visual Studio C++, CMake, Vulkan SDK). `build_whisper.ps1`은 `-SourceDir`를 주지 않으면 고정 커밋의 소스를 직접 받고, `-NoVulkan`을 붙이면 Vulkan 없이 빌드한다.
+
+```bash
+git clone https://github.com/jeongho30/Note-crAIte
+cd Note-crAIte
+powershell -File scripts/build_whisper.ps1
+cd app
+npm ci
+npm run dev
+```
+
+**macOS**(Apple Silicon): Node 24 이상, Xcode 명령줄 도구, CMake, pkg-config. whisper는 Metal로, ffmpeg는 앱이 쓰는 기능만 넣어 LGPL로 빌드한다. `npm run dev` 전에 `.cache/ffmpeg/bin`을 PATH에 넣는다.
+
+```bash
+git clone https://github.com/jeongho30/Note-crAIte
+cd Note-crAIte
+bash scripts/build_whisper.sh
+bash scripts/build_ffmpeg.sh
+export PATH="$PWD/.cache/ffmpeg/bin:$PATH"
+cd app
+npm ci
+npm run dev
+```
 
 ## 설치, 캐시 위치, CI 흐름
 
