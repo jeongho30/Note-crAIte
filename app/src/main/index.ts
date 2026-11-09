@@ -1273,7 +1273,8 @@ const handlers: Record<string, (params: unknown) => unknown> = {
     await runner.noteEdited(checked, r.path, r.props)
     return r.path
   },
-  // 노트 삭제: 파일은 휴지통으로 옮긴다 (되살릴 수 있게). 이 노트를 만든 작업은 노트 경로만 비운다
+  // 노트 삭제: 파일은 휴지통으로 옮긴다 (되살릴 수 있게). 이 노트를 만든 작업은 노트 경로만 비운다.
+  // 이 앱이 만들지 않은 노트도 지울 수 있다(수정은 이 앱이 만든 노트만, core/noteedit.ts)
   'notes.delete': async (p) => {
     const checked = await checkNotePath(String(p))
     if (await runner.noteBusy(checked)) throw new EngineError('input', '요약을 만드는 중이라 끝난 뒤에 삭제할 수 있어요.')

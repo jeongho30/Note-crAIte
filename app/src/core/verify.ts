@@ -1,6 +1,7 @@
 // 요약 뒤 교정 검증: 요약 호출이 낸 교정 항목마다 전사에서 바꿀 곳의 앞뒤 문맥을 잘라 보여 주고,
 // 두 번째 호출로 유지/버림을 받는다. 전사 전체를 다시 보내지 않아 싸다.
 // 9/30 실험(docs/decisions.md): 맞게 받아쓴 말의 표기만 바꾸는 교정을 거의 다 거르고, 잘못된 교정을 절반 넘게 막았다.
+// 앱은 쓰지 않고 CLI `run --verify-model`로만 쓴다.
 import type { Correction } from './corrections.ts'
 import { occurrences } from './corrections.ts'
 import { chat } from './llm.ts'

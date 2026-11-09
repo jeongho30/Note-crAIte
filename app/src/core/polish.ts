@@ -134,6 +134,7 @@ export async function polishParagraphs(paras: Paragraph[], notes: string, o: Pol
       if (o.resumeDir) await writeJsonAtomic(fileOf(i), saved[i])
     }
   }
+  // 로컬 LLM(ollama)은 한 조각씩 보낸다(마지막 로컬 호출만 모델을 내리는 것은 job.ts의 unloadAfter → ollama.ts의 keep_alive: 0). 요약 서비스는 CONCURRENCY개 동시에.
   // 한 조각이 실패하면 새 조각은 보내지 않되, 이미 보낸 조각은 끝나 저장될 때까지 기다린 뒤 실패를 알린다
   const runs = await Promise.allSettled(Array.from({ length: Math.min(o.ollama ? 1 : CONCURRENCY, pending.length) }, () => worker().catch((e) => {
     next = pending.length

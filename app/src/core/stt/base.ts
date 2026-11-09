@@ -9,6 +9,7 @@ export type Segment = { startMs: number; endMs: number; text: string }
 export type OnProgress = (frac: number) => void
 export type TranscribeOptions = { language: string; onProgress?: OnProgress; signal?: AbortSignal }
 
+// 엔진(whispercpp.ts, chatkhu.ts)은 이 인터페이스만 따르면 된다. 새 엔진도 마찬가지.
 export interface SttEngine {
   transcribe(wav: string, opts: TranscribeOptions): Promise<Segment[]>
   /** VAD 없이 받아쓰는 같은 엔진. VAD를 쓰지 않으면 null (누락 구간을 다시 받아쓸 때 쓴다) */
