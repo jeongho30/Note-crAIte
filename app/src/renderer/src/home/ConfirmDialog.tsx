@@ -24,6 +24,7 @@ type Prepared = { recordings: Recording[]; rejected: { name: string; reason: str
 type Subjects = { subjects: string[]; lastSubject: string | null; subjectLanguage: Record<string, Language> }
 
 // 과목 칸: 녹음을 끌어 놓는 곳. subject가 null이면 미분류 칸(항상 하나, 왼쪽). 같은 과목을 언어만 달리해 두 칸까지 둘 수 있다.
+// 녹음은 칸 사이를 HTML5 끌기로만 옮긴다(끄는 동안 [파일 추가] 자리가 붉은 빼기 칸, 마지막에 뺀 하나는 되돌리기). 키보드만으로는 옮기거나 뺄 수 없다.
 type Zone = { id: number; subject: string | null; language: Language }
 const NONE_ID = 0
 const NONE_NAME = '미분류'

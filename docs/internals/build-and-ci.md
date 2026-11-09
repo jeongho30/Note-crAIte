@@ -30,6 +30,10 @@ npm ci
 npm run dev
 ```
 
+## 버전 올리기
+
+whisper.cpp는 `scripts/build_whisper.ps1`의 `$Commit`과 `scripts/build_whisper.sh`의 `COMMIT`을 같은 커밋으로 올린다. Windows의 ffmpeg는 `scripts/fetch_ffmpeg.ps1`의 `$Tag`·`$Asset`·`$Sha256`. BtbN/FFmpeg-Builds의 자동 빌드 중 월말 빌드가 오래 남으니 그중 하나의 `win64-lgpl` 자산을 고르고, 받은 zip의 sha256(`Get-FileHash`)을 적는다. `win64-gpl`은 쓰지 않는다(재배포하면 소스 제공 의무. `docs/decisions.md` "라이선스 검토 (9/28)"). macOS의 ffmpeg는 `scripts/build_ffmpeg.sh`의 `FFMPEG_TAG`·`FFMPEG_COMMIT`(libopus는 `OPUS_TAG`·`OPUS_COMMIT`)이고 Windows와 같은 FFmpeg 버전으로 맞춘다. 올린 뒤 스크립트를 다시 돌려 `.cache/`를 갱신하고, 새 ffmpeg를 PATH에 둔 채 `npm run test:quiet`를 돌린다. 스크립트가 바뀌면 CI 캐시 키가 바뀌어 다음 실행에서 다시 빌드한다.
+
 ## 설치, 캐시 위치, CI 흐름
 
 npm 11은 의존 패키지의 설치 스크립트를 막아 `npm ci`만으로는 Electron 바이너리(`node_modules/electron/dist`·`path.txt`)가 안 생긴다. 그래서 `package.json`의 `postinstall`이 `node node_modules/electron/install.js`를 돌린다(10/1). 그래도 `npm run dev`가 `Error: Electron uninstall`로 멈추면 그 명령을 직접 돌린다.
@@ -43,7 +47,7 @@ npm 11은 의존 패키지의 설치 스크립트를 막아 `npm ci`만으로는
 
 ## 빌드·CI에서 걸리는 것
 
-- `scripts/*.ps1`은 Windows PowerShell 5.1이 한글을 읽도록 UTF-8 BOM으로 저장한다. 네이티브 명령은 `Invoke-Checked`로 종료 코드만 본다.
+- `scripts/*.ps1`·`dev/*.ps1`은 Windows PowerShell 5.1이 한글을 읽도록 UTF-8 BOM으로 저장한다(`app/test/scripts-encoding.test.ts`가 검사). 네이티브 명령은 `Invoke-Checked`로 종료 코드만 본다.
 - 데스크톱의 `py -3.13`은 Microsoft Store판이라 `%LOCALAPPDATA%` 쓰기가 `...\Packages\PythonSoftwareFoundation...\LocalCache\`로 가상화된다. 벤치용 venv를 그 Python으로 만들지 않는다.
 - `.cache/ffmpeg`는 저장소에 없어 PC마다 `fetch_ffmpeg.ps1`로 받아야 한다. `dist:win`이나 `notices.mjs`를 돌리기 전에 먼저 받는다.
 - GitHub의 macOS 러너는 가상 머신이라 Metal(`Apple Paravirtual device`)이 CPU보다 느리다(10/8, 작은 모델로 39초 샘플: CPU 3.6초, Metal 20초). 러너에서 속도 재기가 CPU를 고르는 것은 정상이고, 실제 Mac의 Metal 속도는 러너로 알 수 없다. 러너 크기도 실행마다 다르다(5코어 M2 Pro, 3코어 M1).

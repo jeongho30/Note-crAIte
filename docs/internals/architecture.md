@@ -1,8 +1,8 @@
-# 구조 (모듈별)
+# 구조 (영역별)
 
-언제 읽나: `app/src/` 안의 모듈을 고치거나 새 모듈을 넣기 전에, 고치려는 모듈의 항목만 읽는다. 폴더 지도·변경 지도·금지 사항은 [AGENTS.md](../../AGENTS.md)에 있고, 결정의 이유와 실험 수치는 [decisions.md](../decisions.md)에 있다. 빌드·외부 실행 파일·CI는 [build-and-ci.md](build-and-ci.md).
+언제 읽나: `app/src/` 안의 모듈을 고치거나 새 모듈을 넣기 전에, 고치려는 영역의 절만 읽는다. 여기에는 파일이 어디 있고 무엇을 맡는지와, 파일 둘 이상에 걸친 약속만 둔다. 파일 하나가 혼자 하는 일과 그 까닭은 그 파일의 머리 주석에 있고 여기 되풀이하지 않는다. 폴더 지도·변경 지도·금지 사항은 [AGENTS.md](../../AGENTS.md), 결정의 이유와 실험 수치는 [decisions.md](../decisions.md), 빌드·외부 실행 파일·CI는 [build-and-ci.md](build-and-ci.md).
 
-괄호 안 날짜(M/D)는 2026년의 구현 시점이다. 구조나 경계가 바뀌면 그 PR에서 해당 항목을 고친다.
+`app/`로 시작하지 않는 경로는 `app/src/` 기준이다. 괄호 안 날짜(M/D)는 2026년의 구현 시점이다. 구조나 경계가 바뀌면 그 PR에서 해당 절을 고친다.
 
 ## 화면 설계의 원본
 
@@ -11,39 +11,71 @@
 - 탭: 구현 계획(`#plan`), 화면 흐름(`#flow`: 설치부터 미리보기까지 와이어프레임, 오류 문구, 질문 표), 홈 시안(`#home`), 작업 목록 시안(`#jobs`), 노트 목록 시안(`#notelist`), 노트 미리보기 시안(`#preview`), 설정 시안(`#settings`), 최종 색(`#colors`)
 - 고치는 법: `Artifact` 도구 `action: "read"`로 받은 HTML의 `const DATA = {...}`(문서별 HTML이 `DATA.docs.<탭 id>`에 JSON 문자열로 들어 있음)에서 해당 탭만 바꿔 같은 `url`로 다시 올린다. 두 시안에 같은 Pretendard 글꼴은 한 번만(`DATA.font`, 문서 안에서는 `__FONT__` 자리표시) 들어 있다.
 
-## 모듈
+## core 공통
 
-- `src/core/`: 처리 로직. **electron을 import하지 않는다** — 메인 프로세스, CLI(`src/cli/`), 테스트(`test/`)가 같은 코드를 그대로 쓴다. 상대 import에는 `.ts` 확장자를 붙이고, 타입은 `import type`으로 가져온다(Node type stripping 규칙, tsconfig의 `erasableSyntaxOnly`).
-- `src/main/index.ts`: 화면이 부를 수 있는 처리를 `handlers`(허용 목록)에 두고 `api:call` IPC로 연다. 처리 오류(`EngineError`)는 IPC가 필드를 버려서 메시지 앞에 `[코드]`를 붙여 보내고, 화면의 `api.ts`가 다시 나눈다. 메인 → 화면 알림은 `api:event`이고 preload의 허용 목록(`setup`)에 있는 것만 받는다. `setup.ts`는 모델 받기와 속도 재기(probe) 상태를 메인에 두고 바뀔 때마다 보낸다. 쓰는 받아쓰기 모델은 설정(`sttModel`)을 따르고, 바꾸면 받은 뒤 다시 잰다. 작업이 받아쓰기 중이면(`runner.transcribing()`) 속도 재기는 작업이 끝난 뒤로 미룬다. `log.ts`는 `<데이터 폴더>/logs/YYYY-MM-DD.log`(14일치)에 작업 상태 변화·실패 이유·IPC 오류를 남긴다(키·전사·요약 내용은 적지 않음). 테스터의 로그만 받아 성능을 볼 수 있게 한 줄 JSON 셋도 남긴다(10/12, `core/joblog.ts`): 켤 때 `PC:`(사양), 속도를 잴 때 `속도 재기 상세:`(장치별 시간·CER·안 쓴 이유), 작업이 끝나거나 멈출 때 `작업 요약:`(설정·단계별 시간·시작할 때의 예상 시간과 그 근거·배터리로 돌았는지). 작업은 녹음 파일 이름 대신 작업 ID로 적는다. 그 밖에 마법사 단계(`마법사: N단계`), 전원 변화(`전원: 배터리/어댑터/잠자기/깨어남`), whisper-cli의 종료 코드(오류 메시지 첫 줄)도 남긴다. `secrets.ts`는 API 키를 safeStorage로 암호화해 `<데이터 폴더>/secrets.json`에 두고 화면에는 끝 4자리만 준다. 설정은 `core/settings.ts`(`settings.json`: 마법사 단계, 저장 폴더, 연결된 요약 서비스, 요약 모델, 전사문 다듬기 모델(`polishModel`, null이면 끔), 받아쓰기 모델, 고친 whisper-cli 옵션, 과목별 언어, 화면 색). 9/30 전 설정 파일에 남은 `verifyModel`은 읽히지만 쓰이지 않는다. 개발 중 `LN_DATA_DIR` 환경변수로 데이터 폴더를 바꿔 첫 실행을 따로 시험할 수 있다.
-- 데이터 폴더는 Windows `%LOCALAPPDATA%\lecture-notes`, macOS `~/Library/Application Support/lecture-notes`(`models/`, `bench/`, 이후 `jobs/`)다. 강의 녹음에서 나온 파일은 여기에만 쓴다. 기본 데이터 폴더와 whisper-cli·ffmpeg 찾기(설치본 `resources/bin` → 개발 중 `.cache/whisper/bin`·PATH)는 `core/paths.ts`, `LN_DATA_DIR`은 `main/index.ts`(CLI는 `--data-dir`)가 본다. Windows에서 앱을 제거할 때는 `app/installer.nsh`가 이 폴더를 지울지 묻는다(10/13): 전부(Electron이 쓰는 `%APPDATA%\lecture-notes`까지), 아니면 받은 모델만. 새 판을 덮어 설치할 때(`--updated`)와 조용한 제거(`/S`)에는 묻지 않고 남긴다. 폴더 이름이 `installer.nsh`에도 적혀 있으니 `paths.ts`의 `APP_NAME`을 바꾸면 함께 바꾼다. macOS는 제거 프로그램이 없어 README에 지울 폴더만 적었다.
-- `audio.ts` + `wav.ts`: 16kHz 모노 WAV로 바꾼 뒤 약 10분마다 무음 지점에서 조각(`chunks/part_NNN.wav`)으로 나누고 원본 WAV는 지운다.
-- `stt/base.ts`의 `transcribeChunks`: 조각별 결과를 `part_NNN.json`으로 저장해 끝난 조각은 다시 돌리지 않고, 조각 시작 시각만큼 밀어 하나로 합친다. 누락으로 보이는 시간대(`sparseSpans`: 60초 넘는데 1초에 한 글자도 안 되는 구간, 또는 구간이 60초 넘게 없는 시간. 조각의 앞뒤 포함)가 있는 조각만 VAD 없이(`withoutVad`) 한 번 더 받아써 그 시간대를 바꿔 끼운다(`fillGaps`, 다시 받아쓴 것도 성기면 조용한 시간으로 보고 그대로 둠). 엔진 구현(`stt/whispercpp.ts`)은 `SttEngine`만 따르면 된다. `stt/chatkhu.ts`는 ChatKHU 받아쓰기(Soniox `stt-async-v5`, 1분에 6크레딧): 조각을 opus로 줄여 올리고 상태를 물어 받는다. 올리면 과금되고 환불이 없어서 조각마다 `stt/<조각>.op.json`(operation_id·크레딧)을 먼저 남겨 재시도 때 다시 올리지 않고, 서버에서 실패한 조각은 `.failed-<시각>`으로 이름만 바꿔 크레딧 합계(`chargedCredits` → `job.cost.sttCredits`)에 넣는다. 화자 구간을 문장으로 나누고 시각은 글자 위치로 어림한다(`splitSegments`). 작업의 `settings.sttService`가 `chatkhu`일 때만 쓰이고(설정 `chatkhuStt` + ChatKHU 연결, 메인의 `sttService()`), 그 작업은 받아쓰기 모델·속도 재기·녹음 중 멈춤을 기다리지 않는다. 멈추면 작업 목록의 [이 PC에서 받아쓰기](`runner.localStt`).
-- `downloads.ts` + `models.ts`: 모델 URL·크기·sha256 목록과 `.part` 이어받기.
-- `clean.ts`(반복·환각 정리), `corrections.ts`(교정 목록 적용, 한글로 시작하는 교정은 앞 글자가 한글이면 바꾸지 않음), `llm.ts`(OpenAI 호환 호출, 스트리밍으로 받아 524를 피함, 504·524는 `timeout` 오류)·`summarize.ts`·`prompts.ts`(요약 호출 1회, 요약 서비스의 출력 상한은 16,000토큰, 응답에서 JSON.parse가 제어 문자로 푼 LaTeX 명령을 `restoreLatex`로 되살리고, `**Closure**(Closure)`처럼 앞 말을 되풀이한 괄호는 `dropEchoedGloss`로 지움. 요약 프롬프트는 사용자가 고칠 수 있다(10/7): 설정의 `summaryExtra`(추가 지시, 기본 프롬프트 뒤에 `SUMMARY_EXTRA_HEADER`와 함께 붙음)와 `summaryPrompt`(통째로 고친 프롬프트)를 `summarize.ts`의 `systemPrompt`가 합치고, 둘 다 없으면 `SUMMARY_UNIFIED` 그대로다. 작업은 요약을 시작할 때 `JobContext.summaryPrompt`로 읽는다. 화면은 요약 세부설정 안의 `settings/SummaryPrompt.tsx`(읽기 전용 칸을 10번 누르면 전체 수정이 열림), 핸들러 `prompt.get`·`prompt.save`), `polish.ts`(선택 기능 전사문 다듬기: 2000자 조각을 4개씩 동시에 다시 쓰고, 문단 수가 다르거나 길이가 0.85~1.2배를 벗어나면 원문. 조각 결과를 `polish/part_NNN.json`에 남겨 다시 하면 끝난 조각은 건너뛰고, 원문으로 돌아간 조각 수는 `job.polish`에 남아 작업 목록에 보인다), `verify.ts`(교정 검증, 앱은 쓰지 않고 CLI `run --verify-model`로만), `credits.ts`, `providers.ts`. 작업의 크레딧은 응답 토큰 수 × 단가(`creditsFromTokens`), 단가표 밖 모델만 잔액 차이.
-- 요약 서비스(10/2): ChatKHU·OpenAI·Claude·Gemini 중 하나만 연결한다(`settings.provider`, 키는 `secrets.json`에 서비스별로 남음). 서비스별 주소·기본 모델은 `providers.ts`의 `PRESETS`. `llm.ts`의 `chat`은 옵션의 `service`를 보고 Claude면 `anthropic.ts`(네이티브 `/v1/messages`, SDK 없이 fetch)로 넘기고 OpenAI면 `max_completion_tokens`를 쓴다. 크레딧(잔액·예상·남은 횟수, `PRICES`)은 ChatKHU만이고(`usesCredits`), 다른 서비스는 작업의 토큰 수(`job.usage`)만 남긴다. 메인의 `llm.models`·`llm.steps`는 ChatKHU가 아니면 추천 순서 없이 서비스의 글 모델 목록을 준다(`plainModels`). OpenAI·Claude·Gemini는 실제 키로 불러 본 적이 없다(가짜 응답 테스트 `test/providers.test.ts`).
-- 로컬 LLM(Ollama, 10/2): 요약과 전사문 다듬기를 단계마다 요약 서비스 또는 로컬 LLM으로 한다. `providers.ts`의 `resolveSteps`가 설정(`provider`·`summaryModel`·`polishModel`·`ollama`)에서 단계별 대상(`LlmSettings`: 주소·모델, 로컬이면 `ollama`에 요청 옵션)을 정하고, 작업에는 `settings.llm`(요약)과 `settings.polishLlm`(다듬기, 10/2 전 작업은 `polishModel`)으로 남는다. `llm.ts`의 `chat`은 옵션에 `ollama`가 있으면 `ollama.ts`로 넘긴다: `/api/chat` NDJSON, `truncate: false`(컨텍스트를 넘으면 자르지 않고 `too_large`), `num_ctx: "auto"`(입력 길이로 계산, 모자라면 서버가 알려 준 토큰 수로 한 번 재시도), think 거절 시 think 없이 재시도, 첫 조각 30분·조각 사이 5분 제한, 취소 신호. 로컬 다듬기는 한 조각씩, 작업의 마지막 로컬 호출에 `keep_alive: 0`. 로컬 단계는 API 키 없이 돌고 크레딧을 적지 않는다. 화면은 `llm.status`의 `summary`·`polish`로 요약을 할 수 있는지·무엇으로 하는지를 본다(`provider`는 키로 연결한 서비스일 뿐). 설정은 고급의 요약 세부설정(단계별 선택)과 `settings/OllamaBlock.tsx`(연결 상태, 단계별 모델, 고칠 수 있는 요청 옵션 JSON, [시험하기]), 핸들러 `ollama.get`·`ollama.save`·`ollama.test`.
-- `job.ts`: 작업 하나를 `audio→stt→clean→polish→summarize→note→save` 단계로(polish는 전사문 다듬기를 켠 작업만, 9/30 전 작업에는 없음) 돌리고 `<데이터 폴더>/jobs/<id>/job.json`에 단계 상태를 남긴다. 끝난 단계(`done`/`skipped`)는 건너뛰므로 실패·취소 뒤 `runJob`을 다시 부르면 이어서 한다. 필기는 작업 폴더에 복사해 두고, API 키는 `job.json`에 넣지 않고 실행할 때 `JobContext`로 받는다. 요약 설정(`settings.llm`)이 없으면 요약 단계는 `skipped`이고 전사만 담은 노트가 된다.
-- `probe.ts`: 샘플을 CPU와 Vulkan 장치마다 돌려(로그의 장치 목록·`uma`·처리 시간) 쓸 장치와 RTF를 정한다. GPU 전사가 CPU 전사와 CER 0.3 넘게 다르면 깨진 것으로 보고, 1.2배 이상 빠를 때만 GPU를 고른다. 결과는 `<데이터 폴더>/probe.json`, `run --device auto`(기본)가 장치·예상 시간에 쓴다. `compare.ts`: CER(벤치와 공용).
-- `sttargs.ts`: 설정 > 고급에서 고칠 수 있는 whisper-cli 옵션(기본값, 잠긴 옵션 거절, 명령 미리보기). 옵션이 있으면 `WhisperCpp`는 threads·beamSize·장치 대신 그것을 쓰고, 저장 전에 `checkArgs`로 whisper-cli에 한 번 읽혀 본다(없는 입력 파일로 실행하면 옵션을 읽은 뒤 바로 끝남). `probe.ts`의 `testSample`은 [샘플로 시험하기]. `providers.ts`의 `creditsPer90ByModel`은 작업 기록으로 모델별 90분 요약 크레딧을 잰다.
-- `note.ts`: 노트 마크다운(frontmatter 값은 JSON 문자열, 접는 부분은 `> [!quote]-` callout)과 저장(`<저장 폴더>/<과목|미분류>/<날짜> <제목>.md`, 겹치면 ` (2)`). `inputs.ts`: 녹음 옆 같은 이름 필기 찾기(`pairInputs`), 이미 목록에 있는 녹음에 나중에 넣은 필기 붙이기(`attachNotes`: 같은 폴더·이름 우선, 없으면 이름만 같은 녹음이 하나일 때), UTF-8이 아니면 CP949로 읽기. 문서 필기(.hwpx·.docx·.pptx)는 `doctext.ts`가 ZIP(fflate)을 풀어 XML에서 글자만 뽑는다(수식·그림은 버림, 읽을 수 없으면 `input` 오류).
-- 화면(`src/renderer/src/`):
-  - 색·치수 토큰, 창 맨 위 띠, 4:3과 최소 크기, OS별 낱말 같은 공통 규칙은 `app/src/renderer/AGENTS.md`에 있다(화면 파일을 건드릴 때 자동으로 읽힌다).
-  - 폴더: `wizard/`(첫 실행 마법사), `home/`(사이드바 `Shell`, 홈, 시작 전 확인 `ConfirmDialog`, 작업 목록 `JobList`), `notes/`(노트 목록), `preview/`(노트 미리보기), `settings/`(설정). 화면 흐름·배치·문구는 위 "화면 설계의 원본"의 시안이 기준이다.
-  - 시작 전 확인(`home/ConfirmDialog`, 10/3): 왼쪽에 미분류 칸과 [파일 추가], 오른쪽에 과목 칸들과 [과목 추가]. 녹음은 지난번 과목 칸에 들어간 채 열리고, 끌어서 다른 칸으로 옮긴다(HTML5 끌기, 끄는 동안 [파일 추가] 자리에 붉은 빼기 칸, 마지막에 뺀 하나는 되돌리기). 과목과 강의 언어는 칸마다 하나이고, 칸 이름을 누르면 그 칸의 과목을 바꾼다. 같은 과목은 언어가 다른 칸 둘까지. 과목 메뉴는 브라우저 popover + CSS anchor로 띄운다(대화상자 스크롤에 안 잘림). 필기는 녹음 줄의 문서 아이콘으로 넣고 뺀다(`inputs.pickNotes`). 키보드만으로는 녹음을 옮기거나 뺄 수 없다. 녹음을 처음 넣을 때만 과목 칸 대신 안내(`Intro`: 예시 칸 + 번호별 설명)가 먼저 보이고 [계속하기]로 넘긴다(설정 `confirmIntroSeen`, 핸들러 `settings.introSeen`, 버튼 줄 왼쪽의 [안내 다시 보기]).
-  - 미리보기: `markdown.ts`가 머리말·callout·키워드를 나누고 나머지는 markdown-it(HTML 끔, cjk-friendly로 조사가 붙은 굵게도 인식, @vscode/markdown-it-katex로 수식)으로 그린다. KaTeX CSS는 Node 테스트가 못 읽으니 markdown.ts가 아니라 NotePreview.tsx에서 import한다. 미리보기는 앞 화면을 숨겨 둔 채 열어 돌아가면 상태가 그대로다. [요약 다시 만들기]는 `runner.resummarize`로 요약부터 다시 해 같은 파일에 덮어쓰고, 제목이 바뀌면 같은 폴더에서 파일 이름도 새 제목으로 바꾼다(`saveNote`, 미리보기는 `onMoved`로 따라간다).
-  - 작업은 메인의 `main/jobs.ts`(실행기)가 한 번에 하나씩 돌리고 `jobs` 이벤트로 진행을 알린다. 작업이 있으면 `main/tray.ts`의 트레이가 생기고 창을 닫으면 트레이로 숨으며, 앱을 끝낼 때는 받아쓰기를 멈추고 작업을 대기로 되돌린다(`runner.shutdown`). 모델이 없으면 `setup.whenReady()`로 받고 속도를 잰 뒤 시작한다. 끌어 놓은 파일 경로는 preload의 `pathForFile`(`webUtils`)로 얻는다.
-- `llmcatalog.ts`: 요약 모델 목록(글 모델만), 90분 요약 크레딧 어림(`estimateCredits90`). 단가표·추천 순서·다듬기 추천·숨긴 모델·알려진 90분 크레딧은 코드가 아니라 모델 카탈로그 `src/core/modelcatalog.json`에 있고 `catalog()`로 읽는다(`prices`, `ranked`: 10/9에 작성자가 다시 정한 12개, 앞 `recommendedCount`=4개가 추천: luna·gpt-6.1-sol·flash·sonnet. 이 12개 밖의 서비스 모델은 모두 `hidden`). 앱에 든 것이 기본이고, 메인이 켤 때와 모델 목록을 볼 때(6시간에 한 번) `catalogsync.ts`로 `main` 브랜치의 같은 파일을 받아 바꾼다(받은 것은 `<데이터 폴더>/model-catalog.json`, 앱에 든 것보다 `updated`가 오래됐으면 안 씀). 새 모델을 반영하려면 그 JSON의 값과 `updated`를 고쳐 `main`에 올리면 되고, 파일을 옮기거나 형식(version 1)을 바꾸면 설치된 앱이 못 읽는다. 서비스 목록에는 있는데 `ranked`에도 `hidden`에도 없는 모델은 새 모델로 보고(`newModels`) [더 많은 모델 보기] 끝에 "새 모델"로 보인다. 설정의 `settings/ModelPicker.tsx`는 선택 칸에 "추천 모델 목록" 4개를 보이고, [더 많은 모델 보기] 창에 12개를 추천 순서대로(그 아래 새 모델), [직접 모델 입력]으로 그 밖의 이름을 받는다(목록을 불러왔으면 서비스의 글 모델 이름인지 확인). 다듬기 모델도 같은 부품(`kind="polish"`, 핸들러 `llm.steps`)이고 추천은 카탈로그의 `polishRecommended`(luna·gemma, 90분 약 20~30크레딧인 모델), 크레딧 어림은 `STEP_TOKENS_PER_90MIN.polish`(luna 90분 약 30). `src/cli/llmbench.ts`(`llm models`, `llm bench`)는 요약 모델 비교용이고 키는 환경변수 `LN_API_KEY`로만 받는다(결과는 강의 내용이라 데이터 폴더의 `bench/`에만). `secrets.ts`는 키를 풀지 못하면(암호화 키가 바뀜) 연결 안 된 것으로 본다.
-- 자동 처리(폴더 감시): `core/watch.ts`(폴더 읽기, 복사가 끝났는지 판단 `settled`, 같은 녹음 `fingerprint`, `처리됨`으로 옮기기, 처리 기록 `<데이터 폴더>/watch.json`)와 `main/watcher.ts`(20초 폴링, `runner.start`로 작업을 넘기고 `onDone`에서 녹음을 옮김, `watch` 이벤트). 설정은 `settings.watch`(enabled·folder·paused), 화면은 `settings/AutoSection.tsx`. 켜져 있으면 창을 닫아도 트레이에 남고, 트레이 메뉴(`main/tray.ts`)에서 멈추기/다시 시작. PC를 켜면 자동 실행은 `--hidden`으로 등록해 창 없이 시작하고 설치본에서만 된다.
-- 앱에서 녹음하기: 화면의 `home/recording.ts`(React 밖 상태: MediaRecorder webm/opus, 5초마다 `rec.chunk`로 보냄, 소리 크기·무음 경고)와 `home/Recorder.tsx`(시작 창·녹음 중 카드). 메인의 `main/recorder.ts`가 `<데이터 폴더>/recordings/<이름>.recording.webm`에 덧붙여 쓰고(녹음 중 잠자기 방지), 끝나면 `core/recordings.ts`의 `finishRecording`이 ffmpeg `-c copy`로 길이 정보를 넣어 `<이름>.webm`으로 만든다. 앱이 꺼져 남은 `.recording.webm`은 다음 실행 때 `repairRecordings`가 고친다. 작업으로 넘긴 녹음은 `recordings/processed.json`에 적고, 나머지가 홈의 "노트로 만들지 않은 녹음" 배너다. 컴퓨터 소리는 메인의 `setDisplayMediaRequestHandler`가 loopback을 준다(Windows만). 녹음 중에는 `runner`의 `holdStt`로 받아쓰기가 남은 작업을 건너뛰고(`nextPending`), 시작할 때 도는 받아쓰기는 `holdNow`로 멈춰 대기로 되돌린다(설정 `sttWhileRecording`이면 안 멈춤). 속도 재기도 녹음 중에는 미룬다. 처음 [녹음하기]를 누를 때만 시작 창의 본문 자리에 녹음 안내가 먼저 보인다(10/11, 설정 `recordIntroSeen`, 시작 창의 [녹음 안내 다시 보기]). 설정 > 고급의 마지막 칸 "실험 기능"에 `sttWhileRecording`과 `chatkhuStt`가 토글 스위치(`components/Switch`, 바로 저장)로 있다.
-- `noteedit.ts`: 노트 정보(제목·과목·날짜) 수정. 이 앱이 만든 노트(머리말에 title·date·source·stt)만, 머리말·첫 `# ` 줄·파일 이름·과목 폴더를 함께 바꾸고 본문은 그대로 둔다(과목 태그만 갈고 사용자가 더한 태그는 유지, 과목이 바뀔 때만 폴더, 제목·날짜가 바뀔 때만 파일 이름). 메인의 `notes.editInfo`·`notes.edit`가 부르고, 그 노트를 만든 작업의 `output.notePath`·`input.subject`·`edits`(제목·날짜)를 함께 고쳐 [요약 다시 만들기]가 옛 경로로 덮어쓰거나 수정한 값을 되돌리지 않게 한다(`runner.noteEdited`). 요약을 만드는 중인 노트는 못 고친다(`runner.noteBusy`). 화면은 노트 목록 줄과 미리보기 버튼 줄 끝의 [...] 메뉴(`components/MoreMenu`)에서 [수정](`notes/NotePropsDialog`)과 [삭제](`notes/NoteDeleteDialog`)를 연다. 삭제는 `notes.delete`가 파일을 휴지통으로 옮기고(`shell.trashItem`, 되살릴 수 있음) 그 작업의 `output`을 비운다(`runner.noteDeleted`). 이 앱이 만들지 않은 노트도 삭제할 수 있다(수정은 못 함).
-- 앱 아이콘(10/3): `app/resources/icon.ico`. 모양을 고치면 `node scripts/icon.mjs`로 다시 만들어 커밋한다(도구 없이 둥근 사각형을 직접 그림, 16·20·24px는 픽셀에 맞춘 그림이 따로 있음). 설치 파일(`electron-builder.yml`의 `win.icon`), 창, 트레이가 같은 파일을 쓰고 설치본에서는 `resources/icon.ico`에서 찾는다.
-- 작은 공용 모듈: `files.ts`(`writeJsonAtomic`: 임시 파일 뒤 rename, Windows 백신 잠금 때문에 재시도. 작업·설정 JSON은 이것으로 쓴다), `proc.ts`(`runCapture`: 외부 실행 파일을 창 없이 돌림), `vault.ts`(저장 폴더가 쓸 수 있는지·옵시디언 볼트 안인지·기존 과목 폴더), `hardware.ts`(물리 코어·전원 상태는 OS 명령으로 읽음), `errors.ts`(`EngineError`).
-- `src/cli/bench.ts`: S3용. RTF와, 기준 전사(기존 파이프라인의 large-v3 결과) 대비 CER을 잰다.
-- macOS(10/8, `feat/mac` 브랜치, Apple Silicon만): 목표는 Windows 앱과 같게 도는 것이다. 실제 Mac(M5 10코어)에서는 작성자가 설치, [그래도 열기], 받아쓰기까지 봤고(10/9, 속도 재기가 GPU를 골랐고 turbo로 79분 강의의 받아쓰기 2분 51초·전체 약 3분 30초), 나머지는 GitHub의 macOS 러너에서만 봤다. 10/9에 `main`에 합쳤고 첫 릴리즈는 `v0.1.0`(사전 출시).
-  - 받아쓰기: whisper-cli는 Metal로 돈다(백엔드 이름 `MTL0`). `probe.ts`는 macOS에서 장치 목록 없이 0번을 재 보고 이름은 로그의 `GPU name:` 줄에서 읽는다. GPU로 재는 시간이 CPU로 잰 시간의 5배(적어도 2분)를 넘으면 그만두고 그 GPU를 쓰지 않는다(OS 공통). `backendUsed`는 `whisper_backend_init_gpu:` 줄만 본다(macOS는 CPU로 돌 때도 `using BLAS backend`가 나온다). 스레드는 성능·효율 코어가 나뉜 Mac이면 성능 코어 수(`hardware.ts`의 `performanceCores`).
-  - 화면 문구: OS마다 다른 낱말(이 PC·이 Mac, 트레이·메뉴 막대, 그래픽카드·GPU, 마이크 권한을 켜는 곳)은 `renderer/src/platform.ts`에 모으고, 문구는 Windows 기준으로 쓴 뒤 그 낱말만 가져다 쓴다. 메인 쪽 낱말은 `main/index.ts`의 `MAC`·`PC_OBJ`·`TRAY_ICON`.
-  - 메인의 분기: 창 버튼(신호등)은 `trafficLightPosition`으로 띠 가운데 높이에 두고 `TitleBar`는 macOS에서 띠를 비워 둔다(아이콘·이름 없음, Apple 지침), 메뉴 막대 아이콘은 `resources/trayTemplate.png`(`.ico`를 못 읽음. 검정 + 투명의 템플릿 이미지라 macOS가 메뉴 막대 색에 맞춰 칠한다), 알림은 `Notification`, 설치본의 메뉴는 앱·편집·창(없애면 Cmd+V가 안 됨. 앱 메뉴의 "설정…" Cmd+,가 설정 화면을 연다), Dock을 누르면 창을 다시 엶(`activate`), 로그인할 때 자동 실행은 인자 대신 `wasOpenedAtLogin`으로 창 없이 시작.
-  - 뺀 기능: 컴퓨터 소리 녹음(Electron의 `loopback`이 Windows만 지원해 선택지를 보이지 않는다), 바탕화면 바로가기(Windows의 것).
-  - 파일 이름: macOS는 Finder가 만든 이름을 자모를 풀어(NFD) 준다. 폴더에서 읽은 과목 이름은 `files.ts`의 `diskName`(macOS에서만 NFC), 녹음 이름에서 온 노트 제목·`source`와 노트 목록의 제목은 어디서나 NFC.
-  - 패키징: `electron-builder.yml`의 `mac`(arm64 DMG, `identity: "-"`로 임시 서명, `hardenedRuntime: false`, 마이크 쓰는 이유 문구). 앱 아이콘은 `resources/icon.icns`(`icon.mjs`가 함께 만든다: 1024 가운데 824만 채움). 오픈소스 고지(`notices.mjs`)는 빌드하는 OS에 맞춰 적는다.
+`core/`는 처리 로직이고 electron을 모른다. 메인, CLI(`cli/`), 테스트(`app/test/`)가 같은 코드를 쓴다(import 규칙은 AGENTS.md 컨벤션). 작은 공용 모듈: `files.ts`(`writeJsonAtomic`, 파일 이름 정규화 `diskName`), `proc.ts`(`runCapture`), `errors.ts`(`EngineError`), `paths.ts`(데이터 폴더, whisper-cli·ffmpeg 찾기), `brand.ts`(제품 이름), `hardware.ts`(물리 코어·전원), `vault.ts`(저장 폴더 검사), `compare.ts`(CER, 벤치와 공용).
 
+## 처리 파이프라인(작업)
+
+- `core/job.ts`: 작업 하나를 `audio→stt→clean→polish→summarize→note→save` 단계로 돌리고 `<데이터 폴더>/jobs/<id>/job.json`에 단계 상태를 남긴다. API 키는 `job.json`에 넣지 않고 `JobContext`로 받는다. 단계별 담당은 `audio.ts`+`wav.ts`(16kHz WAV, 10분 조각), `stt/`, `clean.ts`·`corrections.ts`, `polish.ts`, `summarize.ts`, `note.ts`.
+- 다시 시작할 때 건너뛸 조각은 각 모듈이 작업 폴더에 남긴다: 받아쓰기 `part_NNN.json`과 ChatKHU의 `stt/<조각>.op.json`, 다듬기 `polish/part_NNN.json`. 단계 상태는 `job.json`. 끝난 조각·단계를 다시 하지 않는 것은 AGENTS.md 우선순위 3.
+
+## 받아쓰기
+
+- `core/stt/base.ts`: `SttEngine` 인터페이스와 공통 흐름 `transcribeChunks`(조각별 저장·합치기, 누락 구간 다시 받아쓰기 `fillGaps`). 엔진은 `stt/whispercpp.ts`(whisper-cli)와 `stt/chatkhu.ts`(ChatKHU 받아쓰기, Soniox).
+- ChatKHU 받아쓰기 작업(`settings.sttService`가 `chatkhu`. 설정 `chatkhuStt` + ChatKHU 연결, 메인의 `sttService()`)은 받아쓰기 모델·속도 재기·녹음 중 멈춤을 기다리지 않는다. 멈추면 작업 목록의 [이 PC에서 받아쓰기] 단추로 돌린다(`runner.localStt`). 크레딧은 `job.cost.sttCredits`.
+- `core/sttargs.ts`: whisper-cli 옵션의 기본값과 잠긴 옵션. 저장 전 검사 `checkArgs`는 `stt/whispercpp.ts`에, [샘플로 시험하기] `testSample`은 `probe.ts`에 있다.
+- `core/probe.ts`: 속도 재기. 장치별로 샘플을 돌려 쓸 장치와 RTF를 정해 `<데이터 폴더>/probe.json`에 남기고, `run --device auto`(기본)가 읽는다. 진행 상태는 `main/setup.ts`가 든다.
+- `core/recommend.ts`(10/11): 받아쓰기 모델 자동 선택(설정 `sttAuto`. 처음에는 `firstModel`, 속도 재기 뒤에는 `afterProbe`).
+- `core/downloads.ts`+`models.ts`: 모델 목록(URL·크기·sha256)과 이어받기.
+
+## 요약·LLM
+
+- 입구는 `core/llm.ts`의 `chat`. 옵션의 `service`가 Claude면 `anthropic.ts`, `ollama`가 있으면 `ollama.ts`로 넘기고 나머지는 OpenAI 호환으로 부른다.
+- `core/providers.ts`: 서비스 목록(`ProviderId`·`PROVIDERS`), 주소·기본 모델(`PRESETS`), 크레딧 여부(`usesCredits`: ChatKHU만), 단계별 대상 결정 `resolveSteps`(설정 → 작업의 `settings.llm`·`settings.polishLlm`). 한 번에 한 서비스만 연결한다(`settings.provider`, 키는 서비스별로 `secrets.json`에 남음).
+- 로컬 LLM(Ollama, 10/2) 단계는 API 키 없이 돌고 크레딧을 적지 않는다. 화면은 `llm.status`의 `summary`·`polish`로 요약을 할 수 있는지·무엇으로 하는지를 본다(`provider`는 키로 연결한 서비스일 뿐). 화면 `settings/OllamaBlock.tsx`, 핸들러 `ollama.get`·`ollama.save`·`ollama.test`.
+- 크레딧: 작업의 크레딧은 응답 토큰 수 × 단가(`core/llmcatalog.ts`의 `creditsFromTokens`, 단가는 `modelcatalog.json`의 `prices`). ChatKHU가 아닌 서비스는 토큰 수(`job.usage`)만 남긴다. 잔액은 `credits.ts`, 작업 기록으로 재는 모델별 90분 크레딧은 `providers.ts`의 `creditsPer90ByModel`.
+- 모델 목록·추천·숨김: `core/llmcatalog.ts`가 `modelcatalog.json`을 읽고 `catalogsync.ts`가 `main`의 같은 파일로 갱신한다(값 고치는 법과 금지는 AGENTS.md). 화면은 `settings/ModelPicker.tsx`(요약·다듬기 공용, 핸들러 `llm.models`·`llm.steps`. ChatKHU가 아니면 추천 없이 서비스의 글 모델 목록 `plainModels`).
+- `core/summarize.ts`·`prompts.ts`: 요약 호출과 프롬프트. 사용자가 고친 프롬프트(설정 `summaryExtra`·`summaryPrompt`, 10/7)는 작업 시작 때 `JobContext.summaryPrompt`로 들어간다. 화면 `settings/SummaryPrompt.tsx`, 핸들러 `prompt.get`·`prompt.save`.
+- `core/polish.ts`: 선택 기능 전사문 다듬기(원문으로 돌아간 조각 수는 `job.polish`, 작업 목록에 보임). `core/verify.ts`: 교정 검증(CLI 전용). `core/clean.ts`·`corrections.ts`: 전사문 정리와 교정.
+
+## 노트·입력
+
+- `core/note.ts`(만들기·저장), `core/noteedit.ts`(제목·과목·날짜 수정), `core/recent.ts`(저장 폴더의 노트 목록)가 노트 파일 이름 규칙을 공유한다(AGENTS.md 변경 지도, `test/notename.test.ts`). 노트는 `<저장 폴더>/<과목|미분류>/<날짜> <제목>.md`.
+- `core/inputs.ts`: 녹음 옆 필기 찾기(`pairInputs`)와 나중에 붙이기(`attachNotes`). `core/doctext.ts`: 문서 필기(.hwpx·.docx·.pptx)에서 글자 뽑기.
+- 노트 수정·삭제: 메인 `notes.editInfo`·`notes.edit`·`notes.delete`가 파일과, 그 노트를 만든 작업의 기록(`output.notePath`·`input.subject`·`edits`)을 함께 고쳐 [요약 다시 만들기]가 옛 경로나 옛 값으로 돌아가지 않게 한다(`runner.noteEdited`·`noteDeleted`·`noteBusy`). 화면은 노트 목록 줄과 미리보기 버튼 줄의 [...] 메뉴(`components/MoreMenu`)에서 `notes/NotePropsDialog`·`notes/NoteDeleteDialog`를 연다.
+- 녹음 이름에서 온 노트 제목·`source`와 노트 목록의 제목은 어디서나 NFC다(macOS의 Finder는 NFD로 준다. `files.ts`의 `diskName`).
+
+## 메인·실행기
+
+- `main/index.ts`: 화면이 부를 처리의 허용 목록 `handlers`(`api:call`)와 메인→화면 알림 `api:event`(preload 허용 목록에 있는 것만). 창·트레이·메뉴·자동 실행·OS 분기 같은 Electron 쪽도 여기.
+- `main/jobs.ts`(실행기 `runner`): 작업을 한 번에 하나씩 돌리고 `jobs` 이벤트로 알린다. 모델이 없으면 `setup.whenReady()`로 받고 속도를 잰 뒤 시작한다. 녹음 중 멈춤(`holdStt`·`holdNow`), ChatKHU 받아쓰기, 앱 종료(`shutdown`), 노트 수정·삭제와의 얽힘은 이 파일의 주석.
+- `main/setup.ts`: 모델 받기와 속도 재기 상태. 작업이 받아쓰기 중이면(`runner.transcribing()`) 속도 재기를 미룬다.
+- 자동 처리(폴더 감시): `core/watch.ts`(판단과 기록 `<데이터 폴더>/watch.json`) → `main/watcher.ts`(폴링, `runner.start`) → `main/tray.ts`(멈추기/다시 시작). 설정 `settings.watch`, 화면 `settings/AutoSection.tsx`. 켜져 있으면 창을 닫아도 트레이에 남고, PC를 켤 때 자동 실행은 설치본에서만 된다.
+- 앱에서 녹음하기: 화면 `home/recording.ts`(React 밖 상태, MediaRecorder)+`home/Recorder.tsx` → 메인 `main/recorder.ts`(`<데이터 폴더>/recordings/`에 덧붙여 쓰기) → `core/recordings.ts`(끝내기·복구·`processed.json`). 녹음 중 받아쓰기를 멈추는 것은 `runner`(설정 `sttWhileRecording`이면 안 멈춤). 실험 기능 토글(`sttWhileRecording`·`chatkhuStt`)은 `settings/AdvancedSection.tsx`.
+- `main/fit.ts`: 4:3 창 크기(electron 없이 시험). `main/log.ts`·`main/secrets.ts`: 아래 데이터·설정·로그.
+
+## 화면
+
+규칙(색·치수 토큰, 창 맨 위 띠, 4:3, OS별 낱말, 폴더 목록, 메인과의 통신)은 [app/src/renderer/AGENTS.md](../../app/src/renderer/AGENTS.md). 흐름·배치·문구는 위 "화면 설계의 원본". 화면이 쓰는 순수 로직은 파일로 빼서 테스트한다(`preview/markdown.ts`·`preview/find.ts`·`notes/filter.ts` → `test/preview.test.ts`).
+
+- `home/ConfirmDialog.tsx`(10/3): 시작 전 확인. 과목 칸·언어, 끌어 옮기기, 첫 안내(`Intro`, 설정 `confirmIntroSeen`, 핸들러 `settings.introSeen`). 필기는 `inputs.pickNotes`.
+- `home/Shell.tsx`: 사이드바와 화면 전환. 미리보기는 앞 화면을 숨긴 채 열어 돌아가면 상태가 그대로다.
+- `preview/NotePreview.tsx`+`preview/markdown.ts`: 노트 미리보기. [요약 다시 만들기]는 `runner.resummarize`(같은 파일에 덮어쓰고 제목이 바뀌면 파일 이름도 바꾸며, 미리보기는 `onMoved`로 따라감).
+- `home/Recorder.tsx`: 녹음 시작 창·녹음 중 카드. 첫 안내는 설정 `recordIntroSeen`(10/11).
+
+## 데이터·설정·로그
+
+- 데이터 폴더: Windows `%LOCALAPPDATA%\lecture-notes`, macOS `~/Library/Application Support/lecture-notes`. 안에 `models/` `jobs/` `recordings/` `logs/` `bench/`와 `settings.json` `secrets.json` `probe.json` `watch.json` `model-catalog.json`. 경로 규칙은 `core/paths.ts`, 개발 중에는 `LN_DATA_DIR`(CLI는 `--data-dir`). 강의에서 나온 파일은 여기와 저장 폴더에만 쓴다.
+- 설정 `core/settings.ts`(필드마다 주석). 키는 `main/secrets.ts`(safeStorage로 암호화, 화면에는 끝 4자리만. 풀지 못하면 연결 안 된 것으로 봄).
+- 로그 `main/log.ts`(`logs/YYYY-MM-DD.log`, 14일치)와 테스터 로그용 한 줄 JSON(`core/joblog.ts`, 10/12). 키·전사·요약 내용은 적지 않는다.
+- Windows에서 제거할 때 데이터 폴더를 지울지는 `app/installer.nsh`가 묻는다(10/13). macOS는 제거 프로그램이 없어 README에 지울 폴더만 적었다. 폴더 이름은 `core/paths.ts`의 `APP_NAME`과 `installer.nsh`에 같이 있다.
+
+## 플랫폼(macOS)
+
+Apple Silicon만(10/8). 목표는 Windows 앱과 같게 도는 것이다. OS 분기는 세 곳에 모인다: 화면 낱말 `renderer/src/platform.ts`, 메인 낱말·창 버튼·메뉴·알림·자동 실행 `main/index.ts`(`MAC`·`PC_OBJ`·`TRAY_ICON`), 받아쓰기 장치 `core/probe.ts`·`stt/whispercpp.ts`·`core/hardware.ts`(Metal, 성능 코어). 뺀 기능: 컴퓨터 소리 녹음(Electron `loopback`이 Windows만), 바탕화면 바로가기. 패키징·서명·러너 함정은 build-and-ci.md.
+
+## 빌드·CLI
+
+- `cli/cli.ts`: 화면 없는 실행(`run`·`resume`·`probe`·`models`). `cli/bench.ts`: S3 벤치(RTF와 기준 전사 대비 CER). `cli/llmbench.ts`: 요약 모델 비교(`llm models`·`llm bench`, 키는 환경변수 `LN_API_KEY`). 결과는 강의 내용이라 데이터 폴더의 `bench/`에만 쓴다.
+- `app/scripts/icon.mjs`(`resources/icon.ico`·`icon.icns`, 10/3. 설치 파일·창·트레이가 같은 파일을 씀), `app/scripts/notices.mjs`(오픈소스 고지, 빌드하는 OS에 맞춤), `app/electron-builder.yml`, `app/e2e/first-run.mjs`(Playwright 첫 실행 시험, CI의 macOS 작업). 빌드 흐름은 build-and-ci.md.

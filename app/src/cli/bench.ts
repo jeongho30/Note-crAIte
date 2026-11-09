@@ -1,5 +1,6 @@
 // S3: STT 엔진·모델·장치별 속도(RTF)와 기준 전사 대비 CER 비교.
 // 결과에는 강의 전사가 들어가므로 저장소가 아니라 데이터 폴더의 bench/ 아래에만 쓴다.
+// 기준 전사는 예전 파이프라인(저장소 밖)의 large-v3 결과다.
 import { appendFile, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { prepareLocal } from '../core/audio.ts'
